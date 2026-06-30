@@ -1,0 +1,41 @@
+appId: com.local.local-ai-gateway
+productName: Local AI Gateway
+asar: false
+directories:
+  output: dist
+files:
+  - desktop/**/*
+  - docs/**/*
+  - scripts/**/*
+  - server.js
+  - package.json
+  - README.md
+  - LICENSE
+  - gateway.config.example.json
+  - .env.example
+  - models.json
+  - "!gateway.config.json"
+  - "!.env"
+  - "!gateway*.log"
+  - "!gateway.pid"
+  - "!_inspect_repo/**/*"
+  - "!dist/**/*"
+  - "!node_modules/**/*"
+win:
+  signAndEditExecutable: false
+  target:
+    - nsis
+mac:
+  category: public.app-category.developer-tools
+  target:
+    - dmg
+  hardenedRuntime: false
+  gatekeeperAssess: false
+  identity: null
+nsis:
+  oneClick: false
+  perMachine: false
+  allowToChangeInstallationDirectory: true
+dmg:
+  title: Local AI Gateway
+publish: null
