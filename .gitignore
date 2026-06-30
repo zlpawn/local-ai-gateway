@@ -1,0 +1,36 @@
+# Local secrets and user config
+.env
+gateway.config.json
+.codex/
+restore-codex-config.ps1
+restore-codex-custom-provider.ps1
+*.bak
+
+# Runtime state
+gateway.pid
+gateway.log
+gateway.stdout.log
+gateway.stderr.log
+*.log
+
+# Dependencies and package manager output
+node_modules/
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+
+# Test and temp output
+coverage/
+.nyc_output/
+dist/
+.tmp-codex-*/
+
+# OS/editor noise
+.DS_Store
+Thumbs.db
+.idea/
+.vscode/
+
+# Local inspection scratch space
+_inspect_repo/

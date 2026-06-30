@@ -1,0 +1,43 @@
+{
+  "name": "local-ai-gateway",
+  "version": "0.1.0",
+  "description": "Local configurable gateway for Claude, Codex, and OpenAI-compatible AI providers.",
+  "private": false,
+  "license": "MIT",
+  "author": "Local AI Gateway contributors",
+  "type": "module",
+  "main": "desktop/main.mjs",
+  "scripts": {
+    "init": "powershell -NoProfile -ExecutionPolicy Bypass -File scripts/init-config.ps1",
+    "init:bash": "bash scripts/init-config.sh",
+    "start": "node server.js",
+    "desktop": "electron desktop/main.mjs",
+    "desktop:check": "node --check desktop/main.mjs && node --check desktop/lib/gateway-control.mjs && node --check desktop/lib/desktop-smoke.mjs && node --check desktop/renderer/app.js && node --check desktop/preload.cjs && node --check scripts/smoke-desktop.mjs",
+    "desktop:test": "node --test desktop/lib/gateway-control.test.mjs desktop/lib/desktop-smoke.test.mjs",
+    "desktop:smoke": "node scripts/smoke-desktop.mjs",
+    "desktop:dist": "electron-builder --config electron-builder.yml",
+    "desktop:dist:win": "electron-builder --config electron-builder.yml --win nsis",
+    "desktop:dist:mac": "electron-builder --config electron-builder.yml --mac dmg",
+    "check": "node --check server.js",
+    "doctor": "node scripts/doctor.mjs",
+    "validate:config": "node scripts/validate-config.mjs",
+    "codex:catalog": "node scripts/codex-catalog.mjs",
+    "codex:catalog:verify": "node scripts/codex-catalog.mjs --verify",
+    "codex:history:dry-run": "node scripts/codex-history-unify.mjs --dry-run",
+    "codex:history:apply": "node scripts/codex-history-unify.mjs --apply",
+    "codex:history:restore": "node scripts/codex-history-unify.mjs --restore",
+    "test:adapters": "powershell -NoProfile -ExecutionPolicy Bypass -File scripts/test-adapters.ps1",
+    "gateway:start": "powershell -NoProfile -ExecutionPolicy Bypass -File scripts/start-gateway.ps1",
+    "gateway:stop": "powershell -NoProfile -ExecutionPolicy Bypass -File scripts/stop-gateway.ps1",
+    "gateway:status": "powershell -NoProfile -ExecutionPolicy Bypass -File scripts/status-gateway.ps1",
+    "gateway:restart": "powershell -NoProfile -ExecutionPolicy Bypass -File scripts/restart-gateway.ps1",
+    "gateway:bash": "bash scripts/agent-gateway.sh"
+  },
+  "engines": {
+    "node": ">=18"
+  },
+  "devDependencies": {
+    "electron": "^31.7.7",
+    "electron-builder": "^24.13.3"
+  }
+}
