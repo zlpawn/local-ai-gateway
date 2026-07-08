@@ -426,7 +426,7 @@
         function createEndpointHTML(client, index, ep) {
             const availableTypes = client === 'claude' 
                 ? ENDPOINT_TYPES.filter(t => t.value === 'anthropic')
-                : ENDPOINT_TYPES.filter(t => t.value === 'openai-chat');
+                : ENDPOINT_TYPES.filter(t => t.value === 'openai-responses');
 
             const typeOptions = availableTypes.map(t => 
                 `<option value="${t.value}" ${ep.type === t.value ? 'selected' : ''}>${t.label}</option>`
@@ -493,7 +493,7 @@
             config.clients[client].endpoints = config.clients[client].endpoints || [];
             config.clients[client].endpoints.push({
                 name: "新服务商",
-                type: client === 'claude' ? "anthropic" : "openai-chat",
+                type: client === 'claude' ? "anthropic" : "openai-responses",
                 base_url: "",
                 api_key: "",
                 models: []
