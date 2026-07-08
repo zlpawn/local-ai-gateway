@@ -106,7 +106,7 @@ If `gateway.config.json` does not exist, the gateway falls back to the old
 Current mapping in `models.json`:
 
 ```text
-claude-fable-5-2  -> glm-5.2
+claude-opus-4-8   -> glm-5.2
 claude-opus-4-7   -> minimax-m3
 claude-sonnet-4-5 -> deepseek-v4-pro
 claude-haiku-4-0  -> doubao-seed-2.0-pro
@@ -236,11 +236,12 @@ npm run doctor
 
 ## Global Command
 
-For Git Bash or another Bash shell, add this to `~/.bashrc`:
+For Bash, add this to `~/.bashrc` or `~/.zshrc`. The Bash CLI does not require
+PowerShell:
 
 ```bash
 agent-gateway() {
-  local root="${AGENT_GATEWAY_ROOT:-$HOME/agent-transfer}"
+  local root="${AGENT_GATEWAY_ROOT:-$HOME/project/AI/local-ai-gateway}"
   local script="$root/scripts/agent-gateway.sh"
   if [ ! -f "$script" ]; then
     echo "agent-gateway.sh not found: $script" >&2
@@ -344,7 +345,7 @@ inside this project instead of writing directly to `~/.codex`:
 npm run codex:catalog:verify
 ```
 
-The command writes `.codex/volcengine-agent-plan-model-catalog.json`, verifies
+The command writes `.codex/gateway-model-catalog.json`, verifies
 that `codex debug models -c ...` can see the custom models, and prints an
 optional `config.toml` snippet for manual desktop testing. It does not edit
 Codex's user config by itself. If you test the snippet manually, insert it
