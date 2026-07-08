@@ -1,0 +1,576 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="dark">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>AI 本地网关配置</title>
+    <style>
+        :root {
+            /* Modern Dark Theme Inspired by Premium Dev Tools */
+            --bg-color: #0c0d0f;
+            --surface: #141518;
+            --surface-hover: #1b1c20;
+            --border-color: #23252a;
+            --text-primary: #e2e4e9;
+            --text-secondary: #8a8f98;
+            
+            --brand-primary: #526eff;
+            --brand-hover: #435fe6;
+            --brand-glow: rgba(82, 110, 255, 0.2);
+            
+            --danger: #e54d2e;
+            --danger-hover: #ce4024;
+            --danger-bg: rgba(229, 77, 46, 0.1);
+            
+            --success: #4cc38a;
+            
+            --radius-xl: 16px;
+            --radius-lg: 12px;
+            --radius-md: 8px;
+            --radius-sm: 6px;
+            
+            --font-sans: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+            --font-mono: "JetBrains Mono", "Fira Code", SFMono-Regular, Consolas, monospace;
+            
+            --transition-fast: 0.15s ease-out;
+            --transition-bounce: 0.3s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+        }
+
+        * {
+            box-sizing: border-box;
+            margin: 0;
+            padding: 0;
+        }
+
+        body {
+            background-color: var(--bg-color);
+            color: var(--text-primary);
+            font-family: var(--font-sans);
+            -webkit-font-smoothing: antialiased;
+            line-height: 1.6;
+            padding-bottom: 120px;
+        }
+
+        /* Top Navigation Bar */
+        .header {
+            position: sticky;
+            top: 0;
+            z-index: 100;
+            background: rgba(12, 13, 15, 0.7);
+            backdrop-filter: blur(16px);
+            -webkit-backdrop-filter: blur(16px);
+            border-bottom: 1px solid var(--border-color);
+            padding: 16px 40px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+
+        .header-title {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            font-weight: 600;
+            font-size: 18px;
+            letter-spacing: -0.02em;
+        }
+
+        .status-dot {
+            width: 10px;
+            height: 10px;
+            background-color: var(--success);
+            border-radius: 50%;
+            box-shadow: 0 0 12px var(--success);
+            animation: pulse 2s infinite;
+        }
+
+        @keyframes pulse {
+            0% { box-shadow: 0 0 0 0 rgba(76, 195, 138, 0.4); }
+            70% { box-shadow: 0 0 0 6px rgba(76, 195, 138, 0); }
+            100% { box-shadow: 0 0 0 0 rgba(76, 195, 138, 0); }
+        }
+
+        /* Buttons */
+        .btn {
+            background: transparent;
+            color: var(--text-primary);
+            border: 1px solid var(--border-color);
+            padding: 8px 16px;
+            border-radius: var(--radius-md);
+            font-size: 14px;
+            font-weight: 500;
+            cursor: pointer;
+            transition: all var(--transition-fast);
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            gap: 8px;
+        }
+
+        .btn:hover:not(:disabled) {
+            background: var(--surface-hover);
+            border-color: #383c44;
+        }
+
+        .btn:active:not(:disabled) {
+            transform: scale(0.97);
+        }
+        
+        .btn:disabled {
+            opacity: 0.5;
+            cursor: not-allowed;
+        }
+
+        .btn-primary {
+            background: var(--brand-primary);
+            color: white;
+            border: none;
+            box-shadow: 0 4px 14px var(--brand-glow), inset 0 1px 0 rgba(255,255,255,0.1);
+        }
+
+        .btn-primary:hover:not(:disabled) {
+            background: var(--brand-hover);
+            box-shadow: 0 6px 20px var(--brand-glow), inset 0 1px 0 rgba(255,255,255,0.15);
+            transform: translateY(-1px);
+        }
+        
+        .btn-danger {
+            background: var(--danger-bg);
+            color: var(--danger);
+            border: 1px solid transparent;
+        }
+
+        .btn-danger:hover:not(:disabled) {
+            background: var(--danger);
+            color: white;
+        }
+
+        .btn-sm {
+            padding: 6px 12px;
+            font-size: 13px;
+        }
+
+        /* Main Container */
+        .container {
+            max-width: 1040px;
+            margin: 48px auto;
+            padding: 0 40px;
+            display: flex;
+            flex-direction: column;
+            gap: 56px;
+        }
+
+        /* Sections */
+        .section-header {
+            margin-bottom: 24px;
+            display: flex;
+            justify-content: space-between;
+            align-items: flex-end;
+            padding-bottom: 16px;
+            border-bottom: 1px solid var(--border-color);
+        }
+
+        .section-header h2 {
+            font-size: 22px;
+            font-weight: 600;
+            letter-spacing: -0.02em;
+            margin-bottom: 6px;
+        }
+
+        .section-header p {
+            color: var(--text-secondary);
+            font-size: 14px;
+        }
+
+        /* Endpoints Grid */
+        .endpoints-grid {
+            display: grid;
+            grid-template-columns: 1fr;
+            gap: 24px;
+        }
+
+        /* Cards */
+        .card {
+            background: var(--surface);
+            border: 1px solid var(--border-color);
+            border-radius: var(--radius-lg);
+            padding: 24px 32px;
+            transition: border-color var(--transition-fast), box-shadow var(--transition-fast);
+        }
+
+        .card:hover {
+            border-color: #353942;
+            box-shadow: 0 8px 30px rgba(0,0,0,0.12);
+        }
+
+        .card-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 24px;
+        }
+
+        .card-header h3 {
+            font-size: 16px;
+            font-weight: 600;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+        
+        .card-header h3::before {
+            content: "";
+            display: inline-block;
+            width: 4px;
+            height: 16px;
+            background: var(--brand-primary);
+            border-radius: 2px;
+        }
+
+        /* Form Grid */
+        .form-grid {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 20px;
+        }
+
+        .form-group {
+            display: flex;
+            flex-direction: column;
+            gap: 8px;
+        }
+
+        .form-group.full {
+            grid-column: 1 / -1;
+        }
+
+        label {
+            font-size: 13px;
+            font-weight: 500;
+            color: var(--text-secondary);
+        }
+
+        input, select {
+            background: rgba(0,0,0,0.2);
+            border: 1px solid var(--border-color);
+            color: var(--text-primary);
+            padding: 10px 14px;
+            border-radius: var(--radius-md);
+            font-size: 14px;
+            font-family: var(--font-sans);
+            transition: all var(--transition-fast);
+            width: 100%;
+        }
+        
+        input.mono {
+            font-family: var(--font-mono);
+            font-size: 13px;
+        }
+
+        input:hover, select:hover {
+            border-color: #353942;
+        }
+
+        input:focus, select:focus {
+            outline: none;
+            border-color: var(--brand-primary);
+            background: rgba(0,0,0,0.3);
+            box-shadow: 0 0 0 3px var(--brand-glow);
+        }
+
+        /* Empty State */
+        .empty-state {
+            text-align: center;
+            padding: 48px;
+            background: rgba(20, 21, 24, 0.4);
+            border: 1px dashed var(--border-color);
+            border-radius: var(--radius-lg);
+            color: var(--text-secondary);
+        }
+
+        .empty-state p {
+            margin-bottom: 16px;
+            font-size: 14px;
+        }
+
+        /* Toast */
+        .toast-container {
+            position: fixed;
+            bottom: 32px;
+            right: 32px;
+            display: flex;
+            flex-direction: column;
+            gap: 12px;
+            z-index: 999;
+        }
+
+        .toast {
+            background: var(--surface);
+            border: 1px solid var(--border-color);
+            color: var(--text-primary);
+            padding: 14px 24px;
+            border-radius: var(--radius-md);
+            font-size: 14px;
+            font-weight: 500;
+            box-shadow: 0 10px 40px rgba(0, 0, 0, 0.4);
+            transform: translateY(20px) scale(0.95);
+            opacity: 0;
+            animation: toastEnter var(--transition-bounce) forwards;
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+
+        .toast.success { border-left: 3px solid var(--success); }
+        .toast.error { border-left: 3px solid var(--danger); }
+
+        .toast svg {
+            width: 18px;
+            height: 18px;
+        }
+        
+        .toast.success svg { color: var(--success); }
+        .toast.error svg { color: var(--danger); }
+
+        @keyframes toastEnter {
+            to { transform: translateY(0) scale(1); opacity: 1; }
+        }
+
+        @keyframes toastExit {
+            to { transform: translateY(10px) scale(0.95); opacity: 0; }
+        }
+    </style>
+</head>
+<body>
+
+    <header class="header">
+        <div class="header-title">
+            <div class="status-dot"></div>
+            AI 网关配置
+        </div>
+        <button class="btn btn-primary" id="save-btn" onclick="saveConfig()">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z"></path><polyline points="17 21 17 13 7 13 7 21"></polyline><polyline points="7 3 7 8 15 8"></polyline></svg>
+            保存并重载
+        </button>
+    </header>
+
+    <main class="container" id="app">
+        <!-- Claude Section -->
+        <section>
+            <div class="section-header">
+                <div>
+                    <h2>Claude 代理 (Claude Code)</h2>
+                    <p>通过官方 API 或兼容 OpenAI 格式的代理服务转发 Anthropic 模型请求。</p>
+                </div>
+                <button class="btn" onclick="addEndpoint('claude')">
+                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="12" y1="5" x2="12" y2="19"></line><line x1="5" y1="12" x2="19" y2="12"></line></svg>添加节点</button>
+            </div>
+            <div class="endpoints-grid" id="claude-endpoints"></div>
+        </section>
+
+        <!-- Codex 代理 (IDE) Section -->
+        <section>
+            <div class="section-header">
+                <div>
+                    <h2>Codex</h2>
+                    <p>为 IDE 插件（如 Cursor、GitHub Copilot 等）提供下游代理支持。</p>
+                </div>
+                <button class="btn" onclick="addEndpoint('codex')">
+                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="12" y1="5" x2="12" y2="19"></line><line x1="5" y1="12" x2="19" y2="12"></line></svg>添加节点</button>
+            </div>
+            <div class="endpoints-grid" id="codex-endpoints"></div>
+        </section>
+    </main>
+
+    <div class="toast-container" id="toast-container"></div>
+
+    <script>
+        let config = {
+            server: { host: "127.0.0.1", port: 8787 },
+            clients: { claude: { endpoints: [] }, codex: { endpoints: [] } }
+        };
+
+        const ENDPOINT_TYPES = [
+            { value: "anthropic", label: "Anthropic 官方" },
+            { value: "openai-chat", label: "OpenAI Chat 补全格式" },
+            { value: "openai-responses", label: "OpenAI Responses (实验性)" }
+        ];
+
+        async function init() {
+            try {
+                const res = await fetch('/v1/config');
+                if (res.ok) {
+                    const data = await res.json();
+                    if (data && data.clients) {
+                        config = {
+                            ...config,
+                            ...data,
+                            clients: {
+                                claude: data.clients.claude || { endpoints: [] },
+                                codex: data.clients.codex || { endpoints: [] }
+                            }
+                        };
+                    }
+                }
+            } catch (e) {
+                console.warn('加载初始配置失败，使用默认配置。');
+            }
+            render();
+        }
+
+        function formatModelMapping(mapping) {
+            if (!mapping) return "";
+            return Object.entries(mapping).map(([k, v]) => `${k}=${v}`).join(', ');
+        }
+
+        function createEndpointHTML(client, index, ep) {
+            const typeOptions = ENDPOINT_TYPES.map(t => 
+                `<option value="${t.value}" ${ep.type === t.value ? 'selected' : ''}>${t.label}</option>`
+            ).join('');
+
+            return `
+                <div class="card" id="ep-${client}-${index}">
+                    <div class="card-header">
+                        <h3>节点 ${index + 1}</h3>
+                        <button class="btn btn-sm btn-danger" onclick="removeEndpoint('${client}', ${index})">
+                            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="3 6 5 6 21 6"></polyline><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path></svg>删除</button>
+                    </div>
+                    <div class="form-grid">
+                        <div class="form-group">
+                            <label>名称</label>
+                            <input type="text" value="${ep.name || ''}" placeholder="例如：OpenRouter" onchange="updateEndpoint('${client}', ${index}, 'name', this.value)">
+                        </div>
+                        <div class="form-group">
+                            <label>类型</label>
+                            <select onchange="updateEndpoint('${client}', ${index}, 'type', this.value)">
+                                ${typeOptions}
+                            </select>
+                        </div>
+                        <div class="form-group full">
+                            <label>接口地址 (Base URL)</label>
+                            <input class="mono" type="text" value="${ep.base_url || ''}" placeholder="https://api.openai.com/v1" onchange="updateEndpoint('${client}', ${index}, 'base_url', this.value)">
+                        </div>
+                        <div class="form-group full">
+                            <label>密钥 (API Key)</label>
+                            <input class="mono" type="password" value="${ep.api_key || ''}" placeholder="sk-..." onchange="updateEndpoint('${client}', ${index}, 'api_key', this.value)">
+                        </div>
+                        <div class="form-group full">
+                            <label>上游模型列表 (英文逗号分隔)</label>
+                            <input class="mono" type="text" value="${(ep.models || []).join(', ')}" placeholder="glm-5.2, deepseek-v4" onchange="updateEndpoint('${client}', ${index}, 'models', this.value)">
+                        </div>
+                        <div class="form-group full">
+                            <label>模型映射关系 (格式为 请求模型=上游模型，逗号分隔)</label>
+                            <input class="mono" type="text" value="${formatModelMapping(ep.model_mapping)}" placeholder="claude-opus-4-8=glm-5.2, claude-fable=glm-5.2" onchange="updateEndpoint('${client}', ${index}, 'model_mapping', this.value)">
+                        </div>
+                    </div>
+                </div>
+            `;
+        }
+
+        function render() {
+            ['claude', 'codex'].forEach(client => {
+                const container = document.getElementById(`${client}-endpoints`);
+                const eps = config.clients[client].endpoints || [];
+                
+                if (eps.length === 0) {
+                    container.innerHTML = `
+                        <div class="empty-state">
+                            <p>${client} 尚未配置任何节点。</p>
+                            <button class="btn" onclick="addEndpoint('${client}')">创建第一个节点</button>
+                        </div>
+                    `;
+                } else {
+                    container.innerHTML = eps.map((ep, i) => createEndpointHTML(client, i, ep)).join('');
+                }
+            });
+        }
+
+        window.addEndpoint = function(client) {
+            config.clients[client].endpoints = config.clients[client].endpoints || [];
+            config.clients[client].endpoints.push({
+                name: "新服务商",
+                type: "openai-chat",
+                base_url: "",
+                api_key: "",
+                models: []
+            });
+            render();
+        }
+
+        window.removeEndpoint = function(client, index) {
+            config.clients[client].endpoints.splice(index, 1);
+            render();
+        }
+
+        window.updateEndpoint = function(client, index, field, value) {
+            if (field === 'models') {
+                config.clients[client].endpoints[index][field] = value.split(',').map(s => s.trim()).filter(Boolean);
+            } else if (field === 'model_mapping') {
+                const mapping = {};
+                value.split(',').forEach(pair => {
+                    const parts = pair.split('=');
+                    if (parts.length === 2) {
+                        mapping[parts[0].trim()] = parts[1].trim();
+                    }
+                });
+                config.clients[client].endpoints[index][field] = mapping;
+            } else {
+                config.clients[client].endpoints[index][field] = value;
+            }
+        }
+
+        window.saveConfig = async function() {
+            const btn = document.getElementById('save-btn');
+            const originalContent = btn.innerHTML;
+            
+            btn.innerHTML = `<svg class="spinner" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" style="animation: spin 1s linear infinite;"><line x1="12" y1="2" x2="12" y2="6"></line><line x1="12" y1="18" x2="12" y2="22"></line><line x1="4.93" y1="4.93" x2="7.76" y2="7.76"></line><line x1="16.24" y1="16.24" x2="19.07" y2="19.07"></line><line x1="2" y1="12" x2="6" y2="12"></line><line x1="18" y1="12" x2="22" y2="12"></line><line x1="4.93" y1="19.07" x2="7.76" y2="16.24"></line><line x1="16.24" y1="7.76" x2="19.07" y2="4.93"></line></svg> Saving...`;
+            btn.disabled = true;
+
+            try {
+                const res = await fetch('/v1/config/save', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(config)
+                });
+                
+                if (res.ok) {
+                    showToast('配置已生效，服务已重新加载', 'success');
+                } else {
+                    const err = await res.text();
+                    showToast(err || '保存配置失败', 'error');
+                }
+            } catch (e) {
+                showToast('保存时网络出错', 'error');
+            } finally {
+                btn.innerHTML = originalContent;
+                btn.disabled = false;
+            }
+        }
+
+        function showToast(message, type = 'success') {
+            const container = document.getElementById('toast-container');
+            const toast = document.createElement('div');
+            toast.className = `toast ${type}`;
+            
+            const icon = type === 'success' 
+                ? `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"></path><polyline points="22 4 12 14.01 9 11.01"></polyline></svg>`
+                : `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"></circle><line x1="12" y1="8" x2="12" y2="12"></line><line x1="12" y1="16" x2="12.01" y2="16"></line></svg>`;
+            
+            toast.innerHTML = `${icon} <span>${message}</span>`;
+            container.appendChild(toast);
+            
+            setTimeout(() => {
+                toast.style.animation = 'toastExit 0.3s forwards';
+                setTimeout(() => toast.remove(), 300);
+            }, 3500);
+        }
+
+        // Add spinner keyframes
+        const style = document.createElement('style');
+        style.textContent = `@keyframes spin { 100% { transform: rotate(360deg); } }`;
+        document.head.appendChild(style);
+
+        document.addEventListener('DOMContentLoaded', init);
+    </script>
+</body>
+</html>

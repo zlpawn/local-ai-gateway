@@ -1,4 +1,4 @@
-﻿import http from "node:http";
+import http from "node:http";
 import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
@@ -37,23 +37,26 @@ const ANTHROPIC_MESSAGES_URL =
   process.env.OFFICIAL_ANTHROPIC_MESSAGES_URL || `${ANTHROPIC_BASE_URL}/v1/messages`;
 const OFFICIAL_CLAUDE_MODELS = parseList(
   process.env.OFFICIAL_CLAUDE_MODELS ||
-    "claude-fable-5,claude-opus-4-8,claude-sonnet-4-6,claude-haiku-4-5-20251001",
+    "claude-3-5-sonnet-20241022,claude-3-5-sonnet-latest,claude-3-5-haiku-20241022,claude-3-5-haiku-latest,claude-3-opus-20240229,claude-3-opus-latest",
 );
 const OFFICIAL_CLAUDE_MODEL_IDS = new Set(OFFICIAL_CLAUDE_MODELS);
 const MODEL_MAP_FILE = resolveProjectPath(process.env.MODEL_MAP_FILE || "models.json");
 const MODEL_MAP = loadModelMap(MODEL_MAP_FILE);
-const GATEWAY_CONFIG = loadGatewayConfig(GATEWAY_CONFIG_FILE, MODEL_MAP);
+let GATEWAY_CONFIG = loadGatewayConfig(GATEWAY_CONFIG_FILE, MODEL_MAP);
 const LISTEN_HOST = ENV_HOST || GATEWAY_CONFIG.server?.host || "127.0.0.1";
 const LISTEN_PORT = ENV_PORT || Number(GATEWAY_CONFIG.server?.port) || 8787;
-const PROVIDERS = GATEWAY_CONFIG.providers;
-const MODEL_ROUTES = GATEWAY_CONFIG.models;
-const MODEL_ROUTE_ALIASES = GATEWAY_CONFIG.aliases;
-const EXPOSED_MODELS =
-  MODEL_ROUTES.length > 0
-    ? MODEL_ROUTES.map((model) => model.id)
-    : parseList(process.env.EXPOSED_MODELS || process.env.MODEL_LIST || "claude-sonnet");
+const _allEndpoints = [
+  ...(GATEWAY_CONFIG.clients?.claude?.endpoints || []),
+  ...(GATEWAY_CONFIG.clients?.codex?.endpoints || [])
+];
+let EXPOSED_MODELS = [...new Set(_allEndpoints.flatMap(ep => [
+  ...(ep.models || []),
+  ...Object.keys(ep.model_mapping || {})
+]))];
+if (EXPOSED_MODELS.length === 0) {
+  EXPOSED_MODELS.push(...parseList(process.env.EXPOSED_MODELS || process.env.MODEL_LIST || "claude-sonnet"));
+}
 const MODEL_ALIASES = {
-  ...MODEL_ROUTE_ALIASES,
   ...parseAliases(process.env.MODEL_ALIASES || ""),
 };
 const MODEL_DISPLAY_NAMES = {
@@ -63,7 +66,7 @@ const LOG_FILE = resolveProjectPath(process.env.LOG_FILE || "gateway.log");
 const CODEX_HOME = process.env.CODEX_HOME || path.join(os.homedir(), ".codex");
 const CODEX_AUTH_PATH = path.join(CODEX_HOME, "auth.json");
 const CODEX_MODEL_CATALOG_PATH =
-  process.env.CODEX_MODEL_CATALOG_PATH || path.join(CODEX_HOME, "volcengine-agent-plan-model-catalog.json");
+  process.env.CODEX_MODEL_CATALOG_PATH || path.join(CODEX_HOME, "gateway-model-catalog.json");
 const CODEX_WRITE_MODEL_CATALOG = isTruthy(process.env.CODEX_WRITE_MODEL_CATALOG);
 const OFFICIAL_CODEX_CATALOG_MODELS = loadOfficialCodexCatalogModels();
 const OFFICIAL_CODEX_MODELS = OFFICIAL_CODEX_CATALOG_MODELS.map((model) => ({
@@ -105,7 +108,7 @@ server.listen(LISTEN_PORT, LISTEN_HOST, () => {
   console.log(`Ark Codex/OpenAI URL: ${ARK_CODEX_BASE_URL}`);
   console.log(`Official Anthropic messages URL: ${ANTHROPIC_MESSAGES_URL}`);
   console.log(`Gateway config: ${fs.existsSync(GATEWAY_CONFIG_FILE) ? GATEWAY_CONFIG_FILE : "legacy .env/models.json"}`);
-  console.log(`Providers: ${Object.keys(PROVIDERS).join(", ")}`);
+  console.log(`Providers: ${_allEndpoints.map(e => e.name).join(", ")}`);
   console.log(`Exposed models: ${EXPOSED_MODELS.join(", ")}`);
   console.log(`Official Claude models: ${OFFICIAL_CLAUDE_MODELS.join(", ")}`);
   console.log(`Codex official models: ${OFFICIAL_CODEX_MODELS.length}`);
@@ -117,14 +120,44 @@ async function route(req, res) {
   const context = getRequestContext(req);
   req.gatewayContext = context;
   const url = context.url;
-  const path = context.path;
+  const reqPath = context.path;
+
+  
+  if ((reqPath === "/" || reqPath === "/config") && req.method === "GET") {
+    const htmlPath = path.join(PROJECT_ROOT, "desktop", "config-panel.html");
+    if (fs.existsSync(htmlPath)) {
+      res.writeHead(200, { "Content-Type": "text/html; charset=utf-8" });
+      res.end(fs.readFileSync(htmlPath));
+    } else {
+      sendJson(res, 404, { error: { message: "config-panel.html not found" }});
+    }
+    return;
+  }
+  
+  if (reqPath === "/v1/config/save" && req.method === "POST") {
+    if (!checkLocalAuth(req, res)) return;
+    try {
+      const newConfig = JSON.parse(await readText(req));
+      let currentConfig = {};
+      if (fs.existsSync(GATEWAY_CONFIG_FILE)) {
+         currentConfig = JSON.parse(fs.readFileSync(GATEWAY_CONFIG_FILE, "utf8"));
+      }
+      const mergedConfig = { ...currentConfig, server: newConfig.server, clients: newConfig.clients };
+      fs.writeFileSync(GATEWAY_CONFIG_FILE, JSON.stringify(mergedConfig, null, 2));
+      reloadGatewayConfig();
+      sendJson(res, 200, { success: true });
+    } catch(e) {
+      sendJson(res, 500, { error: e.message });
+    }
+    return;
+  }
 
   if (req.method === "OPTIONS") {
     sendCors(res, 204);
     return;
   }
 
-  if (path === "/health" && req.method === "GET") {
+  if (reqPath === "/health" && req.method === "GET") {
     const healthModels =
       context.client === "codex"
         ? codexModelDiscovery().data.map((model) => model.id)
@@ -139,7 +172,7 @@ async function route(req, res) {
     return;
   }
 
-  if (path === "/v1/models" && req.method === "GET") {
+  if (reqPath === "/v1/models" && req.method === "GET") {
     if (!checkLocalAuth(req, res)) return;
     logInfo("models_request", {
       request_id: context.requestId,
@@ -147,23 +180,23 @@ async function route(req, res) {
       path: context.originalPath,
       user_agent: req.headers["user-agent"] || null,
     });
-    sendJson(res, 200, context.client === "codex" ? codexModelDiscovery() : modelDiscovery());
+    sendJson(res, 200, context.client === "codex" ? codexModelDiscovery(context.client) : modelDiscovery(context.client));
     return;
   }
 
-  if (path === "/v1/config" && req.method === "GET") {
+  if (reqPath === "/v1/config" && req.method === "GET") {
     if (!checkLocalAuth(req, res)) return;
     sendJson(res, 200, publicGatewayConfig());
     return;
   }
 
-  if (path === "/v1/providers" && req.method === "GET") {
+  if (reqPath === "/v1/providers" && req.method === "GET") {
     if (!checkLocalAuth(req, res)) return;
     sendJson(res, 200, { providers: publicProviders() });
     return;
   }
 
-  if (path === "/v1/resolve" && req.method === "GET") {
+  if (reqPath === "/v1/resolve" && req.method === "GET") {
     if (!checkLocalAuth(req, res)) return;
     const model = url.searchParams.get("model") || "";
     if (!model) {
@@ -179,28 +212,28 @@ async function route(req, res) {
     return;
   }
 
-  if (path === "/v1/messages" && req.method === "POST") {
+  if (reqPath === "/v1/messages" && req.method === "POST") {
     if (!checkLocalAuth(req, res)) return;
     const body = await readJson(req);
     await forwardAnthropicMessages(body, req, res, context);
     return;
   }
 
-  if (path === "/v1/chat/completions" && req.method === "POST") {
+  if (reqPath === "/v1/chat/completions" && req.method === "POST") {
     if (!checkLocalAuth(req, res)) return;
     const body = await readJson(req);
     await forwardOpenAIChatCompletions(body, req, res, context);
     return;
   }
 
-  if (path === "/v1/responses" && req.method === "POST") {
+  if (reqPath === "/v1/responses" && req.method === "POST") {
     if (!checkLocalAuth(req, res)) return;
     const body = await readJson(req);
     await forwardOpenAIResponses(body, req, res, context);
     return;
   }
 
-  if (path === "/v1/messages/count_tokens" && req.method === "POST") {
+  if (reqPath === "/v1/messages/count_tokens" && req.method === "POST") {
     if (!checkLocalAuth(req, res)) return;
     const body = await readJson(req);
     logInfo("count_tokens_request", {
@@ -223,7 +256,7 @@ async function route(req, res) {
 
 async function forwardAnthropicMessages(body, clientReq, clientRes, context) {
   const requestedModel = body.model;
-  const route = resolveAnthropicRoute(requestedModel);
+  const route = resolveAnthropicRoute(requestedModel, context.client);
   const upstreamBody =
     route.provider?.type === "openai-chat"
       ? anthropicMessagesToOpenAIChat(body, route.model)
@@ -299,7 +332,7 @@ async function forwardOpenAIChatCompletions(body, clientReq, clientRes, context)
     );
   }
 
-  const route = resolveConfiguredModel(requestedModel, ["anthropic", "openai-chat", "openai-responses"]);
+  const route = resolveConfiguredModel(requestedModel, ["anthropic", "openai-chat", "openai-responses"], context.client);
   const resolvedModel = route?.upstream_model || resolveModel(requestedModel);
   const upstreamBody =
     route?.provider?.type === "anthropic"
@@ -400,7 +433,7 @@ async function forwardOpenAIResponses(body, clientReq, clientRes, context) {
     return;
   }
 
-  const route = resolveConfiguredModel(requestedModel, ["openai-chat", "openai-responses"]);
+  const route = resolveConfiguredModel(requestedModel, ["openai-chat", "openai-responses"], context.client);
   const resolvedModel = route?.upstream_model || resolveModel(requestedModel);
   const upstreamBody =
     route?.provider?.type === "openai-chat"
@@ -469,7 +502,7 @@ async function forwardOpenAIResponses(body, clientReq, clientRes, context) {
 }
 
 async function proxyOfficialCodexResponse(body, clientReq, clientRes, context) {
-  const auth = getOfficialCodexAuth();
+  const auth = getOfficialCodexAuth(clientReq);
   if (!auth) {
     throw httpError(
       401,
@@ -744,12 +777,32 @@ function getOfficialAnthropicAuth(req) {
 }
 
 function providerApiKey(provider, req) {
-  if (!provider) return "";
-  if (provider.api_key) return provider.api_key;
-  if (provider.api_key_env && process.env[provider.api_key_env]) return process.env[provider.api_key_env];
   const auth = req.headers.authorization || "";
-  if (auth.toLowerCase().startsWith("bearer ")) return auth.slice(7);
-  return req.headers["x-api-key"] || "";
+  let passedKey = "";
+  if (auth.toLowerCase().startsWith("bearer ")) {
+    passedKey = auth.slice(7);
+  } else if (req.headers["x-api-key"]) {
+    passedKey = req.headers["x-api-key"];
+  }
+
+  const isGatewayAuthKey = process.env.GATEWAY_API_KEY && passedKey === process.env.GATEWAY_API_KEY;
+
+  if (passedKey && !isGatewayAuthKey) {
+    return passedKey;
+  }
+
+  if (!provider) return "";
+  if (provider.api_key) {
+    if (provider.api_key.startsWith("env:")) {
+      const envName = provider.api_key.slice(4);
+      if (process.env[envName]) return process.env[envName];
+    } else {
+      return provider.api_key;
+    }
+  }
+  if (provider.api_key_env && process.env[provider.api_key_env]) return process.env[provider.api_key_env];
+
+  return "";
 }
 
 function providerHeaders(provider, apiKey, baseHeaders = {}) {
@@ -813,7 +866,7 @@ function missingProviderApiKeyMessage(provider, req) {
   return `API key is not set for provider ${provider.id}. Set ${keyName} in the gateway .env, or pass it in the client Authorization / x-api-key header.`;
 }
 
-function modelDiscovery() {
+function modelDiscovery(client = 'claude') {
   const now = Math.floor(Date.now() / 1000);
   const merged = new Map();
 
@@ -830,12 +883,12 @@ function modelDiscovery() {
 
   for (const id of EXPOSED_MODELS) {
     if (!id || merged.has(id)) continue;
-    const route = MODEL_ROUTES.find((model) => model.id === id);
+    const route = resolveConfiguredModel(id, [], client);
     merged.set(id, {
       id,
       object: "model",
       created: now,
-      owned_by: route?.owned_by || route?.provider || "custom",
+      owned_by: route?.provider?.id || "custom",
       display_name: MODEL_DISPLAY_NAMES[id] || id,
     });
   }
@@ -848,32 +901,17 @@ function modelDiscovery() {
 
 function publicGatewayConfig() {
   return {
+    ...GATEWAY_CONFIG,
     config_file: fs.existsSync(GATEWAY_CONFIG_FILE) ? GATEWAY_CONFIG_FILE : null,
-    providers: publicProviders(),
-    models: MODEL_ROUTES.map((model) => ({
-      id: model.id,
-      provider: model.provider,
-      upstream_model: model.upstream_model,
-      display_name: model.display_name,
-      aliases: model.aliases || [],
-      owned_by: model.owned_by || model.provider,
-    })),
   };
 }
 
 function publicProviders() {
-  return Object.values(PROVIDERS).map((provider) => ({
-    id: provider.id,
-    type: provider.type,
-    base_url: provider.base_url,
-    api_key_env: provider.api_key_env || "",
-    auth: provider.auth,
-    has_api_key: Boolean(provider.api_key || (provider.api_key_env && process.env[provider.api_key_env])),
-  }));
+  return GATEWAY_CONFIG.clients || {};
 }
 
-function resolveModelPublic(model) {
-  const configured = resolveConfiguredModel(model);
+function resolveModelPublic(model, client = 'claude') {
+  const configured = resolveConfiguredModel(model, [], client);
   const officialClaude = isOfficialClaudeModel(model);
   const officialCodex = isOfficialCodexModel(model);
 
@@ -985,7 +1023,7 @@ function resolveCapabilityForProtocol(model, protocol) {
   };
 }
 
-function codexModelDiscovery() {
+function codexModelDiscovery(client = 'codex') {
   const now = Math.floor(Date.now() / 1000);
   const merged = new Map();
 
@@ -1744,8 +1782,8 @@ function resolveModel(requestedModel) {
   return ARK_MODEL || requestedModel;
 }
 
-function resolveAnthropicRoute(requestedModel) {
-  const configured = resolveConfiguredModel(requestedModel, ["anthropic", "openai-chat"]);
+function resolveAnthropicRoute(requestedModel, client) {
+  const configured = resolveConfiguredModel(requestedModel, ["anthropic", "openai-chat"], client);
   if (configured) {
     if (!["anthropic", "openai-chat"].includes(configured.provider.type)) {
       throw httpError(
@@ -1768,30 +1806,41 @@ function resolveAnthropicRoute(requestedModel) {
   return { kind: "volcengine", model: ARK_MODEL || requestedModel };
 }
 
-function resolveConfiguredModel(requestedModel, allowedTypes = []) {
+function resolveConfiguredModel(requestedModel, allowedTypes = [], client = null) {
   if (!requestedModel) return null;
   const text = String(requestedModel);
   const allowed = new Set(allowedTypes);
-  const candidates = MODEL_ROUTES.filter((entry) => {
-    const provider = PROVIDERS[entry.provider];
-    return provider && (allowed.size === 0 || allowed.has(provider.type));
-  });
+  
+  const clientsToCheck = client ? [client] : ["claude", "codex"];
+  
+  for (const c of clientsToCheck) {
+    const endpoints = GATEWAY_CONFIG.clients?.[c]?.endpoints || [];
+    for (const ep of endpoints) {
+      if (allowed.size === 0 || allowed.has(ep.type)) {
+        let targetModel = text;
+        if (ep.model_mapping && ep.model_mapping[text]) {
+          targetModel = ep.model_mapping[text];
+        }
 
-  const model = candidates.find((entry) => entry.id === text)
-    || candidates.find((entry) => entry.upstream_model === text)
-    || candidates.find((entry) => Array.isArray(entry.aliases) && entry.aliases.includes(text));
-
-  if (!model) return null;
-  const provider = PROVIDERS[model.provider];
-  if (!provider) return null;
-  return { model, provider, upstream_model: model.upstream_model };
+        if (ep.models?.includes(targetModel) || ep.name === text || ep.model_mapping?.[text]) {
+          return {
+             model: { id: text, display_name: text, upstream_model: targetModel, aliases: [] },
+             provider: { id: ep.name, type: ep.type, base_url: ep.base_url, api_key: ep.api_key, auth: "bearer" },
+             upstream_model: targetModel
+          };
+        }
+      }
+    }
+  }
+  return null;
 }
 
 function isOfficialClaudeModel(model) {
   if (!model) return false;
   const text = String(model);
-  if (OFFICIAL_CLAUDE_MODEL_IDS.has(text)) return true;
-  return /^claude-(?:fable|mythos|opus|sonnet|haiku)-/i.test(text);
+  const route = resolveConfiguredModel(text, ["anthropic", "openai-chat"], "claude");
+  if (route) return false;
+  return /^claude-/i.test(text);
 }
 
 function displayNameForClaudeModel(id) {
@@ -2502,8 +2551,7 @@ function normalizeClientPath(pathname) {
 function normalizeClientName(value) {
   const text = String(value || "").trim().toLowerCase();
   if (!text) return "";
-  if (["desktop", "claude-desktop", "claude_desktop"].includes(text)) return "desktop";
-  if (["code", "claude-code", "claude_code"].includes(text)) return "code";
+  if (["desktop", "claude-desktop", "claude_desktop", "code", "claude-code", "claude_code", "claude"].includes(text)) return "claude";
   if (["codex", "codex-desktop", "codex_desktop"].includes(text)) return "codex";
   return "";
 }
@@ -2541,13 +2589,18 @@ function buildCodexCustomModels(referenceModel) {
   const seen = new Set();
   const models = [];
 
-  for (const model of MODEL_ROUTES) {
-    const provider = PROVIDERS[model.provider];
-    if (!provider || !["openai-chat", "openai-responses"].includes(provider.type)) continue;
-    const id = model.id || model.upstream_model;
-    if (!id || seen.has(id)) continue;
-    seen.add(id);
-    models.push(buildCodexCustomModel(id, model.display_name || id, referenceModel));
+  const endpoints = GATEWAY_CONFIG.clients?.codex?.endpoints || [];
+  for (const ep of endpoints) {
+    if (!["openai-chat", "openai-responses"].includes(ep.type)) continue;
+    const epModels = [
+      ...(ep.models || []),
+      ...Object.keys(ep.model_mapping || {})
+    ];
+    for (const id of epModels) {
+      if (!id || seen.has(id)) continue;
+      seen.add(id);
+      models.push(buildCodexCustomModel(id, displayNameForClaudeModel(id) || id, referenceModel));
+    }
   }
 
   return models;
@@ -2624,12 +2677,25 @@ function writeCodexModelCatalog() {
   fs.writeFileSync(CODEX_MODEL_CATALOG_PATH, JSON.stringify(catalog, null, 2), "utf8");
 }
 
-function getOfficialCodexAuth() {
+function getOfficialCodexAuth(clientReq) {
+  const authHeader = clientReq?.headers?.authorization || "";
+  if (authHeader.toLowerCase().startsWith("bearer ")) {
+    const accessToken = authHeader.slice(7);
+    if (accessToken && accessToken !== "dummy") {
+      return {
+        backend: "chatgpt-codex",
+        url: "https://chatgpt.com/backend-api/codex/responses",
+        accessToken,
+        accountId: clientReq.headers["chatgpt-account-id"] || "",
+      };
+    }
+  }
+
   if (fs.existsSync(CODEX_AUTH_PATH)) {
     try {
       const auth = JSON.parse(fs.readFileSync(CODEX_AUTH_PATH, "utf8"));
-      const accessToken = auth?.tokens?.access_token;
-      const accountId = auth?.tokens?.account_id;
+      const accessToken = auth?.tokens?.access_token || auth?.access_token || auth?.credentials?.access_token;
+      const accountId = auth?.tokens?.account_id || auth?.account_id || "";
       if (accessToken) {
         return {
           backend: "chatgpt-codex",
@@ -2660,6 +2726,9 @@ function officialUpstreamHeaders(clientReq, auth) {
     "Content-Type": "application/json",
     Accept: clientReq.headers.accept || "application/json",
     Authorization: `Bearer ${auth.accessToken}`,
+    "OpenAI-Beta": "responses=experimental",
+    "originator": "codex_cli_rs",
+    "User-Agent": "codex_cli_rs/0.0.0"
   };
 
   if (auth.accountId) {
@@ -2720,12 +2789,52 @@ function loadModelMap(filePath) {
 }
 
 function loadGatewayConfig(filePath, legacyModelMap) {
+  let config = {};
   if (filePath && fs.existsSync(filePath)) {
     const raw = fs.readFileSync(filePath, "utf8").replace(/^\uFEFF/, "");
-    return normalizeGatewayConfig(JSON.parse(raw));
+    config = JSON.parse(raw);
+  } else {
+    config = buildLegacyGatewayConfig(legacyModelMap);
   }
+  
+  if (!config.clients) {
+    const old = normalizeGatewayConfig(config);
+    config.clients = { claude: { endpoints: [] }, codex: { endpoints: [] } };
+    for (const m of old.models || []) {
+      const provider = old.providers[m.provider];
+      if (!provider) continue;
+      const ep = {
+        name: provider.id,
+        type: provider.type,
+        base_url: provider.base_url,
+        api_key: provider.api_key || (provider.api_key_env ? `env:${provider.api_key_env}` : ""),
+        models: [m.upstream_model],
+        model_mapping: {}
+      };
+      ep.model_mapping[m.id] = m.upstream_model;
+      for (const alias of m.aliases || []) {
+        ep.model_mapping[alias] = m.upstream_model;
+      }
+      config.clients.claude.endpoints.push(ep);
+      config.clients.codex.endpoints.push(ep);
+    }
+  }
+  return config;
+}
 
-  return buildLegacyGatewayConfig(legacyModelMap);
+function reloadGatewayConfig() {
+  GATEWAY_CONFIG = loadGatewayConfig(GATEWAY_CONFIG_FILE, MODEL_MAP);
+  const _endpoints = [
+    ...(GATEWAY_CONFIG.clients?.claude?.endpoints || []),
+    ...(GATEWAY_CONFIG.clients?.codex?.endpoints || [])
+  ];
+  EXPOSED_MODELS = [...new Set(_endpoints.flatMap(ep => [
+    ...(ep.models || []),
+    ...Object.keys(ep.model_mapping || {})
+  ]))];
+  if (EXPOSED_MODELS.length === 0) {
+    EXPOSED_MODELS.push(...parseList(process.env.EXPOSED_MODELS || process.env.MODEL_LIST || "claude-sonnet"));
+  }
 }
 
 function normalizeGatewayConfig(config) {
@@ -2910,3 +3019,12 @@ function enableNodeEnvProxy() {
 }
 
 
+
+async function readText(req) {
+  return new Promise((resolve, reject) => {
+    let data = "";
+    req.on("data", chunk => data += chunk);
+    req.on("end", () => resolve(data));
+    req.on("error", reject);
+  });
+}
