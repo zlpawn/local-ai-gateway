@@ -425,52 +425,62 @@
             font-size: 14px;
         }
 
-        /* Tag Inputs */
-        .tag-input-container {
+        /* Tag & Mapping UI */
+        .tags-list {
             display: flex;
             flex-wrap: wrap;
-            gap: 6px;
-            background: var(--input-bg);
-            border: 1px solid var(--border-color);
-            padding: 6px;
-            border-radius: var(--radius-md);
-            min-height: 36px;
+            gap: 8px;
+            margin-bottom: 12px;
+        }
+
+        .add-mapping-row {
+            display: flex;
             align-items: center;
-            transition: border-color var(--transition-fast);
-            cursor: text;
+            gap: 12px;
+            background: var(--surface-hover);
+            padding: 12px;
+            border-radius: var(--radius-md);
+            border: 1px dashed var(--border-color);
         }
-        .tag-input-container:focus-within {
-            border-color: var(--text-primary);
-            background: var(--input-focus-bg);
-        }
-        .tag-input-container input {
-            border: none;
-            background: transparent;
-            padding: 0 4px;
-            margin: 0;
-            min-width: 120px;
+
+        .add-mapping-row input {
             flex: 1;
-            font-size: 13px;
-            box-shadow: none !important;
-            height: 22px;
-            color: var(--text-primary);
         }
-        .tag-input-container input:focus {
-            box-shadow: none !important;
+
+        .mapping-arrow {
+            color: var(--text-secondary);
+            font-size: 14px;
+            font-weight: 500;
+        }
+
+        .password-input-wrapper {
+            position: relative;
+            display: flex;
+            align-items: center;
+        }
+
+        .password-input-wrapper input {
+            padding-right: 40px;
+        }
+
+        .password-toggle-btn {
+            position: absolute;
+            right: 8px;
+            background: none;
             border: none;
-            background: transparent;
+            color: var(--text-secondary);
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            padding: 4px;
+            border-radius: var(--radius-sm);
+            transition: color var(--transition-fast), background var(--transition-fast);
         }
-        .inline-input {
-            background: var(--input-bg) !important;
-            border: 1px dashed var(--inline-input-border) !important;
-            border-radius: 4px;
-            padding: 2px 6px !important;
-            height: 24px !important;
-        }
-        .inline-input:focus {
-            border-style: solid !important;
-            border-color: var(--text-primary) !important;
-            background: var(--input-focus-bg) !important;
+
+        .password-toggle-btn:hover {
+            color: var(--text-primary);
+            background: var(--surface);
         }
         .tag {
             background: var(--surface-hover);
@@ -695,28 +705,40 @@
                         </div>
                         <div class="form-group full">
                             <label>密钥 (API Key)</label>
-                            <input class="mono" type="password" value="${ep.api_key || ''}" placeholder="sk-..." onchange="updateEndpoint('${client}', ${index}, 'api_key', this.value)">
-                        </div>
-                        <div class="form-group full">
-                            <label>上游模型列表 (输入模型名称后按回车添加)</label>
-                            <div class="tag-input-container" onclick="if(event.target.tagName !== 'INPUT' && event.target.tagName !== 'BUTTON') document.getElementById('input-models-${client}-${index}').focus()">
-                                ${(ep.models || []).map((m, i) => `
-                                    <span class="tag">${m} <button type="button" onclick="removeTag('${client}', ${index}, 'models', ${i})" title="移除模型">×</button></span>
-                                `).join('')}
-                                <input type="text" id="input-models-${client}-${index}" class="mono inline-input" placeholder="添加模型 (例如: glm-5.2)..." onkeydown="handleTagInput(event, '${client}', ${index}, 'models')">
+                            <div class="password-input-wrapper">
+                                <input class="mono" type="password" id="api-key-${client}-${index}" value="${ep.api_key || ''}" placeholder="sk-..." onchange="updateEndpoint('${client}', ${index}, 'api_key', this.value)">
+                                <button type="button" class="password-toggle-btn" onclick="togglePasswordVisibility('api-key-${client}-${index}')" title="显示/隐藏密钥">
+                                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                                        <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"></path>
+                                        <circle cx="12" cy="12" r="3"></circle>
+                                    </svg>
+                                </button>
                             </div>
                         </div>
                         <div class="form-group full">
-                            <label>模型映射关系 (输入 原模型 → 映射模型，按回车添加)</label>
-                            <div class="tag-input-container" onclick="if(event.target.tagName !== 'INPUT' && event.target.tagName !== 'BUTTON') document.getElementById('input-mapping-req-${client}-${index}').focus()">
-                                ${Object.entries(ep.model_mapping || {}).map(([k, v]) => `
-                                    <span class="tag">${k} <span style="color: var(--text-secondary); margin: 0 2px;">→</span> ${v} <button type="button" onclick="removeMapping('${client}', ${index}, '${k}')" title="移除映射">×</button></span>
+                            <label>上游模型列表 (输入模型名称后按回车添加)</label>
+                            ${(ep.models && ep.models.length > 0) ? `
+                            <div class="tags-list">
+                                ${ep.models.map((m, i) => `
+                                    <span class="tag">${m} <button type="button" onclick="removeTag('${client}', ${index}, 'models', ${i})" title="移除模型">×</button></span>
                                 `).join('')}
-                                <div style="display: flex; align-items: center; gap: 8px; flex: 1; min-width: 250px;">
-                                    <input type="text" id="input-mapping-req-${client}-${index}" class="mono inline-input" placeholder="原模型 (如 claude-opus)" style="min-width: 120px; flex: 1;" onkeydown="handleMappingInput(event, '${client}', ${index}, true)">
-                                    <span style="color: var(--text-secondary); font-size: 12px;">→</span>
-                                    <input type="text" id="input-mapping-up-${client}-${index}" class="mono inline-input" placeholder="映射模型 (如 glm-5.2) + 回车" style="min-width: 150px; flex: 1;" onkeydown="handleMappingInput(event, '${client}', ${index}, false)">
-                                </div>
+                            </div>
+                            ` : ''}
+                            <input type="text" id="input-models-${client}-${index}" class="mono" placeholder="添加新模型并按回车 (例如: glm-5.2)..." onkeydown="handleTagInput(event, '${client}', ${index}, 'models')">
+                        </div>
+                        <div class="form-group full">
+                            <label>模型映射关系 (输入 原模型 → 映射模型，按回车添加)</label>
+                            ${Object.keys(ep.model_mapping || {}).length > 0 ? `
+                            <div class="tags-list">
+                                ${Object.entries(ep.model_mapping).map(([k, v]) => `
+                                    <span class="tag">${k} <span style="color: var(--text-secondary); margin: 0 4px;">→</span> ${v} <button type="button" onclick="removeMapping('${client}', ${index}, '${k}')" title="移除映射">×</button></span>
+                                `).join('')}
+                            </div>
+                            ` : ''}
+                            <div class="add-mapping-row">
+                                <input type="text" id="input-mapping-req-${client}-${index}" class="mono" placeholder="原模型 (如 claude-opus)" onkeydown="handleMappingInput(event, '${client}', ${index}, true)">
+                                <span class="mapping-arrow">→</span>
+                                <input type="text" id="input-mapping-up-${client}-${index}" class="mono" placeholder="映射模型 (如 glm-5.2) + 回车" onkeydown="handleMappingInput(event, '${client}', ${index}, false)">
                             </div>
                         </div>
                     </div>
@@ -846,6 +868,25 @@
                         if (input) input.focus();
                     }, 0);
                 }
+            }
+        };
+
+        window.togglePasswordVisibility = function(inputId) {
+            const input = document.getElementById(inputId);
+            if (!input) return;
+            const btn = input.nextElementSibling;
+            if (input.type === 'password') {
+                input.type = 'text';
+                btn.innerHTML = `<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                    <path d="M17.94 17.94A10.07 10.07 0 0 1 12 20c-7 0-11-8-11-8a18.45 18.45 0 0 1 5.06-5.94M9.9 4.24A9.12 9.12 0 0 1 12 4c7 0 11 8 11 8a18.5 18.5 0 0 1-2.16 3.19m-6.72-1.07a3 3 0 1 1-4.24-4.24"></path>
+                    <line x1="1" y1="1" x2="23" y2="23"></line>
+                </svg>`;
+            } else {
+                input.type = 'password';
+                btn.innerHTML = `<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                    <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"></path>
+                    <circle cx="12" cy="12" r="3"></circle>
+                </svg>`;
             }
         };
 
