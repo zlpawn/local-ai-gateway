@@ -293,6 +293,70 @@
             font-size: 14px;
         }
 
+        /* Tag Inputs */
+        .tag-input-container {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 8px;
+            background: rgba(0,0,0,0.2);
+            border: 1px solid var(--border-color);
+            padding: 8px 12px;
+            border-radius: var(--radius-md);
+            min-height: 42px;
+            align-items: center;
+            transition: all var(--transition-fast);
+            cursor: text;
+        }
+        .tag-input-container:focus-within {
+            border-color: var(--brand-primary);
+            background: rgba(0,0,0,0.3);
+            box-shadow: 0 0 0 3px var(--brand-glow);
+        }
+        .tag-input-container input {
+            border: none;
+            background: transparent;
+            padding: 0;
+            margin: 0;
+            min-width: 120px;
+            flex: 1;
+            font-size: 13px;
+            box-shadow: none !important;
+            height: 24px;
+        }
+        .tag-input-container input:focus {
+            box-shadow: none !important;
+            border: none;
+            background: transparent;
+        }
+        .tag {
+            background: var(--surface-hover);
+            border: 1px solid var(--border-color);
+            padding: 4px 10px;
+            border-radius: 12px;
+            font-size: 12px;
+            display: inline-flex;
+            align-items: center;
+            gap: 8px;
+            font-family: var(--font-mono);
+            color: var(--text-primary);
+        }
+        .tag button {
+            background: none;
+            border: none;
+            color: var(--text-secondary);
+            cursor: pointer;
+            padding: 0;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 16px;
+            line-height: 1;
+            transition: color var(--transition-fast);
+        }
+        .tag button:hover {
+            color: var(--danger);
+        }
+
         /* Toast */
         .toast-container {
             position: fixed;
@@ -459,12 +523,22 @@
                             <input class="mono" type="password" value="${ep.api_key || ''}" placeholder="sk-..." onchange="updateEndpoint('${client}', ${index}, 'api_key', this.value)">
                         </div>
                         <div class="form-group full">
-                            <label>上游模型列表 (英文逗号分隔)</label>
-                            <input class="mono" type="text" value="${(ep.models || []).join(', ')}" placeholder="glm-5.2, deepseek-v4" onchange="updateEndpoint('${client}', ${index}, 'models', this.value)">
+                            <label>上游模型列表 (输入模型名称后按回车添加)</label>
+                            <div class="tag-input-container" onclick="document.getElementById('input-models-${client}-${index}').focus()">
+                                ${(ep.models || []).map((m, i) => `
+                                    <span class="tag">${m} <button type="button" onclick="removeTag('${client}', ${index}, 'models', ${i})" title="移除模型">×</button></span>
+                                `).join('')}
+                                <input type="text" id="input-models-${client}-${index}" class="mono" placeholder="添加模型 (例如: glm-5.2)..." onkeydown="handleTagInput(event, '${client}', ${index}, 'models')">
+                            </div>
                         </div>
                         <div class="form-group full">
-                            <label>模型映射关系 (格式为 请求模型=上游模型，逗号分隔)</label>
-                            <input class="mono" type="text" value="${formatModelMapping(ep.model_mapping)}" placeholder="claude-opus-4-8=glm-5.2, claude-fable=glm-5.2" onchange="updateEndpoint('${client}', ${index}, 'model_mapping', this.value)">
+                            <label>模型映射关系 (输入格式 A=B 暂存。例如: claude-opus-4-8=glm-5.2 然后按回车)</label>
+                            <div class="tag-input-container" onclick="document.getElementById('input-mapping-${client}-${index}').focus()">
+                                ${Object.entries(ep.model_mapping || {}).map(([k, v]) => `
+                                    <span class="tag">${k} ➔ ${v} <button type="button" onclick="removeMapping('${client}', ${index}, '${k}')" title="移除映射">×</button></span>
+                                `).join('')}
+                                <input type="text" id="input-mapping-${client}-${index}" class="mono" placeholder="请求模型=上游模型..." onkeydown="handleMappingInput(event, '${client}', ${index})">
+                            </div>
                         </div>
                     </div>
                 </div>
@@ -507,21 +581,63 @@
         }
 
         window.updateEndpoint = function(client, index, field, value) {
-            if (field === 'models') {
-                config.clients[client].endpoints[index][field] = value.split(',').map(s => s.trim()).filter(Boolean);
-            } else if (field === 'model_mapping') {
-                const mapping = {};
-                value.split(',').forEach(pair => {
-                    const parts = pair.split('=');
-                    if (parts.length === 2) {
-                        mapping[parts[0].trim()] = parts[1].trim();
-                    }
-                });
-                config.clients[client].endpoints[index][field] = mapping;
-            } else {
-                config.clients[client].endpoints[index][field] = value;
-            }
+            config.clients[client].endpoints[index][field] = value;
         }
+
+        window.handleTagInput = function(e, client, index, field) {
+            if (e.key === 'Enter') {
+                e.preventDefault();
+                const val = e.target.value.trim();
+                if (val) {
+                    config.clients[client].endpoints[index][field] = config.clients[client].endpoints[index][field] || [];
+                    if (!config.clients[client].endpoints[index][field].includes(val)) {
+                        config.clients[client].endpoints[index][field].push(val);
+                    }
+                    e.target.value = '';
+                    render();
+                    setTimeout(() => {
+                        const input = document.getElementById(`input-${field}-${client}-${index}`);
+                        if (input) input.focus();
+                    }, 0);
+                }
+            }
+        };
+
+        window.removeTag = function(client, index, field, tagIndex) {
+            if (config.clients[client].endpoints[index][field]) {
+                config.clients[client].endpoints[index][field].splice(tagIndex, 1);
+                render();
+            }
+        };
+
+        window.handleMappingInput = function(e, client, index) {
+            if (e.key === 'Enter') {
+                e.preventDefault();
+                const val = e.target.value.trim();
+                let parts = val.split(/=|->|➔/);
+                if (parts.length === 2) {
+                    const k = parts[0].trim();
+                    const v = parts[1].trim();
+                    if (k && v) {
+                        config.clients[client].endpoints[index].model_mapping = config.clients[client].endpoints[index].model_mapping || {};
+                        config.clients[client].endpoints[index].model_mapping[k] = v;
+                        e.target.value = '';
+                        render();
+                        setTimeout(() => {
+                            const input = document.getElementById(`input-mapping-${client}-${index}`);
+                            if (input) input.focus();
+                        }, 0);
+                    }
+                }
+            }
+        };
+
+        window.removeMapping = function(client, index, key) {
+            if (config.clients[client].endpoints[index].model_mapping) {
+                delete config.clients[client].endpoints[index].model_mapping[key];
+                render();
+            }
+        };
 
         window.saveConfig = async function() {
             const btn = document.getElementById('save-btn');
