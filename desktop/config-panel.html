@@ -697,21 +697,14 @@ open -a "Claude"</pre>
                 <div class="section-header">
                     <div>
                         <h2>Codex 代理</h2>
-                        <p>为兼容 OpenAI 接口的独立客户端或插件（如 Cursor 等）提供下游代理支持。</p>
+                        <p>为兼容 OpenAI 接口的独立 Codex 客户端提供下游代理支持。</p>
                     </div>
                     <button class="btn" onclick="addEndpoint('codex')">
                         <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="12" y1="5" x2="12" y2="19"></line><line x1="5" y1="12" x2="19" y2="12"></line></svg>添加节点</button>
                 </div>
 
                 <div class="usage-guide">
-                    <h3>🚀 接入方式 1：第三方 IDE (Cursor / Copilot)</h3>
-                    <p>在 IDE 的“OpenAI Compatible”提供商中配置以下信息：</p>
-                    <div class="code-snippet">
-                        <code>Base URL: http://<span class="cfg-host">127.0.0.1</span>:<span class="cfg-port">8787</span>/codex/v1</code><br>
-                        <code style="margin-top: 6px; display: block; color: var(--text-secondary);">API Key: 任意字符串 (若无权限，网关会自动降级使用你在此配置的真实密钥)</code>
-                    </div>
-
-                    <h3 style="margin-top: 20px;">🤖 接入方式 2：独立 Codex App</h3>
+                    <h3>🚀 如何连接此网关？</h3>
                     <p>对于独立的 Codex 桌面端或命令行，网关会自动在 <code>~/.codex/</code> 生成 <code>gateway-model-catalog.json</code> 模型目录文件。你只需要将以下配置片段粘贴到你的 <code>~/.codex/config.toml</code> 文件中（确保放在第一个 <code>[section]</code> 之前）：</p>
                     <div class="code-snippet" style="margin-top: 10px;">
                         <pre style="margin: 0; color: inherit; font-family: inherit; font-size: inherit; background: transparent; padding: 0; overflow-x: auto;">
