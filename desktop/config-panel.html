@@ -66,17 +66,40 @@
             --radius-lg: 8px;
             --radius-md: 6px;
             --radius-sm: 4px;
+            --brand-hover: #333333;
+            --danger: #e5484d;
+            --danger-bg: #ffeef0;
+            --success: #30a46c;
+            --radius-md: 6px;
+            --radius-lg: 8px;
+            --font-sans: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+            --font-mono: ui-monospace, SFMono-Regular, "SF Mono", Menlo, Consolas, "Liberation Mono", monospace;
+            --transition-fast: 0.15s ease;
+            --transition-bounce: 0.4s cubic-bezier(0.175, 0.885, 0.32, 1.275);
             
-            --font-sans: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
-            --font-mono: "JetBrains Mono", "Fira Code", SFMono-Regular, Consolas, monospace;
-            
-            --transition-fast: 0.15s ease-out;
-            
-            --shadow-card: 0 4px 20px rgba(0, 0, 0, 0.04);
+            /* Input specific */
             --input-bg: #ffffff;
             --input-focus-bg: #ffffff;
-            --inline-input-border: rgba(0, 0, 0, 0.2);
-            --tag-bg: #f4f4f5;
+            --inline-input-border: #cccccc;
+        }
+
+        [data-theme="dark"] {
+            --bg-color: #0c0c0c;
+            --surface: #111111;
+            --surface-hover: #1f1f1f;
+            --border-color: #2a2a2a;
+            --text-primary: #ededed;
+            --text-secondary: #888888;
+            --brand-primary: #ffffff;
+            --brand-text: #000000;
+            --brand-hover: #e0e0e0;
+            --danger: #e5484d;
+            --danger-bg: rgba(229, 72, 77, 0.15);
+            --success: #30a46c;
+            
+            --input-bg: #0c0c0c;
+            --input-focus-bg: #111111;
+            --inline-input-border: #444444;
         }
 
         * {
@@ -86,12 +109,90 @@
         }
 
         body {
+            font-family: var(--font-sans);
             background-color: var(--bg-color);
             color: var(--text-primary);
-            font-family: var(--font-sans);
+            line-height: 1.5;
             -webkit-font-smoothing: antialiased;
-            line-height: 1.6;
-            padding-bottom: 120px;
+            -moz-osx-font-smoothing: grayscale;
+            height: 100vh;
+            overflow: hidden;
+            margin: 0;
+        }
+
+        /* App Layout (Dashboard) */
+        .app-layout {
+            display: flex;
+            height: 100%;
+        }
+
+        /* Sidebar */
+        .sidebar {
+            width: 260px;
+            display: flex;
+            flex-direction: column;
+            background: var(--surface);
+            border-right: 1px solid var(--border-color);
+            flex-shrink: 0;
+        }
+
+        .sidebar-header {
+            padding: 32px 24px;
+            font-size: 15px;
+            font-weight: 600;
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            color: var(--text-primary);
+        }
+
+        .sidebar-nav {
+            flex: 1;
+            padding: 0 12px;
+            display: flex;
+            flex-direction: column;
+            gap: 4px;
+        }
+
+        .nav-item {
+            padding: 8px 12px;
+            border-radius: var(--radius-md);
+            color: var(--text-secondary);
+            text-decoration: none;
+            font-size: 13px;
+            font-weight: 500;
+            transition: all var(--transition-fast);
+            cursor: pointer;
+            display: block;
+        }
+
+        .nav-item:hover {
+            background: var(--surface-hover);
+            color: var(--text-primary);
+        }
+
+        .nav-item.active {
+            background: var(--input-bg);
+            color: var(--text-primary);
+            font-weight: 600;
+            border: 1px solid var(--border-color);
+            box-shadow: 0 1px 2px rgba(0,0,0,0.02);
+        }
+
+        .sidebar-footer {
+            padding: 24px;
+            display: flex;
+            gap: 12px;
+            border-top: 1px solid var(--border-color);
+            background: var(--surface);
+        }
+
+        /* Content Area */
+        .content-area {
+            flex: 1;
+            overflow-y: auto;
+            padding: 48px 64px;
+            background: var(--bg-color);
         }
 
         .header {
@@ -191,15 +292,7 @@
             font-size: 12px;
         }
 
-        /* Main Container */
-        .container {
-            max-width: 1040px;
-            margin: 48px auto;
-            padding: 0 40px;
-            display: flex;
-            flex-direction: column;
-            gap: 56px;
-        }
+        /* End of App Layout styling */
 
         /* Sections */
         .section-header {
@@ -477,50 +570,56 @@
 </head>
 <body>
 
-    <header class="header">
-        <div class="header-title">
-            <div class="status-dot"></div>
-            AI 网关配置
-        </div>
-        <div style="display: flex; gap: 12px; align-items: center;">
-            <button class="btn" id="theme-toggle" onclick="toggleTheme()" aria-label="Toggle Theme" style="padding: 8px; border-radius: 50%;">
-                <svg id="theme-icon-dark" style="display: none;" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"></path></svg>
-                <svg id="theme-icon-light" style="display: none;" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="5"></circle><line x1="12" y1="1" x2="12" y2="3"></line><line x1="12" y1="21" x2="12" y2="23"></line><line x1="4.22" y1="4.22" x2="5.64" y2="5.64"></line><line x1="18.36" y1="18.36" x2="19.78" y2="19.78"></line><line x1="1" y1="12" x2="3" y2="12"></line><line x1="21" y1="12" x2="23" y2="12"></line><line x1="4.22" y1="19.78" x2="5.64" y2="18.36"></line><line x1="18.36" y1="5.64" x2="19.78" y2="4.22"></line></svg>
-            </button>
-            <button class="btn btn-primary" id="save-btn" onclick="saveConfig()">
-                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z"></path><polyline points="17 21 17 13 7 13 7 21"></polyline><polyline points="7 3 7 8 15 8"></polyline></svg>
-                保存并重载
-            </button>
-        </div>
-    </header>
-
-    <main class="container" id="app">
-        <!-- Claude Section -->
-        <section>
-            <div class="section-header">
-                <div>
-                    <h2>Claude 代理 (Claude Code)</h2>
-                    <p>通过官方 API 或兼容 OpenAI 格式的代理服务转发 Anthropic 模型请求。</p>
-                </div>
-                <button class="btn" onclick="addEndpoint('claude')">
-                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="12" y1="5" x2="12" y2="19"></line><line x1="5" y1="12" x2="19" y2="12"></line></svg>添加节点</button>
+    <div class="app-layout">
+        <aside class="sidebar">
+            <div class="sidebar-header">
+                <div class="status-dot"></div>
+                AI 网关配置
             </div>
-            <div class="endpoints-grid" id="claude-endpoints"></div>
-        </section>
-
-        <!-- Codex 代理 (IDE) Section -->
-        <section>
-            <div class="section-header">
-                <div>
-                    <h2>Codex</h2>
-                    <p>为 IDE 插件（如 Cursor、GitHub Copilot 等）提供下游代理支持。</p>
-                </div>
-                <button class="btn" onclick="addEndpoint('codex')">
-                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="12" y1="5" x2="12" y2="19"></line><line x1="5" y1="12" x2="19" y2="12"></line></svg>添加节点</button>
+            <nav class="sidebar-nav">
+                <a href="#claude" class="nav-item active" onclick="switchTab('claude')">Claude 代理</a>
+                <a href="#codex" class="nav-item" onclick="switchTab('codex')">Codex 代理</a>
+            </nav>
+            <div class="sidebar-footer">
+                <button class="btn" id="theme-toggle" onclick="toggleTheme()" aria-label="Toggle Theme" style="padding: 8px; border-radius: 50%;">
+                    <svg id="theme-icon-dark" style="display: none;" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"></path></svg>
+                    <svg id="theme-icon-light" style="display: none;" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="5"></circle><line x1="12" y1="1" x2="12" y2="3"></line><line x1="12" y1="21" x2="12" y2="23"></line><line x1="4.22" y1="4.22" x2="5.64" y2="5.64"></line><line x1="18.36" y1="18.36" x2="19.78" y2="19.78"></line><line x1="1" y1="12" x2="3" y2="12"></line><line x1="21" y1="12" x2="23" y2="12"></line><line x1="4.22" y1="19.78" x2="5.64" y2="18.36"></line><line x1="18.36" y1="5.64" x2="19.78" y2="4.22"></line></svg>
+                </button>
+                <button class="btn btn-primary" id="save-btn" onclick="saveConfig()" style="flex: 1;">
+                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z"></path><polyline points="17 21 17 13 7 13 7 21"></polyline><polyline points="7 3 7 8 15 8"></polyline></svg>
+                    保存配置
+                </button>
             </div>
-            <div class="endpoints-grid" id="codex-endpoints"></div>
-        </section>
-    </main>
+        </aside>
+
+        <main class="content-area" id="app">
+            <!-- Claude Section -->
+            <section id="section-claude" class="tab-section active">
+                <div class="section-header">
+                    <div>
+                        <h2>Claude 代理 (Claude Code)</h2>
+                        <p>通过官方 API 或兼容 OpenAI 格式的代理服务转发 Anthropic 模型请求。</p>
+                    </div>
+                    <button class="btn" onclick="addEndpoint('claude')">
+                        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="12" y1="5" x2="12" y2="19"></line><line x1="5" y1="12" x2="19" y2="12"></line></svg>添加节点</button>
+                </div>
+                <div class="endpoints-grid" id="claude-endpoints"></div>
+            </section>
+
+            <!-- Codex Section -->
+            <section id="section-codex" class="tab-section" style="display: none;">
+                <div class="section-header">
+                    <div>
+                        <h2>Codex 代理 (IDE)</h2>
+                        <p>为 IDE 插件（如 Cursor、GitHub Copilot 等）提供下游代理支持。</p>
+                    </div>
+                    <button class="btn" onclick="addEndpoint('codex')">
+                        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="12" y1="5" x2="12" y2="19"></line><line x1="5" y1="12" x2="19" y2="12"></line></svg>添加节点</button>
+                </div>
+                <div class="endpoints-grid" id="codex-endpoints"></div>
+            </section>
+        </main>
+    </div>
 
     <div class="toast-container" id="toast-container"></div>
 
@@ -642,6 +741,38 @@
                 }
             });
         }
+
+        window.switchTab = function(tabId) {
+            // Update nav items
+            document.querySelectorAll('.nav-item').forEach(el => {
+                el.classList.remove('active');
+            });
+            const navItem = document.querySelector(`.nav-item[href="#${tabId}"]`);
+            if (navItem) {
+                navItem.classList.add('active');
+            }
+
+            // Update sections
+            document.querySelectorAll('.tab-section').forEach(el => {
+                el.style.display = 'none';
+                el.classList.remove('active');
+            });
+            const activeSection = document.getElementById(`section-${tabId}`);
+            if (activeSection) {
+                activeSection.style.display = 'block';
+                activeSection.classList.add('active');
+            }
+
+            // Scroll to top
+            document.querySelector('.content-area').scrollTop = 0;
+        }
+
+        window.addEventListener('load', () => {
+            const hash = window.location.hash.replace('#', '');
+            if (hash === 'claude' || hash === 'codex') {
+                switchTab(hash);
+            }
+        });
 
         window.addEndpoint = function(client) {
             config.clients[client].endpoints = config.clients[client].endpoints || [];
