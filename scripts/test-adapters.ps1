@@ -241,40 +241,58 @@ $Config = @{
     host = "127.0.0.1"
     port = $GatewayPort
   }
-  providers = @{
-    "mock-chat" = @{
-      type = "openai-chat"
-      base_url = "http://127.0.0.1:$MockPort"
-      api_key_env = "MOCK_API_KEY"
-      auth = "bearer"
+  clients = @{
+    code = @{
+      endpoints = @(
+        @{
+          name = "mock-chat"
+          type = "openai-chat"
+          base_url = "http://127.0.0.1:$MockPort"
+          api_key = "env:MOCK_API_KEY"
+          models = @("mock-upstream")
+          model_mapping = @{
+            "claude-mock-sonnet" = "mock-upstream"
+          }
+        }
+      )
     }
-    "mock-responses" = @{
-      type = "openai-responses"
-      base_url = "http://127.0.0.1:$MockPort"
-      api_key_env = "MOCK_API_KEY"
-      auth = "bearer"
+    codex = @{
+      endpoints = @(
+        @{
+          name = "mock-chat"
+          type = "openai-chat"
+          base_url = "http://127.0.0.1:$MockPort"
+          api_key = "env:MOCK_API_KEY"
+          models = @("mock-upstream")
+          model_mapping = @{
+            "mock-codex-model" = "mock-upstream"
+          }
+        }
+      )
     }
-  }
-  models = @{
-    "claude-mock-sonnet" = @{
-      provider = "mock-chat"
-      upstream_model = "mock-upstream"
-      display_name = "Mock Sonnet"
-    }
-    "mock-codex-model" = @{
-      provider = "mock-chat"
-      upstream_model = "mock-upstream"
-      display_name = "Mock Codex"
-    }
-    "mock-chat-model" = @{
-      provider = "mock-chat"
-      upstream_model = "mock-upstream"
-      display_name = "Mock Chat"
-    }
-    "mock-responses-model" = @{
-      provider = "mock-responses"
-      upstream_model = "mock-responses-upstream"
-      display_name = "Mock Responses"
+    unknown = @{
+      endpoints = @(
+        @{
+          name = "mock-chat"
+          type = "openai-chat"
+          base_url = "http://127.0.0.1:$MockPort"
+          api_key = "env:MOCK_API_KEY"
+          models = @("mock-upstream")
+          model_mapping = @{
+            "mock-chat-model" = "mock-upstream"
+          }
+        }
+        @{
+          name = "mock-responses"
+          type = "openai-responses"
+          base_url = "http://127.0.0.1:$MockPort"
+          api_key = "env:MOCK_API_KEY"
+          models = @("mock-responses-upstream")
+          model_mapping = @{
+            "mock-responses-model" = "mock-responses-upstream"
+          }
+        }
+      )
     }
   }
 } | ConvertTo-Json -Depth 20
