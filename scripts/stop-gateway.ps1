@@ -13,6 +13,14 @@ function Stop-Pid {
     return $false
   }
 
+  $processInfo = Get-CimInstance Win32_Process -Filter "ProcessId = $ProcessId" -ErrorAction SilentlyContinue
+  $commandLine = if ($processInfo) { $processInfo.CommandLine } else { "" }
+  $isGatewayProcess = $process.ProcessName -eq "node" -and $commandLine -match "(^|[\\\s`"]|/)server\.js([`"\s]|$)"
+  if (-not $isGatewayProcess) {
+    Write-Host "PID $ProcessId is not an agent gateway process; treating PID file as stale."
+    return $false
+  }
+
   Stop-Process -Id $ProcessId -Force
   Write-Host "Stopped gateway PID: $ProcessId"
   return $true
