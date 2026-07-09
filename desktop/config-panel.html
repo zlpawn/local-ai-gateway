@@ -532,12 +532,16 @@
                             </div>
                         </div>
                         <div class="form-group full">
-                            <label>模型映射关系 (输入格式 A=B 暂存。例如: claude-opus-4-8=glm-5.2 然后按回车)</label>
-                            <div class="tag-input-container" onclick="document.getElementById('input-mapping-${client}-${index}').focus()">
+                            <label>模型映射关系 (输入 原模型 ➔ 映射模型，按回车添加)</label>
+                            <div class="tag-input-container" onclick="document.getElementById('input-mapping-req-${client}-${index}').focus()">
                                 ${Object.entries(ep.model_mapping || {}).map(([k, v]) => `
                                     <span class="tag">${k} ➔ ${v} <button type="button" onclick="removeMapping('${client}', ${index}, '${k}')" title="移除映射">×</button></span>
                                 `).join('')}
-                                <input type="text" id="input-mapping-${client}-${index}" class="mono" placeholder="请求模型=上游模型..." onkeydown="handleMappingInput(event, '${client}', ${index})">
+                                <div style="display: flex; align-items: center; gap: 8px; flex: 1; min-width: 250px;">
+                                    <input type="text" id="input-mapping-req-${client}-${index}" class="mono" placeholder="原模型 (如 claude-opus)" style="min-width: 120px; flex: 1;" onkeydown="handleMappingInput(event, '${client}', ${index}, true)">
+                                    <span style="color: var(--text-secondary);">➔</span>
+                                    <input type="text" id="input-mapping-up-${client}-${index}" class="mono" placeholder="映射模型 (如 glm-5.2) + 回车" style="min-width: 150px; flex: 1;" onkeydown="handleMappingInput(event, '${client}', ${index}, false)">
+                                </div>
                             </div>
                         </div>
                     </div>
@@ -610,24 +614,29 @@
             }
         };
 
-        window.handleMappingInput = function(e, client, index) {
+        window.handleMappingInput = function(e, client, index, isReq) {
             if (e.key === 'Enter') {
                 e.preventDefault();
-                const val = e.target.value.trim();
-                let parts = val.split(/=|->|➔/);
-                if (parts.length === 2) {
-                    const k = parts[0].trim();
-                    const v = parts[1].trim();
-                    if (k && v) {
-                        config.clients[client].endpoints[index].model_mapping = config.clients[client].endpoints[index].model_mapping || {};
-                        config.clients[client].endpoints[index].model_mapping[k] = v;
-                        e.target.value = '';
-                        render();
-                        setTimeout(() => {
-                            const input = document.getElementById(`input-mapping-${client}-${index}`);
-                            if (input) input.focus();
-                        }, 0);
-                    }
+                const reqInput = document.getElementById(`input-mapping-req-${client}-${index}`);
+                const upInput = document.getElementById(`input-mapping-up-${client}-${index}`);
+                if (!reqInput || !upInput) return;
+                
+                const k = reqInput.value.trim();
+                const v = upInput.value.trim();
+
+                if (isReq && k && !v) {
+                    upInput.focus();
+                    return;
+                }
+
+                if (k && v) {
+                    config.clients[client].endpoints[index].model_mapping = config.clients[client].endpoints[index].model_mapping || {};
+                    config.clients[client].endpoints[index].model_mapping[k] = v;
+                    render();
+                    setTimeout(() => {
+                        const input = document.getElementById(`input-mapping-req-${client}-${index}`);
+                        if (input) input.focus();
+                    }, 0);
                 }
             }
         };
