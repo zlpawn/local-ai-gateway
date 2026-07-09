@@ -571,10 +571,11 @@
             config.clients[client].endpoints = config.clients[client].endpoints || [];
             config.clients[client].endpoints.push({
                 name: "新服务商",
-                type: client === 'claude' ? "anthropic" : "openai-responses",
+                type: "anthropic",
                 base_url: "",
                 api_key: "",
-                models: []
+                models: [],
+                model_mapping: {}
             });
             render();
         }

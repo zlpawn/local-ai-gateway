@@ -2803,20 +2803,25 @@ function loadGatewayConfig(filePath, legacyModelMap) {
     for (const m of old.models || []) {
       const provider = old.providers[m.provider];
       if (!provider) continue;
-      const ep = {
-        name: provider.id,
-        type: provider.type,
-        base_url: provider.base_url,
-        api_key: provider.api_key || (provider.api_key_env ? `env:${provider.api_key_env}` : ""),
-        models: [m.upstream_model],
-        model_mapping: {}
-      };
-      ep.model_mapping[m.id] = m.upstream_model;
-      for (const alias of m.aliases || []) {
-        ep.model_mapping[alias] = m.upstream_model;
+      
+      // Do not auto-migrate OpenAPI URLs to Claude/Codex unless the user configures them manually
+      if (provider.type === "anthropic") {
+        const ep = {
+          name: provider.id,
+          type: provider.type,
+          base_url: provider.base_url,
+          api_key: provider.api_key || (provider.api_key_env ? `env:${provider.api_key_env}` : ""),
+          models: [m.upstream_model],
+          model_mapping: {}
+        };
+        ep.model_mapping[m.id] = m.upstream_model;
+        for (const alias of m.aliases || []) {
+          ep.model_mapping[alias] = m.upstream_model;
+        }
+        // Push deep clones to avoid modifying both when editing one
+        config.clients.claude.endpoints.push(JSON.parse(JSON.stringify(ep)));
+        config.clients.codex.endpoints.push(JSON.parse(JSON.stringify(ep)));
       }
-      config.clients.claude.endpoints.push(ep);
-      config.clients.codex.endpoints.push(ep);
     }
   }
   return config;
