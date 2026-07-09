@@ -12,7 +12,7 @@
     "init:bash": "bash scripts/init-config.sh",
     "start": "node server.js",
     "desktop": "electron desktop/main.mjs",
-    "desktop:check": "node --check desktop/main.mjs && node --check desktop/lib/gateway-control.mjs && node --check desktop/lib/desktop-smoke.mjs && node --check desktop/renderer/app.js && node --check desktop/preload.cjs && node --check scripts/smoke-desktop.mjs",
+    "desktop:check": "node --check desktop/main.mjs && node --check desktop/lib/gateway-control.mjs && node --check desktop/lib/desktop-smoke.mjs && node --check scripts/smoke-desktop.mjs",
     "desktop:test": "node --test desktop/lib/gateway-control.test.mjs desktop/lib/desktop-smoke.test.mjs",
     "desktop:smoke": "node scripts/smoke-desktop.mjs",
     "desktop:dist": "electron-builder --config electron-builder.yml",

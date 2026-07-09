@@ -1,6 +1,7 @@
 # Local secrets and user config
 .env
 gateway.config.json
+models.json
 .codex/
 restore-codex-config.ps1
 restore-codex-custom-provider.ps1
