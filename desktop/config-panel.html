@@ -693,11 +693,27 @@
                 </div>
 
                 <div class="usage-guide">
-                    <h3>🚀 如何连接此网关？</h3>
-                    <p>在 Cursor 等 IDE 的“OpenAI Compatible”提供商中配置以下信息：</p>
+                    <h3>🚀 接入方式 1：第三方 IDE (Cursor / Copilot)</h3>
+                    <p>在 IDE 的“OpenAI Compatible”提供商中配置以下信息：</p>
                     <div class="code-snippet">
                         <code>Base URL: http://<span class="cfg-host">127.0.0.1</span>:<span class="cfg-port">8787</span>/codex/v1</code><br>
                         <code style="margin-top: 6px; display: block; color: var(--text-secondary);">API Key: 任意字符串 (若无权限，网关会自动降级使用你在此配置的真实密钥)</code>
+                    </div>
+
+                    <h3 style="margin-top: 20px;">🤖 接入方式 2：独立 Codex App</h3>
+                    <p>对于独立的 Codex 桌面端或命令行，网关会自动在 <code>~/.codex/</code> 生成 <code>gateway-model-catalog.json</code> 模型目录文件。你只需要将以下配置片段粘贴到你的 <code>~/.codex/config.toml</code> 文件中（确保放在第一个 <code>[section]</code> 之前）：</p>
+                    <div class="code-snippet" style="margin-top: 10px;">
+                        <pre style="margin: 0; color: inherit; font-family: inherit; font-size: inherit; background: transparent; padding: 0; overflow-x: auto;">
+model_provider = "custom"
+model_catalog_json = "<span class="cfg-home-dir">~</span>/.codex/gateway-model-catalog.json"
+openai_base_url = "http://<span class="cfg-host">127.0.0.1</span>:<span class="cfg-port">8787</span>/codex/v1"
+
+[model_providers.custom]
+name = "Local AI Gateway"
+base_url = "http://<span class="cfg-host">127.0.0.1</span>:<span class="cfg-port">8787</span>/codex/v1"
+wire_api = "responses"
+requires_openai_auth = true
+experimental_bearer_token = "dummy"</pre>
                     </div>
                 </div>
 
