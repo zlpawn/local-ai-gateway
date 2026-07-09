@@ -641,7 +641,7 @@ async function fetchConfiguredAnthropic(provider, body, clientReq) {
 
   try {
     try {
-      return await fetch(url, {
+      let res = await fetch(url, {
         method: "POST",
         headers: providerHeaders(provider, upstreamApiKey, {
           "anthropic-version": clientReq.headers["anthropic-version"] || "2023-06-01",
@@ -652,6 +652,26 @@ async function fetchConfiguredAnthropic(provider, body, clientReq) {
         body: JSON.stringify(body),
         signal: controller.signal,
       });
+
+      if (res.status === 401 || res.status === 403) {
+        const fallbackKey = getConfiguredProviderApiKey(provider);
+        if (fallbackKey && fallbackKey !== upstreamApiKey) {
+          logInfo("api_key_fallback", { provider: provider.id, original_status: res.status });
+          res = await fetch(url, {
+            method: "POST",
+            headers: providerHeaders(provider, fallbackKey, {
+              "anthropic-version": clientReq.headers["anthropic-version"] || "2023-06-01",
+              ...(clientReq.headers["anthropic-beta"]
+                ? { "anthropic-beta": clientReq.headers["anthropic-beta"] }
+                : {}),
+            }),
+            body: JSON.stringify(body),
+            signal: controller.signal,
+          });
+        }
+      }
+
+      return res;
     } catch (error) {
       const message =
         error?.name === "AbortError"
@@ -709,12 +729,27 @@ async function fetchConfiguredOpenAI(provider, endpointPath, body, clientReq) {
 
   try {
     try {
-      return await fetch(url, {
+      let res = await fetch(url, {
         method: "POST",
         headers: providerHeaders(provider, upstreamApiKey),
         body: JSON.stringify(body),
         signal: controller.signal,
       });
+
+      if (res.status === 401 || res.status === 403) {
+        const fallbackKey = getConfiguredProviderApiKey(provider);
+        if (fallbackKey && fallbackKey !== upstreamApiKey) {
+          logInfo("api_key_fallback", { provider: provider.id, original_status: res.status });
+          res = await fetch(url, {
+            method: "POST",
+            headers: providerHeaders(provider, fallbackKey),
+            body: JSON.stringify(body),
+            signal: controller.signal,
+          });
+        }
+      }
+
+      return res;
     } catch (error) {
       const message =
         error?.name === "AbortError"
@@ -778,6 +813,20 @@ function getOfficialAnthropicAuth(req) {
   return null;
 }
 
+function getConfiguredProviderApiKey(provider) {
+  if (!provider) return "";
+  if (provider.api_key) {
+    if (provider.api_key.startsWith("env:")) {
+      const envName = provider.api_key.slice(4);
+      if (process.env[envName]) return process.env[envName];
+    } else {
+      return provider.api_key;
+    }
+  }
+  if (provider.api_key_env && process.env[provider.api_key_env]) return process.env[provider.api_key_env];
+  return "";
+}
+
 function providerApiKey(provider, req) {
   const auth = req.headers.authorization || "";
   let passedKey = "";
@@ -793,18 +842,7 @@ function providerApiKey(provider, req) {
     return passedKey;
   }
 
-  if (!provider) return "";
-  if (provider.api_key) {
-    if (provider.api_key.startsWith("env:")) {
-      const envName = provider.api_key.slice(4);
-      if (process.env[envName]) return process.env[envName];
-    } else {
-      return provider.api_key;
-    }
-  }
-  if (provider.api_key_env && process.env[provider.api_key_env]) return process.env[provider.api_key_env];
-
-  return "";
+  return getConfiguredProviderApiKey(provider);
 }
 
 function providerHeaders(provider, apiKey, baseHeaders = {}) {
