@@ -7,6 +7,20 @@
   "author": "Local AI Gateway contributors",
   "type": "module",
   "main": "desktop/main.mjs",
+  "bin": {
+    "local-ai-gateway": "./bin/cli.js"
+  },
+  "files": [
+    "bin",
+    "desktop",
+    "server.js",
+    "gateway.config.example.json",
+    "gateway.config.json",
+    "models.json",
+    ".env.example",
+    "README.md",
+    "LICENSE"
+  ],
   "scripts": {
     "init": "powershell -NoProfile -ExecutionPolicy Bypass -File scripts/init-config.ps1",
     "init:bash": "bash scripts/init-config.sh",

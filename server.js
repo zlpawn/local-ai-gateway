@@ -3,7 +3,7 @@ import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
 import zlib from "node:zlib";
-import { execFileSync } from "node:child_process";
+import { execFileSync, exec } from "node:child_process";
 import { randomUUID } from "node:crypto";
 import { URL, fileURLToPath } from "node:url";
 
@@ -105,7 +105,9 @@ const server = http.createServer(async (req, res) => {
 });
 
 server.listen(LISTEN_PORT, LISTEN_HOST, () => {
-  console.log(`Claude -> Ark gateway listening on http://${LISTEN_HOST}:${LISTEN_PORT}`);
+  const host = LISTEN_HOST === "0.0.0.0" ? "127.0.0.1" : LISTEN_HOST;
+  const url = `http://${host}:${LISTEN_PORT}/`;
+  console.log(`Claude -> Ark gateway listening on ${url}`);
   console.log(`Ark Anthropic messages URL: ${ARK_MESSAGES_URL}`);
   console.log(`Ark Codex/OpenAI URL: ${ARK_CODEX_BASE_URL}`);
   console.log(`Official Anthropic messages URL: ${ANTHROPIC_MESSAGES_URL}`);
@@ -116,6 +118,22 @@ server.listen(LISTEN_PORT, LISTEN_HOST, () => {
   console.log(`Codex official models: ${OFFICIAL_CODEX_MODELS.length}`);
   console.log(`Codex custom models: ${CODEX_CUSTOM_MODELS.length}`);
   console.log(`Codex model catalog writing: ${CODEX_WRITE_MODEL_CATALOG ? CODEX_MODEL_CATALOG_PATH : "disabled"}`);
+
+  const shouldOpen = !process.env.GATEWAY_NO_OPEN &&
+                     !process.env.MOCK_API_KEY &&
+                     !process.env.ELECTRON_RUN_AS_NODE &&
+                     process.env.NODE_ENV !== "test";
+  if (shouldOpen) {
+    const startCmd = 
+      process.platform === "darwin" ? `open "${url}"` :
+      process.platform === "win32" ? `start "" "${url}"` :
+      `xdg-open "${url}"`;
+    exec(startCmd, (err) => {
+      if (err) {
+        console.error("Failed to open browser automatically:", err.message);
+      }
+    });
+  }
 });
 
 async function route(req, res) {
