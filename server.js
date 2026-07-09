@@ -2800,30 +2800,70 @@ function loadGatewayConfig(filePath, legacyModelMap) {
   if (!config.clients) {
     const old = normalizeGatewayConfig(config);
     config.clients = { claude: { endpoints: [] }, codex: { endpoints: [] } };
+    
+    const providersMap = {};
     for (const m of old.models || []) {
       const provider = old.providers[m.provider];
       if (!provider) continue;
       
       // Do not auto-migrate OpenAPI URLs to Claude/Codex unless the user configures them manually
       if (provider.type === "anthropic") {
-        const ep = {
-          name: provider.id,
-          type: provider.type,
-          base_url: provider.base_url,
-          api_key: provider.api_key || (provider.api_key_env ? `env:${provider.api_key_env}` : ""),
-          models: [m.upstream_model],
-          model_mapping: {}
-        };
+        if (!providersMap[provider.id]) {
+          providersMap[provider.id] = {
+            name: provider.id,
+            type: provider.type,
+            base_url: provider.base_url,
+            api_key: provider.api_key || (provider.api_key_env ? `env:${provider.api_key_env}` : ""),
+            models: [],
+            model_mapping: {}
+          };
+        }
+        
+        const ep = providersMap[provider.id];
+        if (!ep.models.includes(m.upstream_model)) {
+          ep.models.push(m.upstream_model);
+        }
         ep.model_mapping[m.id] = m.upstream_model;
         for (const alias of m.aliases || []) {
           ep.model_mapping[alias] = m.upstream_model;
         }
-        // Push deep clones to avoid modifying both when editing one
-        config.clients.claude.endpoints.push(JSON.parse(JSON.stringify(ep)));
-        config.clients.codex.endpoints.push(JSON.parse(JSON.stringify(ep)));
       }
     }
+    
+    for (const ep of Object.values(providersMap)) {
+      config.clients.claude.endpoints.push(JSON.parse(JSON.stringify(ep)));
+      config.clients.codex.endpoints.push(JSON.parse(JSON.stringify(ep)));
+    }
   }
+
+  // Deduplicate endpoints
+  if (config.clients) {
+    for (const clientName of Object.keys(config.clients)) {
+      const endpoints = config.clients[clientName].endpoints || [];
+      const mergedEndpoints = [];
+      const epMap = new Map();
+      
+      for (const ep of endpoints) {
+        const key = `${ep.type}|${ep.base_url}|${ep.api_key}`;
+        if (epMap.has(key)) {
+          const existing = epMap.get(key);
+          if (ep.models) {
+            for (const m of ep.models) {
+              if (!existing.models.includes(m)) existing.models.push(m);
+            }
+          }
+          if (ep.model_mapping) {
+            Object.assign(existing.model_mapping, ep.model_mapping);
+          }
+        } else {
+          epMap.set(key, ep);
+          mergedEndpoints.push(ep);
+        }
+      }
+      config.clients[clientName].endpoints = mergedEndpoints;
+    }
+  }
+
   return config;
 }
 
