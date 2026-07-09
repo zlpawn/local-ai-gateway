@@ -11,11 +11,10 @@ files:
   - package.json
   - README.md
   - LICENSE
-  - gateway.config.example.json
   - .env.example
-  - models.json
   - "!gateway.config.json"
   - "!.env"
+  - "!models.json"
   - "!gateway*.log"
   - "!gateway.pid"
   - "!_inspect_repo/**/*"

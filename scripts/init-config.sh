@@ -25,12 +25,11 @@ copy_template_if_missing() {
 }
 
 copy_template_if_missing ".env.example" ".env"
-copy_template_if_missing "gateway.config.example.json" "gateway.config.json"
 
 cat <<'EOF'
 
 Next steps:
-  1. Edit .env and gateway.config.json
-  2. Run: npm run validate:config
-  3. Run: npm run gateway:start
+  1. Edit .env
+  2. Start the gateway and open http://127.0.0.1:8787/config
+  3. Save the web config page to create gateway.config.json
 EOF

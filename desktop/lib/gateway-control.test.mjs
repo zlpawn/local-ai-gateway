@@ -63,7 +63,6 @@ test("buildGatewayEnvironment points server paths at the app root", () => {
 
   assert.equal(env.EXISTING, "1");
   assert.equal(env.GATEWAY_CONFIG_FILE, path.join(root, "gateway.config.json"));
-  assert.equal(env.MODEL_MAP_FILE, path.join(root, "models.json"));
   assert.equal(env.LOG_FILE, path.join(root, "gateway.log"));
   assert.equal(env.NODE_USE_ENV_PROXY, "1");
 });

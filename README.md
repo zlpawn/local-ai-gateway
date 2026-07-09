@@ -26,16 +26,14 @@ real Claude model IDs are forwarded to the official Anthropic Messages endpoint.
 ## Files
 
 - `server.js`: local gateway server
-- `gateway.config.example.json`: provider/model routing config template
 - `.env.example`: config template
 - `docs/providers.md`: provider recipes for Volcengine, OpenRouter, DeepSeek, and Anthropic
-- `models.json`: legacy Volcengine-only model mapping fallback
 - `scripts/init-config.ps1`: first-run config initializer for Windows
 - `scripts/init-config.sh`: first-run config initializer for Bash/macOS/Linux
 
 ## Provider Config
 
-New setups should copy the generic config template:
+New setups should create the local environment file:
 
 ```powershell
 npm run init
@@ -49,35 +47,23 @@ npm run init:bash
 
 On Windows, use `npm run init` unless you are running inside Git Bash or WSL.
 
-The init command creates `.env` and `gateway.config.json` only when they do not
-already exist, so it is safe to run again.
+The init command creates `.env` only when it does not already exist, so it is
+safe to run again. Local `.env` and `gateway.config.json` files are ignored by
+Git.
 
-The config has two important sections:
+Start the gateway, open `http://127.0.0.1:8787/config`, add endpoints, and save
+the page to create `gateway.config.json`.
+
+The web config stores endpoints under each client:
 
 ```json
 {
-  "providers": {
-    "openrouter": {
-      "type": "openai-chat",
-      "base_url": "https://openrouter.ai/api/v1",
-      "api_key_env": "OPENROUTER_API_KEY",
-      "auth": "bearer"
-    }
-  },
-  "models": [
-    {
-      "id": "deepseek-chat",
-      "provider": "openrouter",
-      "upstream_model": "deepseek/deepseek-chat",
-      "display_name": "DeepSeek Chat"
-    },
-    {
-      "id": "claude-sonnet-openrouter",
-      "provider": "openrouter",
-      "upstream_model": "deepseek/deepseek-chat",
-      "display_name": "Claude-style DeepSeek Chat via OpenRouter"
-    }
-  ]
+  "server": { "host": "127.0.0.1", "port": 8787 },
+  "clients": {
+    "code": { "endpoints": [] },
+    "desktop": { "endpoints": [] },
+    "codex": { "endpoints": [] }
+  }
 }
 ```
 
@@ -98,30 +84,13 @@ The same `openai-chat` providers can serve Claude Desktop / Claude Code
 means a Claude-style client model id such as `claude-sonnet-openrouter` can be
 mapped to an upstream OpenAI-compatible model such as `deepseek/deepseek-chat`.
 
-If `gateway.config.json` does not exist, the gateway falls back to the old
-`.env + models.json` Volcengine setup.
-
-## Legacy Model Mapping
-
-Current mapping in `models.json`:
-
-```text
-claude-opus-4-8   -> glm-5.2
-claude-opus-4-7   -> minimax-m3
-claude-sonnet-4-5 -> deepseek-v4-pro
-claude-haiku-4-0  -> doubao-seed-2.0-pro
-```
-
-Aliases are also accepted. For example, if a client sends `sonnet` or
-`deepseek-v4-pro`, the gateway forwards `deepseek-v4-pro` to Ark.
-
 ## Start
 
 ```powershell
 npm run init
 ```
 
-Edit `.env` and `gateway.config.json`:
+Edit `.env`:
 
 ```env
 # Optional. If empty, the gateway uses the client's Gateway API key as Ark key.
@@ -132,15 +101,16 @@ GATEWAY_CONFIG_FILE=gateway.config.json
 ARK_BASE_URL=https://ark.cn-beijing.volces.com/api/plan
 ARK_CODEX_BASE_URL=https://ark.cn-beijing.volces.com/api/plan/v3
 OFFICIAL_ANTHROPIC_BASE_URL=https://api.anthropic.com
-MODEL_MAP_FILE=models.json
 ```
 
 Then run:
 
 ```powershell
-npm run validate:config
 npm start
 ```
+
+Open `http://127.0.0.1:8787/config` and save the web config page to create
+`gateway.config.json`.
 
 For background control on Windows, use:
 
@@ -160,12 +130,12 @@ gateway.stderr.log
 gateway.log
 ```
 
-## Desktop Console
+## Desktop App
 
-The desktop console is an Electron app for Windows and macOS. It starts the
-gateway when the app opens and stops the gateway when the app exits. It does
-not install a system service, keep running in the background after close, or
-auto-update.
+The desktop app is an Electron shell for the same web config page served at
+`/config`. It starts the gateway when the app opens, loads the local
+`http://127.0.0.1:<port>/config` page, and stops the gateway when the app exits.
+It does not keep a separate desktop config UI.
 
 Run it during development:
 
@@ -194,11 +164,9 @@ The repository also includes a GitHub Actions workflow at
 `.github/workflows/desktop-build.yml` that builds both platforms on native
 hosted runners and uploads the Windows and macOS artifacts.
 
-The desktop console keeps its editable config and logs in Electron's user data
-directory, not in the repository root. On first launch it copies the existing
-`.env`, `gateway.config.json`, and `models.json` when present; otherwise it
-uses the example templates. This keeps the existing CLI and script workflow
-unchanged.
+The desktop app keeps its local `.env`, `gateway.config.json`, and logs in
+Electron's user data directory, not in the repository root. The config is still
+created by saving the shared web config page.
 
 Desktop checks:
 
@@ -214,11 +182,10 @@ app, and verifies that the port is released.
 
 ## Validate
 
-Before starting the gateway, validate your provider config:
+After saving `gateway.config.json`, validate your provider config:
 
 ```powershell
 npm run validate:config
-node scripts/validate-config.mjs gateway.config.example.json
 ```
 
 Run adapter tests without calling any real upstream provider:
@@ -299,8 +266,8 @@ Claude Code env block:
 Routing behavior:
 
 ```text
-claude-sonnet-4-5       -> deepseek-v4-pro on Ark, from models.json
-glm-5.2                 -> glm-5.2 on Ark, from models.json alias
+claude-sonnet-4-5       -> deepseek-v4-pro on Ark, from gateway.config.json
+glm-5.2                 -> glm-5.2 on Ark, from gateway.config.json alias
 claude-sonnet-4-6       -> official Anthropic upstream
 claude-haiku-4-5-...    -> official Anthropic upstream
 ```
