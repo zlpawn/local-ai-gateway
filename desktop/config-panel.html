@@ -5,35 +5,78 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>AI 本地网关配置</title>
     <style>
-        :root {
-            /* Modern Dark Theme Inspired by Premium Dev Tools */
-            --bg-color: #0c0d0f;
-            --surface: #141518;
-            --surface-hover: #1b1c20;
-            --border-color: #23252a;
-            --text-primary: #e2e4e9;
-            --text-secondary: #8a8f98;
+        :root[data-theme="dark"] {
+            /* Pure Dark Theme (No Purple Glow) */
+            --bg-color: #09090b;
+            --surface: #18181b;
+            --surface-hover: #27272a;
+            --border-color: #3f3f46;
+            --text-primary: #fafafa;
+            --text-secondary: #a1a1aa;
             
-            --brand-primary: #526eff;
-            --brand-hover: #435fe6;
-            --brand-glow: rgba(82, 110, 255, 0.2);
+            --brand-primary: #fafafa;
+            --brand-hover: #ffffff;
+            --brand-text: #09090b;
+            --brand-glow: rgba(255, 255, 255, 0.1);
             
-            --danger: #e54d2e;
-            --danger-hover: #ce4024;
-            --danger-bg: rgba(229, 77, 46, 0.1);
+            --danger: #ef4444;
+            --danger-hover: #dc2626;
+            --danger-bg: rgba(239, 68, 68, 0.1);
             
-            --success: #4cc38a;
+            --success: #10b981;
             
-            --radius-xl: 16px;
-            --radius-lg: 12px;
-            --radius-md: 8px;
-            --radius-sm: 6px;
+            --radius-xl: 12px;
+            --radius-lg: 8px;
+            --radius-md: 6px;
+            --radius-sm: 4px;
             
             --font-sans: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
             --font-mono: "JetBrains Mono", "Fira Code", SFMono-Regular, Consolas, monospace;
             
             --transition-fast: 0.15s ease-out;
-            --transition-bounce: 0.3s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+            
+            --shadow-card: 0 4px 20px rgba(0, 0, 0, 0.3);
+            --input-bg: rgba(255, 255, 255, 0.03);
+            --input-focus-bg: rgba(255, 255, 255, 0.05);
+            --inline-input-border: rgba(255, 255, 255, 0.2);
+            --tag-bg: rgba(255, 255, 255, 0.1);
+        }
+
+        :root[data-theme="light"] {
+            /* Crisp Light Theme */
+            --bg-color: #fafafa;
+            --surface: #ffffff;
+            --surface-hover: #f4f4f5;
+            --border-color: #e4e4e7;
+            --text-primary: #09090b;
+            --text-secondary: #71717a;
+            
+            --brand-primary: #18181b;
+            --brand-hover: #09090b;
+            --brand-text: #ffffff;
+            --brand-glow: rgba(0, 0, 0, 0.1);
+            
+            --danger: #ef4444;
+            --danger-hover: #dc2626;
+            --danger-bg: rgba(239, 68, 68, 0.1);
+            
+            --success: #10b981;
+            
+            --radius-xl: 12px;
+            --radius-lg: 8px;
+            --radius-md: 6px;
+            --radius-sm: 4px;
+            
+            --font-sans: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+            --font-mono: "JetBrains Mono", "Fira Code", SFMono-Regular, Consolas, monospace;
+            
+            --transition-fast: 0.15s ease-out;
+            
+            --shadow-card: 0 4px 20px rgba(0, 0, 0, 0.04);
+            --input-bg: #ffffff;
+            --input-focus-bg: #ffffff;
+            --inline-input-border: rgba(0, 0, 0, 0.2);
+            --tag-bg: #f4f4f5;
         }
 
         * {
@@ -51,12 +94,11 @@
             padding-bottom: 120px;
         }
 
-        /* Top Navigation Bar */
         .header {
             position: sticky;
             top: 0;
             z-index: 100;
-            background: rgba(12, 13, 15, 0.7);
+            background: var(--bg-color);
             backdrop-filter: blur(16px);
             -webkit-backdrop-filter: blur(16px);
             border-bottom: 1px solid var(--border-color);
@@ -123,15 +165,15 @@
 
         .btn-primary {
             background: var(--brand-primary);
-            color: white;
-            border: none;
-            box-shadow: 0 4px 14px var(--brand-glow), inset 0 1px 0 rgba(255,255,255,0.1);
+            color: var(--brand-text);
+            border: 1px solid var(--brand-primary);
+            box-shadow: 0 2px 8px var(--brand-glow);
         }
 
         .btn-primary:hover:not(:disabled) {
             background: var(--brand-hover);
-            box-shadow: 0 6px 20px var(--brand-glow), inset 0 1px 0 rgba(255,255,255,0.15);
             transform: translateY(-1px);
+            box-shadow: 0 4px 12px var(--brand-glow);
         }
         
         .btn-danger {
@@ -195,12 +237,12 @@
             border: 1px solid var(--border-color);
             border-radius: var(--radius-lg);
             padding: 24px 32px;
+            box-shadow: var(--shadow-card);
             transition: border-color var(--transition-fast), box-shadow var(--transition-fast);
         }
 
         .card:hover {
-            border-color: #353942;
-            box-shadow: 0 8px 30px rgba(0,0,0,0.12);
+            border-color: var(--text-secondary);
         }
 
         .card-header {
@@ -251,7 +293,7 @@
         }
 
         input, select {
-            background: rgba(0,0,0,0.2);
+            background: var(--input-bg);
             border: 1px solid var(--border-color);
             color: var(--text-primary);
             padding: 10px 14px;
@@ -268,14 +310,14 @@
         }
 
         input:hover, select:hover {
-            border-color: #353942;
+            border-color: var(--text-secondary);
         }
 
         input:focus, select:focus {
             outline: none;
-            border-color: var(--brand-primary);
-            background: rgba(0,0,0,0.3);
-            box-shadow: 0 0 0 3px var(--brand-glow);
+            border-color: var(--text-primary);
+            background: var(--input-focus-bg);
+            box-shadow: 0 0 0 1px var(--text-primary);
         }
 
         /* Empty State */
@@ -298,7 +340,7 @@
             display: flex;
             flex-wrap: wrap;
             gap: 8px;
-            background: rgba(0,0,0,0.2);
+            background: var(--input-bg);
             border: 1px solid var(--border-color);
             padding: 8px 12px;
             border-radius: var(--radius-md);
@@ -308,9 +350,9 @@
             cursor: text;
         }
         .tag-input-container:focus-within {
-            border-color: var(--brand-primary);
-            background: rgba(0,0,0,0.3);
-            box-shadow: 0 0 0 3px var(--brand-glow);
+            border-color: var(--text-primary);
+            background: var(--input-focus-bg);
+            box-shadow: 0 0 0 1px var(--text-primary);
         }
         .tag-input-container input {
             border: none;
@@ -322,6 +364,7 @@
             font-size: 13px;
             box-shadow: none !important;
             height: 24px;
+            color: var(--text-primary);
         }
         .tag-input-container input:focus {
             box-shadow: none !important;
@@ -329,17 +372,18 @@
             background: transparent;
         }
         .inline-input {
-            background: rgba(255, 255, 255, 0.05) !important;
-            border: 1px dashed rgba(255, 255, 255, 0.2) !important;
+            background: var(--input-bg) !important;
+            border: 1px dashed var(--inline-input-border) !important;
             border-radius: 4px;
             padding: 2px 8px !important;
         }
         .inline-input:focus {
-            border-color: var(--brand-primary) !important;
-            background: rgba(0, 0, 0, 0.2) !important;
+            border-style: solid !important;
+            border-color: var(--text-primary) !important;
+            background: var(--input-focus-bg) !important;
         }
         .tag {
-            background: var(--surface-hover);
+            background: var(--tag-bg);
             border: 1px solid var(--border-color);
             padding: 4px 10px;
             border-radius: 12px;
@@ -355,11 +399,7 @@
             border: none;
             color: var(--text-secondary);
             cursor: pointer;
-            padding: 0;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            font-size: 16px;
+            font-size: 14px;
             line-height: 1;
             transition: color var(--transition-fast);
         }
@@ -414,6 +454,18 @@
             to { transform: translateY(10px) scale(0.95); opacity: 0; }
         }
     </style>
+    <script>
+        // Prevent FOUC by setting theme early
+        (function() {
+            const savedTheme = localStorage.getItem('app-theme');
+            if (savedTheme) {
+                document.documentElement.setAttribute('data-theme', savedTheme);
+            } else {
+                const prefersLight = window.matchMedia('(prefers-color-scheme: light)').matches;
+                document.documentElement.setAttribute('data-theme', prefersLight ? 'light' : 'dark');
+            }
+        })();
+    </script>
 </head>
 <body>
 
@@ -422,10 +474,16 @@
             <div class="status-dot"></div>
             AI 网关配置
         </div>
-        <button class="btn btn-primary" id="save-btn" onclick="saveConfig()">
-            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z"></path><polyline points="17 21 17 13 7 13 7 21"></polyline><polyline points="7 3 7 8 15 8"></polyline></svg>
-            保存并重载
-        </button>
+        <div style="display: flex; gap: 12px; align-items: center;">
+            <button class="btn" id="theme-toggle" onclick="toggleTheme()" aria-label="Toggle Theme" style="padding: 8px; border-radius: 50%;">
+                <svg id="theme-icon-dark" style="display: none;" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"></path></svg>
+                <svg id="theme-icon-light" style="display: none;" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="5"></circle><line x1="12" y1="1" x2="12" y2="3"></line><line x1="12" y1="21" x2="12" y2="23"></line><line x1="4.22" y1="4.22" x2="5.64" y2="5.64"></line><line x1="18.36" y1="18.36" x2="19.78" y2="19.78"></line><line x1="1" y1="12" x2="3" y2="12"></line><line x1="21" y1="12" x2="23" y2="12"></line><line x1="4.22" y1="19.78" x2="5.64" y2="18.36"></line><line x1="18.36" y1="5.64" x2="19.78" y2="4.22"></line></svg>
+            </button>
+            <button class="btn btn-primary" id="save-btn" onclick="saveConfig()">
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z"></path><polyline points="17 21 17 13 7 13 7 21"></polyline><polyline points="7 3 7 8 15 8"></polyline></svg>
+                保存并重载
+            </button>
+        </div>
     </header>
 
     <main class="container" id="app">
@@ -710,7 +768,36 @@
         style.textContent = `@keyframes spin { 100% { transform: rotate(360deg); } }`;
         document.head.appendChild(style);
 
-        document.addEventListener('DOMContentLoaded', init);
+        // Theme management
+        window.toggleTheme = function() {
+            const root = document.documentElement;
+            const currentTheme = root.getAttribute('data-theme') || 'dark';
+            const newTheme = currentTheme === 'dark' ? 'light' : 'dark';
+            
+            root.setAttribute('data-theme', newTheme);
+            localStorage.setItem('app-theme', newTheme);
+            updateThemeIcon(newTheme);
+        };
+
+        function updateThemeIcon(theme) {
+            const darkIcon = document.getElementById('theme-icon-dark');
+            const lightIcon = document.getElementById('theme-icon-light');
+            if (!darkIcon || !lightIcon) return;
+            
+            if (theme === 'dark') {
+                darkIcon.style.display = 'block';
+                lightIcon.style.display = 'none';
+            } else {
+                darkIcon.style.display = 'none';
+                lightIcon.style.display = 'block';
+            }
+        }
+
+        document.addEventListener('DOMContentLoaded', () => {
+            init();
+            const currentTheme = document.documentElement.getAttribute('data-theme') || 'dark';
+            updateThemeIcon(currentTheme);
+        });
     </script>
 </body>
 </html>
