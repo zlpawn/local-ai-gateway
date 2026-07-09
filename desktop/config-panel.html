@@ -328,6 +328,16 @@
             border: none;
             background: transparent;
         }
+        .inline-input {
+            background: rgba(255, 255, 255, 0.05) !important;
+            border: 1px dashed rgba(255, 255, 255, 0.2) !important;
+            border-radius: 4px;
+            padding: 2px 8px !important;
+        }
+        .inline-input:focus {
+            border-color: var(--brand-primary) !important;
+            background: rgba(0, 0, 0, 0.2) !important;
+        }
         .tag {
             background: var(--surface-hover);
             border: 1px solid var(--border-color);
@@ -528,7 +538,7 @@
                                 ${(ep.models || []).map((m, i) => `
                                     <span class="tag">${m} <button type="button" onclick="removeTag('${client}', ${index}, 'models', ${i})" title="移除模型">×</button></span>
                                 `).join('')}
-                                <input type="text" id="input-models-${client}-${index}" class="mono" placeholder="添加模型 (例如: glm-5.2)..." onkeydown="handleTagInput(event, '${client}', ${index}, 'models')">
+                                <input type="text" id="input-models-${client}-${index}" class="mono inline-input" placeholder="添加模型 (例如: glm-5.2)..." onkeydown="handleTagInput(event, '${client}', ${index}, 'models')">
                             </div>
                         </div>
                         <div class="form-group full">
@@ -538,9 +548,9 @@
                                     <span class="tag">${k} ➔ ${v} <button type="button" onclick="removeMapping('${client}', ${index}, '${k}')" title="移除映射">×</button></span>
                                 `).join('')}
                                 <div style="display: flex; align-items: center; gap: 8px; flex: 1; min-width: 250px;">
-                                    <input type="text" id="input-mapping-req-${client}-${index}" class="mono" placeholder="原模型 (如 claude-opus)" style="min-width: 120px; flex: 1;" onkeydown="handleMappingInput(event, '${client}', ${index}, true)">
+                                    <input type="text" id="input-mapping-req-${client}-${index}" class="mono inline-input" placeholder="原模型 (如 claude-opus)" style="min-width: 120px; flex: 1;" onkeydown="handleMappingInput(event, '${client}', ${index}, true)">
                                     <span style="color: var(--text-secondary);">➔</span>
-                                    <input type="text" id="input-mapping-up-${client}-${index}" class="mono" placeholder="映射模型 (如 glm-5.2) + 回车" style="min-width: 150px; flex: 1;" onkeydown="handleMappingInput(event, '${client}', ${index}, false)">
+                                    <input type="text" id="input-mapping-up-${client}-${index}" class="mono inline-input" placeholder="映射模型 (如 glm-5.2) + 回车" style="min-width: 150px; flex: 1;" onkeydown="handleMappingInput(event, '${client}', ${index}, false)">
                                 </div>
                             </div>
                         </div>
