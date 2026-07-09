@@ -2,6 +2,8 @@
 
 Local AI Gateway routes by model id. Each model points to a provider, and each
 provider declares the upstream API shape it supports.
+The `base_url` value is used exactly as written; the gateway does not append
+protocol paths such as `/messages`, `/chat/completions`, or `/responses`.
 
 ## Provider Types
 
@@ -30,7 +32,7 @@ OpenAI Chat clients          -> anthropic, through Chat-to-Anthropic adapter
   "providers": {
     "volcengine-anthropic": {
       "type": "anthropic",
-      "base_url": "https://ark.cn-beijing.volces.com/api/plan/v1",
+      "base_url": "https://ark.cn-beijing.volces.com/api/plan",
       "api_key_env": "ARK_API_KEY",
       "auth": "bearer"
     },
@@ -66,7 +68,7 @@ and Codex-style clients through the gateway adapters.
   "providers": {
     "openrouter": {
       "type": "openai-chat",
-      "base_url": "https://openrouter.ai/api/v1",
+      "base_url": "https://openrouter.ai/api/v1/chat/completions",
       "api_key_env": "OPENROUTER_API_KEY",
       "auth": "bearer"
     }
@@ -94,7 +96,7 @@ and Codex-style clients through the gateway adapters.
   "providers": {
     "deepseek": {
       "type": "openai-chat",
-      "base_url": "https://api.deepseek.com/v1",
+      "base_url": "https://api.deepseek.com/v1/chat/completions",
       "api_key_env": "DEEPSEEK_API_KEY",
       "auth": "bearer"
     }
@@ -121,7 +123,7 @@ and Codex-style clients through the gateway adapters.
   "providers": {
     "anthropic": {
       "type": "anthropic",
-      "base_url": "https://api.anthropic.com/v1",
+      "base_url": "https://api.anthropic.com/v1/messages",
       "api_key_env": "ANTHROPIC_API_KEY",
       "auth": "x-api-key"
     }
@@ -139,6 +141,8 @@ and Codex-style clients through the gateway adapters.
 ## Key Rules
 
 - Prefer `api_key_env` instead of inline `api_key`.
+- Set `base_url` to the exact upstream request URL shown by the provider for
+  that protocol.
 - Use a Claude-like local model id when a Claude client needs to display a
   third-party model as a Claude choice.
 - Use the provider's real upstream model id in `upstream_model`.

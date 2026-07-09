@@ -86,6 +86,30 @@ function Test-ResponsesToChat {
   }
 }
 
+function Test-AnthropicExactBaseUrl {
+  $body = @{
+    model = "claude-mock-haiku"
+    max_tokens = 16
+    messages = @(@{ role = "user"; content = "Reply OK only." })
+  } | ConvertTo-Json -Depth 20
+
+  $res = Invoke-RestMethod `
+    -Uri "http://127.0.0.1:$GatewayPort/desktop/v1/messages" `
+    -Method Post `
+    -Headers @{ Authorization = "Bearer client-key"; "anthropic-version" = "2023-06-01" } `
+    -ContentType "application/json" `
+    -Body $body
+
+  if ($res.content[0].text -ne "OK") {
+    throw "Anthropic exact base URL returned unexpected text: $($res.content[0].text)"
+  }
+
+  $upstream = Get-Content -LiteralPath (Join-Path $Tmp "last-root.json") -Raw | ConvertFrom-Json
+  if ($upstream.model -ne "mock-anthropic-upstream") {
+    throw "Anthropic exact base URL sent unexpected upstream model: $($upstream.model)"
+  }
+}
+
 function Test-OpenAIChatCompletions {
   $body = @{
     model = "mock-chat-model"
@@ -185,6 +209,20 @@ const server = http.createServer((req, res) => {
     const safeName = req.url.replace(/[^a-z0-9]+/gi, "_").replace(/^_+|_+$/g, "") || "root";
     fs.writeFileSync(`${outDir}/last-${safeName}.json`, JSON.stringify(body, null, 2));
 
+    if (req.url === "/") {
+      res.writeHead(200, { "content-type": "application/json" });
+      res.end(JSON.stringify({
+        id: "msg_mock",
+        type: "message",
+        role: "assistant",
+        model: body.model,
+        content: [{ type: "text", text: "OK" }],
+        stop_reason: "end_turn",
+        usage: { input_tokens: 3, output_tokens: 1 }
+      }));
+      return;
+    }
+
     if (req.url === "/responses") {
       res.writeHead(200, { "content-type": "application/json" });
       res.end(JSON.stringify({
@@ -247,7 +285,7 @@ $Config = @{
         @{
           name = "mock-chat"
           type = "openai-chat"
-          base_url = "http://127.0.0.1:$MockPort"
+          base_url = "http://127.0.0.1:$MockPort/chat/completions"
           api_key = "env:MOCK_API_KEY"
           models = @("mock-upstream")
           model_mapping = @{
@@ -261,11 +299,25 @@ $Config = @{
         @{
           name = "mock-chat"
           type = "openai-chat"
-          base_url = "http://127.0.0.1:$MockPort"
+          base_url = "http://127.0.0.1:$MockPort/chat/completions"
           api_key = "env:MOCK_API_KEY"
           models = @("mock-upstream")
           model_mapping = @{
             "mock-codex-model" = "mock-upstream"
+          }
+        }
+      )
+    }
+    desktop = @{
+      endpoints = @(
+        @{
+          name = "mock-anthropic"
+          type = "anthropic"
+          base_url = "http://127.0.0.1:$MockPort"
+          api_key = "env:MOCK_API_KEY"
+          models = @("mock-anthropic-upstream")
+          model_mapping = @{
+            "claude-mock-haiku" = "mock-anthropic-upstream"
           }
         }
       )
@@ -275,7 +327,7 @@ $Config = @{
         @{
           name = "mock-chat"
           type = "openai-chat"
-          base_url = "http://127.0.0.1:$MockPort"
+          base_url = "http://127.0.0.1:$MockPort/chat/completions"
           api_key = "env:MOCK_API_KEY"
           models = @("mock-upstream")
           model_mapping = @{
@@ -285,7 +337,7 @@ $Config = @{
         @{
           name = "mock-responses"
           type = "openai-responses"
-          base_url = "http://127.0.0.1:$MockPort"
+          base_url = "http://127.0.0.1:$MockPort/responses"
           api_key = "env:MOCK_API_KEY"
           models = @("mock-responses-upstream")
           model_mapping = @{
@@ -330,6 +382,7 @@ try {
 
   Test-AnthropicToChat
   Test-ResponsesToChat
+  Test-AnthropicExactBaseUrl
   Test-OpenAIChatCompletions
   Test-OpenAIChatToResponses
   Test-ResolveRoute
