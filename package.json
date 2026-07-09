@@ -1,5 +1,5 @@
 {
-  "name": "local-ai-gateway",
+  "name": "@leo/local-ai-gateway",
   "version": "0.1.0",
   "description": "Local configurable gateway for Claude, Codex, and OpenAI-compatible AI providers.",
   "private": false,
