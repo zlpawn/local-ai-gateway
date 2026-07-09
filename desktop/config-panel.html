@@ -534,7 +534,7 @@
                         </div>
                         <div class="form-group full">
                             <label>上游模型列表 (输入模型名称后按回车添加)</label>
-                            <div class="tag-input-container" onclick="document.getElementById('input-models-${client}-${index}').focus()">
+                            <div class="tag-input-container" onclick="if(event.target.tagName !== 'INPUT' && event.target.tagName !== 'BUTTON') document.getElementById('input-models-${client}-${index}').focus()">
                                 ${(ep.models || []).map((m, i) => `
                                     <span class="tag">${m} <button type="button" onclick="removeTag('${client}', ${index}, 'models', ${i})" title="移除模型">×</button></span>
                                 `).join('')}
@@ -543,7 +543,7 @@
                         </div>
                         <div class="form-group full">
                             <label>模型映射关系 (输入 原模型 ➔ 映射模型，按回车添加)</label>
-                            <div class="tag-input-container" onclick="document.getElementById('input-mapping-req-${client}-${index}').focus()">
+                            <div class="tag-input-container" onclick="if(event.target.tagName !== 'INPUT' && event.target.tagName !== 'BUTTON') document.getElementById('input-mapping-req-${client}-${index}').focus()">
                                 ${Object.entries(ep.model_mapping || {}).map(([k, v]) => `
                                     <span class="tag">${k} ➔ ${v} <button type="button" onclick="removeMapping('${client}', ${index}, '${k}')" title="移除映射">×</button></span>
                                 `).join('')}
