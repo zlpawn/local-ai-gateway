@@ -1,6 +1,6 @@
 {
   "name": "@wuhezhizhong/local-ai-gateway",
-  "version": "0.0.1-beta",
+  "version": "0.0.2",
   "description": "Local configurable gateway for Claude, Codex, and OpenAI-compatible AI providers.",
   "private": false,
   "license": "MIT",
