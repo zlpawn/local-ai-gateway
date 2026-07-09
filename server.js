@@ -46,6 +46,8 @@ let GATEWAY_CONFIG = loadGatewayConfig(GATEWAY_CONFIG_FILE, MODEL_MAP);
 const LISTEN_HOST = ENV_HOST || GATEWAY_CONFIG.server?.host || "127.0.0.1";
 const LISTEN_PORT = ENV_PORT || Number(GATEWAY_CONFIG.server?.port) || 8787;
 const _allEndpoints = [
+  ...(GATEWAY_CONFIG.clients?.code?.endpoints || []),
+  ...(GATEWAY_CONFIG.clients?.desktop?.endpoints || []),
   ...(GATEWAY_CONFIG.clients?.claude?.endpoints || []),
   ...(GATEWAY_CONFIG.clients?.codex?.endpoints || [])
 ];
@@ -1811,7 +1813,7 @@ function resolveConfiguredModel(requestedModel, allowedTypes = [], client = null
   const text = String(requestedModel);
   const allowed = new Set(allowedTypes);
   
-  const clientsToCheck = client ? [client] : ["claude", "codex"];
+  const clientsToCheck = client ? [client] : ["code", "desktop", "claude", "codex"];
   
   for (const c of clientsToCheck) {
     const endpoints = GATEWAY_CONFIG.clients?.[c]?.endpoints || [];
@@ -2551,7 +2553,8 @@ function normalizeClientPath(pathname) {
 function normalizeClientName(value) {
   const text = String(value || "").trim().toLowerCase();
   if (!text) return "";
-  if (["desktop", "claude-desktop", "claude_desktop", "code", "claude-code", "claude_code", "claude"].includes(text)) return "claude";
+  if (["code", "claude-code", "claude_code"].includes(text)) return "code";
+  if (["desktop", "claude-desktop", "claude_desktop", "claude"].includes(text)) return "desktop";
   if (["codex", "codex-desktop", "codex_desktop"].includes(text)) return "codex";
   return "";
 }
@@ -2799,7 +2802,7 @@ function loadGatewayConfig(filePath, legacyModelMap) {
   
   if (!config.clients) {
     const old = normalizeGatewayConfig(config);
-    config.clients = { claude: { endpoints: [] }, codex: { endpoints: [] } };
+    config.clients = { code: { endpoints: [] }, desktop: { endpoints: [] }, codex: { endpoints: [] } };
     
     const providersMap = {};
     for (const m of old.models || []) {
@@ -2831,13 +2834,19 @@ function loadGatewayConfig(filePath, legacyModelMap) {
     }
     
     for (const ep of Object.values(providersMap)) {
-      config.clients.claude.endpoints.push(JSON.parse(JSON.stringify(ep)));
+      config.clients.code.endpoints.push(JSON.parse(JSON.stringify(ep)));
+      config.clients.desktop.endpoints.push(JSON.parse(JSON.stringify(ep)));
       config.clients.codex.endpoints.push(JSON.parse(JSON.stringify(ep)));
     }
   }
 
   // Deduplicate endpoints
   if (config.clients) {
+    if (config.clients.claude) {
+      if (!config.clients.code) config.clients.code = JSON.parse(JSON.stringify(config.clients.claude));
+      if (!config.clients.desktop) config.clients.desktop = JSON.parse(JSON.stringify(config.clients.claude));
+      delete config.clients.claude;
+    }
     for (const clientName of Object.keys(config.clients)) {
       const endpoints = config.clients[clientName].endpoints || [];
       const mergedEndpoints = [];
@@ -2870,6 +2879,8 @@ function loadGatewayConfig(filePath, legacyModelMap) {
 function reloadGatewayConfig() {
   GATEWAY_CONFIG = loadGatewayConfig(GATEWAY_CONFIG_FILE, MODEL_MAP);
   const _endpoints = [
+    ...(GATEWAY_CONFIG.clients?.code?.endpoints || []),
+    ...(GATEWAY_CONFIG.clients?.desktop?.endpoints || []),
     ...(GATEWAY_CONFIG.clients?.claude?.endpoints || []),
     ...(GATEWAY_CONFIG.clients?.codex?.endpoints || [])
   ];
