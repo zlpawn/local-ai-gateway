@@ -59,7 +59,7 @@ The config has two important sections:
   "providers": {
     "openrouter": {
       "type": "openai-chat",
-      "base_url": "https://openrouter.ai/api/v1",
+      "base_url": "https://openrouter.ai/api/v1/chat/completions",
       "api_key_env": "OPENROUTER_API_KEY",
       "auth": "bearer"
     }
@@ -88,6 +88,10 @@ anthropic         -> /v1/messages providers
 openai-chat       -> /v1/chat/completions providers
 openai-responses  -> /v1/responses providers
 ```
+
+For configured third-party providers, `base_url` is the exact upstream request
+URL. The gateway does not append `/messages`, `/chat/completions`, or
+`/responses` to it.
 
 `openai-chat` providers can also serve Codex `/v1/responses` requests through
 the gateway's Responses-to-Chat adapter. This is useful for providers such as

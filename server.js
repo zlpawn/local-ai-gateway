@@ -633,9 +633,7 @@ async function fetchConfiguredAnthropic(provider, body, clientReq) {
     );
   }
 
-  const url = provider.base_url.endsWith("/messages")
-    ? provider.base_url
-    : `${provider.base_url}/messages`;
+  const url = provider.base_url;
   const controller = new AbortController();
   const timeout = setTimeout(() => controller.abort(), REQUEST_TIMEOUT_MS);
 
@@ -723,7 +721,7 @@ async function fetchConfiguredOpenAI(provider, endpointPath, body, clientReq) {
     );
   }
 
-  const url = `${provider.base_url}${endpointPath}`;
+  const url = provider.base_url;
   const controller = new AbortController();
   const timeout = setTimeout(() => controller.abort(), REQUEST_TIMEOUT_MS);
 
