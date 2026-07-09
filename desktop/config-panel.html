@@ -453,6 +453,38 @@
             font-weight: 500;
         }
 
+        /* Usage Guide */
+        .usage-guide {
+            background: var(--surface);
+            border: 1px solid var(--border-color);
+            border-radius: var(--radius-md);
+            padding: 16px;
+            margin-bottom: 24px;
+        }
+        .usage-guide h3 {
+            font-size: 14px;
+            margin: 0 0 8px 0;
+            display: flex;
+            align-items: center;
+            gap: 6px;
+            color: var(--text-primary);
+        }
+        .usage-guide p {
+            font-size: 13px;
+            color: var(--text-secondary);
+            margin: 0 0 12px 0;
+        }
+        .code-snippet {
+            background: var(--bg-color);
+            border-radius: 4px;
+            padding: 10px 12px;
+            font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+            font-size: 13px;
+            color: var(--text-primary);
+            border: 1px solid var(--border-color);
+            user-select: all;
+        }
+
         .password-input-wrapper {
             position: relative;
             display: flex;
@@ -613,6 +645,16 @@
                     <button class="btn" onclick="addEndpoint('claude')">
                         <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="12" y1="5" x2="12" y2="19"></line><line x1="5" y1="12" x2="19" y2="12"></line></svg>添加节点</button>
                 </div>
+                
+                <div class="usage-guide">
+                    <h3>🚀 如何连接此网关？</h3>
+                    <p>在终端配置环境变量，然后即可无缝启动 Claude Code 或 Claude Desktop：</p>
+                    <div class="code-snippet">
+                        <code>export ANTHROPIC_BASE_URL="http://<span class="cfg-host">127.0.0.1</span>:<span class="cfg-port">8787</span>"</code>
+                    </div>
+                    <p style="font-size: 12px; margin-top: 8px; margin-bottom: 0;">* 注：若使用 Claude Desktop 客户端，请务必从配置了上述环境变量的终端启动应用（例如执行 `open -a "Claude"`）。</p>
+                </div>
+
                 <div class="endpoints-grid" id="claude-endpoints"></div>
             </section>
 
@@ -626,6 +668,16 @@
                     <button class="btn" onclick="addEndpoint('codex')">
                         <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="12" y1="5" x2="12" y2="19"></line><line x1="5" y1="12" x2="19" y2="12"></line></svg>添加节点</button>
                 </div>
+
+                <div class="usage-guide">
+                    <h3>🚀 如何连接此网关？</h3>
+                    <p>在 Cursor 或其他支持自定义配置的 IDE 中，添加一个兼容 OpenAI 格式的提供商：</p>
+                    <div class="code-snippet">
+                        <code>Base URL: http://<span class="cfg-host">127.0.0.1</span>:<span class="cfg-port">8787</span>/v1</code><br>
+                        <code style="margin-top: 6px; display: block; color: var(--text-secondary);">API Key: sk-随便填 (网关会自动处理并在下游节点中替换)</code>
+                    </div>
+                </div>
+
                 <div class="endpoints-grid" id="codex-endpoints"></div>
             </section>
         </main>
@@ -747,6 +799,11 @@
         }
 
         function render() {
+            const host = config.server?.host || "127.0.0.1";
+            const port = config.server?.port || 8787;
+            document.querySelectorAll('.cfg-host').forEach(el => el.textContent = host === '0.0.0.0' ? '127.0.0.1' : host);
+            document.querySelectorAll('.cfg-port').forEach(el => el.textContent = port);
+
             ['claude', 'codex'].forEach(client => {
                 const container = document.getElementById(`${client}-endpoints`);
                 const eps = config.clients[client].endpoints || [];
