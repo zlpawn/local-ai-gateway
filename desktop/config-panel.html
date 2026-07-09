@@ -651,7 +651,7 @@
                     <h3>🚀 如何连接此网关？</h3>
                     <p>在终端配置环境变量，然后即可启动 Claude Code：</p>
                     <div class="code-snippet">
-                        <code>export ANTHROPIC_BASE_URL="http://<span class="cfg-host">127.0.0.1</span>:<span class="cfg-port">8787</span>/code"</code>
+                        <code>Base URL: http://<span class="cfg-host">127.0.0.1</span>:<span class="cfg-port">8787</span>/code</code>
                     </div>
                 </div>
 
@@ -673,7 +673,7 @@
                     <h3>🚀 如何连接此网关？</h3>
                     <p>在终端配置环境变量，并从该终端启动 Claude Desktop：</p>
                     <div class="code-snippet">
-                        <code>export ANTHROPIC_BASE_URL="http://<span class="cfg-host">127.0.0.1</span>:<span class="cfg-port">8787</span>/desktop"</code>
+                        <code>Base URL: http://<span class="cfg-host">127.0.0.1</span>:<span class="cfg-port">8787</span>/desktop</code>
                     </div>
                     <p style="font-size: 12px; margin-top: 8px; margin-bottom: 0;">* macOS 启动示例：执行 <code>open -a "Claude"</code></p>
                 </div>
@@ -685,8 +685,8 @@
             <section id="section-codex" class="tab-section" style="display: none;">
                 <div class="section-header">
                     <div>
-                        <h2>Codex 代理 (IDE)</h2>
-                        <p>为 IDE 插件（如 Cursor、GitHub Copilot 等）提供下游代理支持。</p>
+                        <h2>Codex 代理</h2>
+                        <p>为兼容 OpenAI 接口的独立客户端或插件（如 Cursor 等）提供下游代理支持。</p>
                     </div>
                     <button class="btn" onclick="addEndpoint('codex')">
                         <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="12" y1="5" x2="12" y2="19"></line><line x1="5" y1="12" x2="19" y2="12"></line></svg>添加节点</button>
@@ -697,7 +697,7 @@
                     <p>在 Cursor 等 IDE 的“OpenAI Compatible”提供商中配置以下信息：</p>
                     <div class="code-snippet">
                         <code>Base URL: http://<span class="cfg-host">127.0.0.1</span>:<span class="cfg-port">8787</span>/codex/v1</code><br>
-                        <code style="margin-top: 6px; display: block; color: var(--text-secondary);">API Key: sk-随便填 (网关会自动处理并在下游节点中替换)</code>
+                        <code style="margin-top: 6px; display: block; color: var(--text-secondary);">API Key: 任意字符串 (网关会自动将其替换为真实节点的密钥)</code>
                     </div>
                 </div>
 
