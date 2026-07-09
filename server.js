@@ -620,6 +620,40 @@ async function fetchOfficialAnthropic(body, clientReq) {
   }
 }
 
+function resolveUrl(baseUrl, defaultPath) {
+  const trimmed = baseUrl.replace(/\/$/, "");
+  let parsed;
+  try {
+    parsed = new URL(trimmed);
+  } catch (e) {
+    if (trimmed.endsWith(defaultPath)) {
+      return trimmed;
+    }
+    return `${trimmed}${defaultPath}`;
+  }
+
+  const pathname = parsed.pathname;
+  if (pathname === "" || pathname === "/") {
+    return trimmed;
+  }
+
+  if (defaultPath === "/v1/messages") {
+    if (trimmed.endsWith("/v1/messages") || trimmed.endsWith("/messages")) {
+      return trimmed;
+    }
+    if (trimmed.endsWith("/v1")) {
+      return `${trimmed}/messages`;
+    }
+    return `${trimmed}/v1/messages`;
+  }
+
+  const cleanPath = defaultPath.startsWith("/") ? defaultPath : `/${defaultPath}`;
+  if (trimmed.endsWith(cleanPath)) {
+    return trimmed;
+  }
+  return `${trimmed}${cleanPath}`;
+}
+
 async function fetchConfiguredAnthropic(provider, body, clientReq) {
   if (!provider?.base_url) {
     throw httpError(500, `Provider ${provider?.id || "unknown"} is missing base_url`);
@@ -633,7 +667,7 @@ async function fetchConfiguredAnthropic(provider, body, clientReq) {
     );
   }
 
-  const url = provider.base_url;
+  const url = resolveUrl(provider.base_url, "/v1/messages");
   const controller = new AbortController();
   const timeout = setTimeout(() => controller.abort(), REQUEST_TIMEOUT_MS);
 
@@ -721,7 +755,7 @@ async function fetchConfiguredOpenAI(provider, endpointPath, body, clientReq) {
     );
   }
 
-  const url = provider.base_url;
+  const url = resolveUrl(provider.base_url, endpointPath);
   const controller = new AbortController();
   const timeout = setTimeout(() => controller.abort(), REQUEST_TIMEOUT_MS);
 
