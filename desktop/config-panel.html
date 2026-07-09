@@ -649,19 +649,7 @@
                 
                 <div class="usage-guide">
                     <h3>🚀 如何连接此网关？</h3>
-                    <p>网关通过拦截官方环境变量生效。你有两种配置方式：</p>
-                    
-                    <h4 style="margin-top: 15px; margin-bottom: 8px;">方式 1：终端环境变量（推荐，临时生效）</h4>
-                    <p style="font-size: 13px; color: var(--text-secondary); margin-bottom: 8px;">在启动 <code>claude</code> 前，先在终端中执行以下命令：</p>
-                    <div class="code-snippet">
-                        <pre style="margin: 0; color: inherit; font-family: inherit; font-size: inherit; background: transparent; padding: 0; overflow-x: auto;">
-export ANTHROPIC_BASE_URL="http://<span class="cfg-host">127.0.0.1</span>:<span class="cfg-port">8787</span>/code"
-export ANTHROPIC_API_KEY="dummy"
-claude</pre>
-                    </div>
-
-                    <h4 style="margin-top: 20px; margin-bottom: 8px;">方式 2：修改全局配置（长期生效）</h4>
-                    <p style="font-size: 13px; color: var(--text-secondary); margin-bottom: 8px;">打开并编辑你的 <code>~/.claude/settings.json</code> 文件，向 <code>"env"</code> 字段加入代理地址：</p>
+                    <p>修改全局配置：打开并编辑你的 <code>~/.claude/settings.json</code> 文件，向 <code>"env"</code> 字段加入以下代理地址：</p>
                     <div class="code-snippet">
                         <pre style="margin: 0; color: inherit; font-family: inherit; font-size: inherit; background: transparent; padding: 0; overflow-x: auto;">
 {
