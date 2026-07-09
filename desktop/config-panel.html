@@ -619,7 +619,8 @@
                 AI 网关配置
             </div>
             <nav class="sidebar-nav">
-                <a href="#claude" class="nav-item active" onclick="switchTab('claude')">Claude 代理</a>
+                <a href="#code" class="nav-item active" onclick="switchTab('code')">Claude Code 代理</a>
+                <a href="#desktop" class="nav-item" onclick="switchTab('desktop')">Claude Desktop 代理</a>
                 <a href="#codex" class="nav-item" onclick="switchTab('codex')">Codex 代理</a>
             </nav>
             <div class="sidebar-footer">
@@ -635,31 +636,49 @@
         </aside>
 
         <main class="content-area" id="app">
-            <!-- Claude Section -->
-            <section id="section-claude" class="tab-section active">
+            <!-- Claude Code Section -->
+            <section id="section-code" class="tab-section active">
                 <div class="section-header">
                     <div>
-                        <h2>Claude 代理 (Claude Code)</h2>
-                        <p>通过官方 API 或兼容 OpenAI 格式的代理服务转发 Anthropic 模型请求。</p>
+                        <h2>Claude Code 代理</h2>
+                        <p>为 Claude Code CLI 工具提供下游代理支持。</p>
                     </div>
-                    <button class="btn" onclick="addEndpoint('claude')">
+                    <button class="btn" onclick="addEndpoint('code')">
                         <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="12" y1="5" x2="12" y2="19"></line><line x1="5" y1="12" x2="19" y2="12"></line></svg>添加节点</button>
                 </div>
                 
                 <div class="usage-guide">
                     <h3>🚀 如何连接此网关？</h3>
-                    <p>网关支持通过不同路径后缀区分客户端。请在终端设置对应的环境变量：</p>
+                    <p>在终端配置环境变量，然后即可启动 Claude Code：</p>
                     <div class="code-snippet">
-                        <div style="color: var(--text-secondary); font-size: 12px; margin-bottom: 4px;"># 给 Claude Code 使用:</div>
                         <code>export ANTHROPIC_BASE_URL="http://<span class="cfg-host">127.0.0.1</span>:<span class="cfg-port">8787</span>/code"</code>
-                        
-                        <div style="color: var(--text-secondary); font-size: 12px; margin-top: 12px; margin-bottom: 4px;"># 给 Claude Desktop 使用:</div>
-                        <code>export ANTHROPIC_BASE_URL="http://<span class="cfg-host">127.0.0.1</span>:<span class="cfg-port">8787</span>/desktop"</code>
                     </div>
-                    <p style="font-size: 12px; margin-top: 8px; margin-bottom: 0;">* 注：若使用 Claude Desktop 客户端，请务必从配置了上述环境变量的终端启动应用（例如执行 `open -a "Claude"`）。</p>
                 </div>
 
-                <div class="endpoints-grid" id="claude-endpoints"></div>
+                <div class="endpoints-grid" id="code-endpoints"></div>
+            </section>
+
+            <!-- Claude Desktop Section -->
+            <section id="section-desktop" class="tab-section" style="display: none;">
+                <div class="section-header">
+                    <div>
+                        <h2>Claude Desktop 代理</h2>
+                        <p>为 Claude Desktop 桌面客户端提供下游代理支持。</p>
+                    </div>
+                    <button class="btn" onclick="addEndpoint('desktop')">
+                        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="12" y1="5" x2="12" y2="19"></line><line x1="5" y1="12" x2="19" y2="12"></line></svg>添加节点</button>
+                </div>
+                
+                <div class="usage-guide">
+                    <h3>🚀 如何连接此网关？</h3>
+                    <p>在终端配置环境变量，并从该终端启动 Claude Desktop：</p>
+                    <div class="code-snippet">
+                        <code>export ANTHROPIC_BASE_URL="http://<span class="cfg-host">127.0.0.1</span>:<span class="cfg-port">8787</span>/desktop"</code>
+                    </div>
+                    <p style="font-size: 12px; margin-top: 8px; margin-bottom: 0;">* macOS 启动示例：执行 <code>open -a "Claude"</code></p>
+                </div>
+
+                <div class="endpoints-grid" id="desktop-endpoints"></div>
             </section>
 
             <!-- Codex Section -->
@@ -692,7 +711,7 @@
     <script>
         let config = {
             server: { host: "127.0.0.1", port: 8787 },
-            clients: { claude: { endpoints: [] }, codex: { endpoints: [] } }
+            clients: { code: { endpoints: [] }, desktop: { endpoints: [] }, codex: { endpoints: [] } }
         };
 
         const ENDPOINT_TYPES = [
@@ -711,7 +730,8 @@
                             ...config,
                             ...data,
                             clients: {
-                                claude: data.clients.claude || { endpoints: [] },
+                                code: data.clients.code || { endpoints: [] },
+                                desktop: data.clients.desktop || { endpoints: [] },
                                 codex: data.clients.codex || { endpoints: [] }
                             }
                         };
@@ -729,7 +749,7 @@
         }
 
         function createEndpointHTML(client, index, ep) {
-            const availableTypes = client === 'claude' 
+            const availableTypes = (client === 'code' || client === 'desktop') 
                 ? ENDPOINT_TYPES.filter(t => t.value === 'anthropic')
                 : ENDPOINT_TYPES.filter(t => t.value === 'openai-responses');
 
@@ -808,7 +828,7 @@
             document.querySelectorAll('.cfg-host').forEach(el => el.textContent = host === '0.0.0.0' ? '127.0.0.1' : host);
             document.querySelectorAll('.cfg-port').forEach(el => el.textContent = port);
 
-            ['claude', 'codex'].forEach(client => {
+            ['code', 'desktop', 'codex'].forEach(client => {
                 const container = document.getElementById(`${client}-endpoints`);
                 const eps = config.clients[client].endpoints || [];
                 
@@ -852,7 +872,7 @@
 
         window.addEventListener('load', () => {
             const hash = window.location.hash.replace('#', '');
-            if (hash === 'claude' || hash === 'codex') {
+            if (hash === 'code' || hash === 'desktop' || hash === 'codex') {
                 switchTab(hash);
             }
         });
