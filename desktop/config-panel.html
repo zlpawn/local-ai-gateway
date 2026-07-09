@@ -13,28 +13,28 @@
             --border-color: #3f3f46;
             --text-primary: #fafafa;
             --text-secondary: #a1a1aa;
-            
+
             --brand-primary: #fafafa;
             --brand-hover: #ffffff;
             --brand-text: #09090b;
             --brand-glow: rgba(255, 255, 255, 0.1);
-            
+
             --danger: #ef4444;
             --danger-hover: #dc2626;
             --danger-bg: rgba(239, 68, 68, 0.1);
-            
+
             --success: #10b981;
-            
+
             --radius-xl: 12px;
             --radius-lg: 8px;
             --radius-md: 6px;
             --radius-sm: 4px;
-            
+
             --font-sans: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
             --font-mono: "JetBrains Mono", "Fira Code", SFMono-Regular, Consolas, monospace;
-            
+
             --transition-fast: 0.15s ease-out;
-            
+
             --shadow-card: 0 4px 20px rgba(0, 0, 0, 0.3);
             --input-bg: rgba(255, 255, 255, 0.03);
             --input-focus-bg: rgba(255, 255, 255, 0.05);
@@ -50,18 +50,18 @@
             --border-color: #e4e4e7;
             --text-primary: #09090b;
             --text-secondary: #71717a;
-            
+
             --brand-primary: #18181b;
             --brand-hover: #09090b;
             --brand-text: #ffffff;
             --brand-glow: rgba(0, 0, 0, 0.1);
-            
+
             --danger: #ef4444;
             --danger-hover: #dc2626;
             --danger-bg: rgba(239, 68, 68, 0.1);
-            
+
             --success: #10b981;
-            
+
             --radius-xl: 12px;
             --radius-lg: 8px;
             --radius-md: 6px;
@@ -76,7 +76,7 @@
             --font-mono: ui-monospace, SFMono-Regular, "SF Mono", Menlo, Consolas, "Liberation Mono", monospace;
             --transition-fast: 0.15s ease;
             --transition-bounce: 0.4s cubic-bezier(0.175, 0.885, 0.32, 1.275);
-            
+
             /* Input specific */
             --input-bg: #ffffff;
             --input-focus-bg: #ffffff;
@@ -96,7 +96,7 @@
             --danger: #e5484d;
             --danger-bg: rgba(229, 72, 77, 0.15);
             --success: #30a46c;
-            
+
             --input-bg: #0c0c0c;
             --input-focus-bg: #111111;
             --inline-input-border: #444444;
@@ -257,7 +257,7 @@
         .btn:active:not(:disabled) {
             transform: scale(0.98);
         }
-        
+
         .btn:disabled {
             opacity: 0.5;
             cursor: not-allowed;
@@ -274,7 +274,7 @@
             opacity: 0.9;
             transform: none;
         }
-        
+
         .btn-danger {
             background: transparent;
             color: var(--text-secondary);
@@ -394,7 +394,7 @@
             width: 100%;
             height: 36px;
         }
-        
+
         input.mono {
             font-family: var(--font-mono);
             font-size: 13px;
@@ -585,7 +585,7 @@
             width: 18px;
             height: 18px;
         }
-        
+
         .toast.success svg { color: var(--success); }
         .toast.error svg { color: var(--danger); }
 
@@ -646,7 +646,7 @@
                     <button class="btn" onclick="addEndpoint('code')">
                         <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="12" y1="5" x2="12" y2="19"></line><line x1="5" y1="12" x2="19" y2="12"></line></svg>添加节点</button>
                 </div>
-                
+
                 <div class="usage-guide">
                     <h3>🚀 如何连接此网关？</h3>
                     <p>修改全局配置：打开并编辑你的 <code>~/.claude/settings.json</code> 文件，向 <code>"env"</code> 字段加入以下代理地址：</p>
@@ -674,7 +674,7 @@
                     <button class="btn" onclick="addEndpoint('desktop')">
                         <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="12" y1="5" x2="12" y2="19"></line><line x1="5" y1="12" x2="19" y2="12"></line></svg>添加节点</button>
                 </div>
-                
+
                 <div class="usage-guide">
                     <h3>🚀 如何连接此网关？</h3>
                     <p>Claude 官方桌面端目前不支持直接在界面配置自定义节点，需要通过**环境变量覆盖**的方式启动客户端。</p>
@@ -769,11 +769,11 @@ experimental_bearer_token = "dummy"</pre>
         }
 
         function createEndpointHTML(client, index, ep) {
-            const availableTypes = (client === 'code' || client === 'desktop') 
+            const availableTypes = (client === 'code' || client === 'desktop')
                 ? ENDPOINT_TYPES.filter(t => t.value === 'anthropic')
                 : ENDPOINT_TYPES.filter(t => t.value === 'openai-responses');
 
-            const typeOptions = availableTypes.map(t => 
+            const typeOptions = availableTypes.map(t =>
                 `<option value="${t.value}" ${ep.type === t.value ? 'selected' : ''}>${t.label}</option>`
             ).join('');
 
@@ -851,7 +851,7 @@ experimental_bearer_token = "dummy"</pre>
             ['code', 'desktop', 'codex'].forEach(client => {
                 const container = document.getElementById(`${client}-endpoints`);
                 const eps = config.clients[client].endpoints || [];
-                
+
                 if (eps.length === 0) {
                     container.innerHTML = `
                         <div class="empty-state">
@@ -951,7 +951,7 @@ experimental_bearer_token = "dummy"</pre>
                 const reqInput = document.getElementById(`input-mapping-req-${client}-${index}`);
                 const upInput = document.getElementById(`input-mapping-up-${client}-${index}`);
                 if (!reqInput || !upInput) return;
-                
+
                 const k = reqInput.value.trim();
                 const v = upInput.value.trim();
 
@@ -1001,7 +1001,7 @@ experimental_bearer_token = "dummy"</pre>
         window.saveConfig = async function() {
             const btn = document.getElementById('save-btn');
             const originalContent = btn.innerHTML;
-            
+
             btn.innerHTML = `<svg class="spinner" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" style="animation: spin 1s linear infinite;"><line x1="12" y1="2" x2="12" y2="6"></line><line x1="12" y1="18" x2="12" y2="22"></line><line x1="4.93" y1="4.93" x2="7.76" y2="7.76"></line><line x1="16.24" y1="16.24" x2="19.07" y2="19.07"></line><line x1="2" y1="12" x2="6" y2="12"></line><line x1="18" y1="12" x2="22" y2="12"></line><line x1="4.93" y1="19.07" x2="7.76" y2="16.24"></line><line x1="16.24" y1="7.76" x2="19.07" y2="4.93"></line></svg> Saving...`;
             btn.disabled = true;
 
@@ -1011,7 +1011,7 @@ experimental_bearer_token = "dummy"</pre>
                     headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify(config)
                 });
-                
+
                 if (res.ok) {
                     showToast('配置已生效，服务已重新加载', 'success');
                 } else {
@@ -1030,14 +1030,14 @@ experimental_bearer_token = "dummy"</pre>
             const container = document.getElementById('toast-container');
             const toast = document.createElement('div');
             toast.className = `toast ${type}`;
-            
-            const icon = type === 'success' 
+
+            const icon = type === 'success'
                 ? `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"></path><polyline points="22 4 12 14.01 9 11.01"></polyline></svg>`
                 : `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"></circle><line x1="12" y1="8" x2="12" y2="12"></line><line x1="12" y1="16" x2="12.01" y2="16"></line></svg>`;
-            
+
             toast.innerHTML = `${icon} <span>${message}</span>`;
             container.appendChild(toast);
-            
+
             setTimeout(() => {
                 toast.style.animation = 'toastExit 0.3s forwards';
                 setTimeout(() => toast.remove(), 300);
@@ -1054,7 +1054,7 @@ experimental_bearer_token = "dummy"</pre>
             const root = document.documentElement;
             const currentTheme = root.getAttribute('data-theme') || 'dark';
             const newTheme = currentTheme === 'dark' ? 'light' : 'dark';
-            
+
             root.setAttribute('data-theme', newTheme);
             localStorage.setItem('app-theme', newTheme);
             updateThemeIcon(newTheme);
@@ -1064,7 +1064,7 @@ experimental_bearer_token = "dummy"</pre>
             const darkIcon = document.getElementById('theme-icon-dark');
             const lightIcon = document.getElementById('theme-icon-light');
             if (!darkIcon || !lightIcon) return;
-            
+
             if (theme === 'dark') {
                 darkIcon.style.display = 'block';
                 lightIcon.style.display = 'none';

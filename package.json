@@ -18,7 +18,7 @@
     "desktop:dist": "electron-builder --config electron-builder.yml",
     "desktop:dist:win": "electron-builder --config electron-builder.yml --win nsis",
     "desktop:dist:mac": "electron-builder --config electron-builder.yml --mac dmg",
-    "check": "node --check server.js && bash -n scripts/agent-gateway.sh",
+    "check": "node --check server.js && node scripts/check-bash-script.mjs",
     "doctor": "node scripts/doctor.mjs",
     "validate:config": "node scripts/validate-config.mjs",
     "codex:catalog": "node scripts/codex-catalog.mjs",

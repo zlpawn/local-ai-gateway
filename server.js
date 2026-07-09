@@ -124,7 +124,7 @@ async function route(req, res) {
   const url = context.url;
   const reqPath = context.path;
 
-  
+
   if ((reqPath === "/" || reqPath === "/config") && req.method === "GET") {
     const htmlPath = path.join(PROJECT_ROOT, "desktop", "config-panel.html");
     if (fs.existsSync(htmlPath)) {
@@ -135,7 +135,7 @@ async function route(req, res) {
     }
     return;
   }
-  
+
   if (reqPath === "/v1/config/save" && req.method === "POST") {
     if (!checkLocalAuth(req, res)) return;
     try {
@@ -210,7 +210,7 @@ async function route(req, res) {
       });
       return;
     }
-    sendJson(res, 200, resolveModelPublic(model));
+    sendJson(res, 200, resolveModelPublic(model, context.client));
     return;
   }
 
@@ -962,7 +962,7 @@ function resolveModelPublic(model, client = 'claude') {
           id: configured.model.id,
           display_name: configured.model.display_name || configured.model.id,
           upstream_model: configured.upstream_model,
-          provider: publicProviderById(configured.provider.id),
+          provider: publicProvider(configured.provider),
           aliases: configured.model.aliases || [],
         }
       : null,
@@ -971,15 +971,14 @@ function resolveModelPublic(model, client = 'claude') {
       codex: officialCodex,
     },
     routes: {
-      anthropic_messages: resolveCapabilityForProtocol(model, "anthropic_messages"),
-      openai_chat: resolveCapabilityForProtocol(model, "openai_chat"),
-      openai_responses: resolveCapabilityForProtocol(model, "openai_responses"),
+      anthropic_messages: resolveCapabilityForProtocol(model, "anthropic_messages", client),
+      openai_chat: resolveCapabilityForProtocol(model, "openai_chat", client),
+      openai_responses: resolveCapabilityForProtocol(model, "openai_responses", client),
     },
   };
 }
 
-function publicProviderById(providerId) {
-  const provider = PROVIDERS[providerId];
+function publicProvider(provider) {
   if (!provider) return null;
   return {
     id: provider.id,
@@ -987,12 +986,12 @@ function publicProviderById(providerId) {
     base_url: provider.base_url,
     api_key_env: provider.api_key_env || "",
     auth: provider.auth,
-    has_api_key: Boolean(provider.api_key || (provider.api_key_env && process.env[provider.api_key_env])),
+    has_api_key: Boolean(getConfiguredProviderApiKey(provider)),
   };
 }
 
-function resolveCapabilityForProtocol(model, protocol) {
-  const configured = resolveConfiguredModel(model);
+function resolveCapabilityForProtocol(model, protocol, client = null) {
+  const configured = resolveConfiguredModel(model, [], client);
   if (configured) {
     const providerType = configured.provider.type;
     const direct = {
@@ -1850,9 +1849,9 @@ function resolveConfiguredModel(requestedModel, allowedTypes = [], client = null
   if (!requestedModel) return null;
   const text = String(requestedModel);
   const allowed = new Set(allowedTypes);
-  
+
   const clientsToCheck = client ? [client] : ["code", "desktop", "claude", "codex"];
-  
+
   for (const c of clientsToCheck) {
     const endpoints = GATEWAY_CONFIG.clients?.[c]?.endpoints || [];
     for (const ep of endpoints) {
@@ -2837,16 +2836,16 @@ function loadGatewayConfig(filePath, legacyModelMap) {
   } else {
     config = buildLegacyGatewayConfig(legacyModelMap);
   }
-  
+
   if (!config.clients) {
     const old = normalizeGatewayConfig(config);
     config.clients = { code: { endpoints: [] }, desktop: { endpoints: [] }, codex: { endpoints: [] } };
-    
+
     const providersMap = {};
     for (const m of old.models || []) {
       const provider = old.providers[m.provider];
       if (!provider) continue;
-      
+
       // Do not auto-migrate OpenAPI URLs to Claude/Codex unless the user configures them manually
       if (provider.type === "anthropic") {
         if (!providersMap[provider.id]) {
@@ -2859,7 +2858,7 @@ function loadGatewayConfig(filePath, legacyModelMap) {
             model_mapping: {}
           };
         }
-        
+
         const ep = providersMap[provider.id];
         if (!ep.models.includes(m.upstream_model)) {
           ep.models.push(m.upstream_model);
@@ -2870,7 +2869,7 @@ function loadGatewayConfig(filePath, legacyModelMap) {
         }
       }
     }
-    
+
     for (const ep of Object.values(providersMap)) {
       config.clients.code.endpoints.push(JSON.parse(JSON.stringify(ep)));
       config.clients.desktop.endpoints.push(JSON.parse(JSON.stringify(ep)));
@@ -2889,7 +2888,7 @@ function loadGatewayConfig(filePath, legacyModelMap) {
       const endpoints = config.clients[clientName].endpoints || [];
       const mergedEndpoints = [];
       const epMap = new Map();
-      
+
       for (const ep of endpoints) {
         const key = `${ep.type}|${ep.base_url}|${ep.api_key}`;
         if (epMap.has(key)) {
