@@ -5,7 +5,7 @@ import { fileURLToPath } from "node:url";
 
 const PROJECT_ROOT = path.dirname(path.dirname(fileURLToPath(import.meta.url)));
 const DEFAULT_CONFIG_PATH = path.join(PROJECT_ROOT, "gateway.config.json");
-const DEFAULT_OUTPUT_PATH = path.join(PROJECT_ROOT, ".codex", "volcengine-agent-plan-model-catalog.json");
+const DEFAULT_OUTPUT_PATH = path.join(PROJECT_ROOT, ".codex", "gateway-model-catalog.json");
 
 const args = new Set(process.argv.slice(2));
 const shouldVerify = args.has("--verify");

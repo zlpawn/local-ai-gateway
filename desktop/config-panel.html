@@ -1,0 +1,1084 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="dark">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>AI 本地网关配置</title>
+    <style>
+        :root[data-theme="dark"] {
+            /* Pure Dark Theme (No Purple Glow) */
+            --bg-color: #09090b;
+            --surface: #18181b;
+            --surface-hover: #27272a;
+            --border-color: #3f3f46;
+            --text-primary: #fafafa;
+            --text-secondary: #a1a1aa;
+            
+            --brand-primary: #fafafa;
+            --brand-hover: #ffffff;
+            --brand-text: #09090b;
+            --brand-glow: rgba(255, 255, 255, 0.1);
+            
+            --danger: #ef4444;
+            --danger-hover: #dc2626;
+            --danger-bg: rgba(239, 68, 68, 0.1);
+            
+            --success: #10b981;
+            
+            --radius-xl: 12px;
+            --radius-lg: 8px;
+            --radius-md: 6px;
+            --radius-sm: 4px;
+            
+            --font-sans: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+            --font-mono: "JetBrains Mono", "Fira Code", SFMono-Regular, Consolas, monospace;
+            
+            --transition-fast: 0.15s ease-out;
+            
+            --shadow-card: 0 4px 20px rgba(0, 0, 0, 0.3);
+            --input-bg: rgba(255, 255, 255, 0.03);
+            --input-focus-bg: rgba(255, 255, 255, 0.05);
+            --inline-input-border: rgba(255, 255, 255, 0.2);
+            --tag-bg: rgba(255, 255, 255, 0.1);
+        }
+
+        :root[data-theme="light"] {
+            /* Crisp Light Theme */
+            --bg-color: #fafafa;
+            --surface: #ffffff;
+            --surface-hover: #f4f4f5;
+            --border-color: #e4e4e7;
+            --text-primary: #09090b;
+            --text-secondary: #71717a;
+            
+            --brand-primary: #18181b;
+            --brand-hover: #09090b;
+            --brand-text: #ffffff;
+            --brand-glow: rgba(0, 0, 0, 0.1);
+            
+            --danger: #ef4444;
+            --danger-hover: #dc2626;
+            --danger-bg: rgba(239, 68, 68, 0.1);
+            
+            --success: #10b981;
+            
+            --radius-xl: 12px;
+            --radius-lg: 8px;
+            --radius-md: 6px;
+            --radius-sm: 4px;
+            --brand-hover: #333333;
+            --danger: #e5484d;
+            --danger-bg: #ffeef0;
+            --success: #30a46c;
+            --radius-md: 6px;
+            --radius-lg: 8px;
+            --font-sans: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+            --font-mono: ui-monospace, SFMono-Regular, "SF Mono", Menlo, Consolas, "Liberation Mono", monospace;
+            --transition-fast: 0.15s ease;
+            --transition-bounce: 0.4s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+            
+            /* Input specific */
+            --input-bg: #ffffff;
+            --input-focus-bg: #ffffff;
+            --inline-input-border: #cccccc;
+        }
+
+        [data-theme="dark"] {
+            --bg-color: #0c0c0c;
+            --surface: #111111;
+            --surface-hover: #1f1f1f;
+            --border-color: #2a2a2a;
+            --text-primary: #ededed;
+            --text-secondary: #888888;
+            --brand-primary: #ffffff;
+            --brand-text: #000000;
+            --brand-hover: #e0e0e0;
+            --danger: #e5484d;
+            --danger-bg: rgba(229, 72, 77, 0.15);
+            --success: #30a46c;
+            
+            --input-bg: #0c0c0c;
+            --input-focus-bg: #111111;
+            --inline-input-border: #444444;
+        }
+
+        * {
+            box-sizing: border-box;
+            margin: 0;
+            padding: 0;
+        }
+
+        body {
+            font-family: var(--font-sans);
+            background-color: var(--bg-color);
+            color: var(--text-primary);
+            line-height: 1.5;
+            -webkit-font-smoothing: antialiased;
+            -moz-osx-font-smoothing: grayscale;
+            height: 100vh;
+            overflow: hidden;
+            margin: 0;
+        }
+
+        /* App Layout (Dashboard) */
+        .app-layout {
+            display: flex;
+            height: 100%;
+        }
+
+        /* Sidebar */
+        .sidebar {
+            width: 260px;
+            display: flex;
+            flex-direction: column;
+            background: var(--surface);
+            border-right: 1px solid var(--border-color);
+            flex-shrink: 0;
+        }
+
+        .sidebar-header {
+            padding: 32px 24px;
+            font-size: 15px;
+            font-weight: 600;
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            color: var(--text-primary);
+        }
+
+        .sidebar-nav {
+            flex: 1;
+            padding: 0 12px;
+            display: flex;
+            flex-direction: column;
+            gap: 4px;
+        }
+
+        .nav-item {
+            padding: 8px 12px;
+            border-radius: var(--radius-md);
+            color: var(--text-secondary);
+            text-decoration: none;
+            font-size: 13px;
+            font-weight: 500;
+            transition: all var(--transition-fast);
+            cursor: pointer;
+            display: block;
+        }
+
+        .nav-item:hover {
+            background: var(--surface-hover);
+            color: var(--text-primary);
+        }
+
+        .nav-item.active {
+            background: var(--input-bg);
+            color: var(--text-primary);
+            font-weight: 600;
+            border: 1px solid var(--border-color);
+            box-shadow: 0 1px 2px rgba(0,0,0,0.02);
+        }
+
+        .sidebar-footer {
+            padding: 24px;
+            display: flex;
+            gap: 12px;
+            border-top: 1px solid var(--border-color);
+            background: var(--surface);
+        }
+
+        /* Content Area */
+        .content-area {
+            flex: 1;
+            overflow-y: auto;
+            padding: 48px 64px;
+            background: var(--bg-color);
+        }
+
+        .header {
+            position: sticky;
+            top: 0;
+            z-index: 100;
+            background: var(--bg-color);
+            backdrop-filter: blur(16px);
+            -webkit-backdrop-filter: blur(16px);
+            border-bottom: 1px solid var(--border-color);
+            padding: 16px 40px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+
+        .header-title {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            font-weight: 600;
+            font-size: 18px;
+            letter-spacing: -0.02em;
+        }
+
+        .status-dot {
+            width: 10px;
+            height: 10px;
+            background-color: var(--success);
+            border-radius: 50%;
+            box-shadow: 0 0 12px var(--success);
+            animation: pulse 2s infinite;
+        }
+
+        @keyframes pulse {
+            0% { box-shadow: 0 0 0 0 rgba(76, 195, 138, 0.4); }
+            70% { box-shadow: 0 0 0 6px rgba(76, 195, 138, 0); }
+            100% { box-shadow: 0 0 0 0 rgba(76, 195, 138, 0); }
+        }
+
+        .btn {
+            background: transparent;
+            color: var(--text-primary);
+            border: 1px solid var(--border-color);
+            padding: 6px 14px;
+            border-radius: var(--radius-md);
+            font-size: 13px;
+            font-weight: 500;
+            cursor: pointer;
+            transition: all var(--transition-fast);
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            gap: 6px;
+        }
+
+        .btn:hover:not(:disabled) {
+            background: var(--surface-hover);
+            border-color: var(--text-secondary);
+        }
+
+        .btn:active:not(:disabled) {
+            transform: scale(0.98);
+        }
+        
+        .btn:disabled {
+            opacity: 0.5;
+            cursor: not-allowed;
+        }
+
+        .btn-primary {
+            background: var(--text-primary);
+            color: var(--bg-color);
+            border: 1px solid transparent;
+            font-weight: 600;
+        }
+
+        .btn-primary:hover:not(:disabled) {
+            opacity: 0.9;
+            transform: none;
+        }
+        
+        .btn-danger {
+            background: transparent;
+            color: var(--text-secondary);
+            border: 1px solid transparent;
+        }
+
+        .btn-danger:hover:not(:disabled) {
+            background: var(--danger-bg);
+            color: var(--danger);
+            border-color: transparent;
+        }
+
+        .btn-sm {
+            padding: 4px 10px;
+            font-size: 12px;
+        }
+
+        /* End of App Layout styling */
+
+        /* Sections */
+        .section-header {
+            margin-bottom: 24px;
+            display: flex;
+            justify-content: space-between;
+            align-items: flex-end;
+            padding-bottom: 12px;
+            border-bottom: 1px solid var(--border-color);
+        }
+
+        .section-header h2 {
+            font-size: 18px;
+            font-weight: 600;
+            letter-spacing: -0.01em;
+            margin-bottom: 4px;
+            color: var(--text-primary);
+        }
+
+        .section-header p {
+            color: var(--text-secondary);
+            font-size: 13px;
+        }
+
+        /* Endpoints Grid */
+        .endpoints-grid {
+            display: grid;
+            grid-template-columns: 1fr;
+            gap: 20px;
+        }
+
+        /* Cards */
+        .card {
+            background: var(--surface);
+            border: 1px solid var(--border-color);
+            border-radius: var(--radius-lg);
+            padding: 24px;
+            transition: border-color var(--transition-fast);
+        }
+
+        .card:hover {
+            border-color: var(--text-secondary);
+        }
+
+        .card-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 24px;
+            padding-bottom: 16px;
+            border-bottom: 1px dashed var(--border-color);
+        }
+
+        .card-header h3 {
+            font-size: 14px;
+            font-weight: 600;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            text-transform: uppercase;
+            letter-spacing: 0.05em;
+            color: var(--text-secondary);
+        }
+
+        /* Form Grid */
+        .form-grid {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 24px;
+        }
+
+        .form-group {
+            display: flex;
+            flex-direction: column;
+            gap: 8px;
+        }
+
+        .form-group.full {
+            grid-column: 1 / -1;
+        }
+
+        label {
+            font-size: 12px;
+            font-weight: 600;
+            color: var(--text-secondary);
+            text-transform: uppercase;
+            letter-spacing: 0.05em;
+        }
+
+        input, select {
+            background: var(--input-bg);
+            border: 1px solid var(--border-color);
+            color: var(--text-primary);
+            padding: 8px 12px;
+            border-radius: var(--radius-md);
+            font-size: 13px;
+            font-family: var(--font-sans);
+            transition: border-color var(--transition-fast);
+            width: 100%;
+            height: 36px;
+        }
+        
+        input.mono {
+            font-family: var(--font-mono);
+            font-size: 13px;
+        }
+
+        input:hover, select:hover {
+            border-color: var(--text-secondary);
+        }
+
+        input:focus, select:focus {
+            outline: none;
+            border-color: var(--text-primary);
+            background: var(--input-focus-bg);
+        }
+
+        /* Empty State */
+        .empty-state {
+            text-align: center;
+            padding: 48px;
+            background: var(--input-bg);
+            border: 1px dashed var(--border-color);
+            border-radius: var(--radius-lg);
+            color: var(--text-secondary);
+        }
+
+        .empty-state p {
+            margin-bottom: 16px;
+            font-size: 14px;
+        }
+
+        /* Tag & Mapping UI */
+        .tags-list {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 8px;
+            margin-bottom: 12px;
+        }
+
+        .add-mapping-row {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            background: var(--surface-hover);
+            padding: 12px;
+            border-radius: var(--radius-md);
+            border: 1px dashed var(--border-color);
+        }
+
+        .add-mapping-row input {
+            flex: 1;
+        }
+
+        .mapping-arrow {
+            color: var(--text-secondary);
+            font-size: 14px;
+            font-weight: 500;
+        }
+
+        /* Usage Guide */
+        .usage-guide {
+            background: var(--surface);
+            border: 1px solid var(--border-color);
+            border-radius: var(--radius-md);
+            padding: 16px;
+            margin-bottom: 24px;
+        }
+        .usage-guide h3 {
+            font-size: 14px;
+            margin: 0 0 8px 0;
+            display: flex;
+            align-items: center;
+            gap: 6px;
+            color: var(--text-primary);
+        }
+        .usage-guide p {
+            font-size: 13px;
+            color: var(--text-secondary);
+            margin: 0 0 12px 0;
+        }
+        .code-snippet {
+            background: var(--bg-color);
+            border-radius: 4px;
+            padding: 10px 12px;
+            font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+            font-size: 13px;
+            color: var(--text-primary);
+            border: 1px solid var(--border-color);
+            user-select: all;
+        }
+
+        .password-input-wrapper {
+            position: relative;
+            display: flex;
+            align-items: center;
+        }
+
+        .password-input-wrapper input {
+            padding-right: 40px;
+        }
+
+        .password-toggle-btn {
+            position: absolute;
+            right: 8px;
+            background: none;
+            border: none;
+            color: var(--text-secondary);
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            padding: 4px;
+            border-radius: var(--radius-sm);
+            transition: color var(--transition-fast), background var(--transition-fast);
+        }
+
+        .password-toggle-btn:hover {
+            color: var(--text-primary);
+            background: var(--surface);
+        }
+        .tag {
+            background: var(--surface-hover);
+            border: 1px solid var(--border-color);
+            padding: 2px 8px;
+            border-radius: 4px;
+            font-size: 12px;
+            display: inline-flex;
+            align-items: center;
+            gap: 6px;
+            font-family: var(--font-mono);
+            color: var(--text-primary);
+        }
+        .tag button {
+            background: none;
+            border: none;
+            color: var(--text-secondary);
+            cursor: pointer;
+            font-size: 14px;
+            line-height: 1;
+            transition: color var(--transition-fast), opacity var(--transition-fast);
+            opacity: 0;
+        }
+        .tag:hover button {
+            opacity: 1;
+        }
+        .tag button:hover {
+            color: var(--danger);
+        }
+
+        .card .btn-danger {
+            opacity: 0;
+        }
+        .card:hover .btn-danger {
+            opacity: 1;
+        }
+
+        /* Toast */
+        .toast-container {
+            position: fixed;
+            bottom: 32px;
+            right: 32px;
+            display: flex;
+            flex-direction: column;
+            gap: 12px;
+            z-index: 999;
+        }
+
+        .toast {
+            background: var(--surface);
+            border: 1px solid var(--border-color);
+            color: var(--text-primary);
+            padding: 14px 24px;
+            border-radius: var(--radius-md);
+            font-size: 14px;
+            font-weight: 500;
+            box-shadow: 0 10px 40px rgba(0, 0, 0, 0.4);
+            transform: translateY(20px) scale(0.95);
+            opacity: 0;
+            animation: toastEnter var(--transition-bounce) forwards;
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+
+        .toast.success { border-left: 3px solid var(--success); }
+        .toast.error { border-left: 3px solid var(--danger); }
+
+        .toast svg {
+            width: 18px;
+            height: 18px;
+        }
+        
+        .toast.success svg { color: var(--success); }
+        .toast.error svg { color: var(--danger); }
+
+        @keyframes toastEnter {
+            to { transform: translateY(0) scale(1); opacity: 1; }
+        }
+
+        @keyframes toastExit {
+            to { transform: translateY(10px) scale(0.95); opacity: 0; }
+        }
+    </style>
+    <script>
+        // Prevent FOUC by setting theme early
+        (function() {
+            const savedTheme = localStorage.getItem('app-theme');
+            if (savedTheme) {
+                document.documentElement.setAttribute('data-theme', savedTheme);
+            } else {
+                const prefersLight = window.matchMedia('(prefers-color-scheme: light)').matches;
+                document.documentElement.setAttribute('data-theme', prefersLight ? 'light' : 'dark');
+            }
+        })();
+    </script>
+</head>
+<body>
+
+    <div class="app-layout">
+        <aside class="sidebar">
+            <div class="sidebar-header">
+                <div class="status-dot"></div>
+                AI 网关配置
+            </div>
+            <nav class="sidebar-nav">
+                <a href="#code" class="nav-item active" onclick="switchTab('code')">Claude Code 代理</a>
+                <a href="#desktop" class="nav-item" onclick="switchTab('desktop')">Claude Desktop 代理</a>
+                <a href="#codex" class="nav-item" onclick="switchTab('codex')">Codex 代理</a>
+            </nav>
+            <div class="sidebar-footer">
+                <button class="btn" id="theme-toggle" onclick="toggleTheme()" aria-label="Toggle Theme" style="padding: 8px; border-radius: 50%;">
+                    <svg id="theme-icon-dark" style="display: none;" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"></path></svg>
+                    <svg id="theme-icon-light" style="display: none;" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="5"></circle><line x1="12" y1="1" x2="12" y2="3"></line><line x1="12" y1="21" x2="12" y2="23"></line><line x1="4.22" y1="4.22" x2="5.64" y2="5.64"></line><line x1="18.36" y1="18.36" x2="19.78" y2="19.78"></line><line x1="1" y1="12" x2="3" y2="12"></line><line x1="21" y1="12" x2="23" y2="12"></line><line x1="4.22" y1="19.78" x2="5.64" y2="18.36"></line><line x1="18.36" y1="5.64" x2="19.78" y2="4.22"></line></svg>
+                </button>
+                <button class="btn btn-primary" id="save-btn" onclick="saveConfig()" style="flex: 1;">
+                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z"></path><polyline points="17 21 17 13 7 13 7 21"></polyline><polyline points="7 3 7 8 15 8"></polyline></svg>
+                    保存配置
+                </button>
+            </div>
+        </aside>
+
+        <main class="content-area" id="app">
+            <!-- Claude Code Section -->
+            <section id="section-code" class="tab-section active">
+                <div class="section-header">
+                    <div>
+                        <h2>Claude Code 代理</h2>
+                        <p>为 Claude Code CLI 工具提供下游代理支持。</p>
+                    </div>
+                    <button class="btn" onclick="addEndpoint('code')">
+                        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="12" y1="5" x2="12" y2="19"></line><line x1="5" y1="12" x2="19" y2="12"></line></svg>添加节点</button>
+                </div>
+                
+                <div class="usage-guide">
+                    <h3>🚀 如何连接此网关？</h3>
+                    <p>修改全局配置：打开并编辑你的 <code>~/.claude/settings.json</code> 文件，向 <code>"env"</code> 字段加入以下代理地址：</p>
+                    <div class="code-snippet">
+                        <pre style="margin: 0; color: inherit; font-family: inherit; font-size: inherit; background: transparent; padding: 0; overflow-x: auto;">
+{
+  "env": {
+    "ANTHROPIC_BASE_URL": "http://<span class="cfg-host">127.0.0.1</span>:<span class="cfg-port">8787</span>/code",
+    "ANTHROPIC_API_KEY": "dummy"
+  }
+}</pre>
+                    </div>
+                </div>
+
+                <div class="endpoints-grid" id="code-endpoints"></div>
+            </section>
+
+            <!-- Claude Desktop Section -->
+            <section id="section-desktop" class="tab-section" style="display: none;">
+                <div class="section-header">
+                    <div>
+                        <h2>Claude Desktop 代理</h2>
+                        <p>为 Claude Desktop 桌面客户端提供下游代理支持。</p>
+                    </div>
+                    <button class="btn" onclick="addEndpoint('desktop')">
+                        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="12" y1="5" x2="12" y2="19"></line><line x1="5" y1="12" x2="19" y2="12"></line></svg>添加节点</button>
+                </div>
+                
+                <div class="usage-guide">
+                    <h3>🚀 如何连接此网关？</h3>
+                    <p>Claude 官方桌面端目前不支持直接在界面配置自定义节点，需要通过**环境变量覆盖**的方式启动客户端。</p>
+                    <h4 style="margin-top: 15px; margin-bottom: 8px;">Mac 启动命令</h4>
+                    <p style="font-size: 13px; color: var(--text-secondary); margin-bottom: 8px;">在终端执行以下命令来启动加入了代理参数的桌面端：</p>
+                    <div class="code-snippet">
+                        <pre style="margin: 0; color: inherit; font-family: inherit; font-size: inherit; background: transparent; padding: 0; overflow-x: auto;">
+export ANTHROPIC_BASE_URL="http://<span class="cfg-host">127.0.0.1</span>:<span class="cfg-port">8787</span>/desktop"
+export ANTHROPIC_API_KEY="dummy"
+open -a "Claude"</pre>
+                    </div>
+                    <p style="font-size: 12px; margin-top: 8px; margin-bottom: 0; color: var(--warning);">⚠️ 注意：执行命令前，请确保后台的 Claude 客户端已彻底退出（Cmd+Q）。你可以将上述命令保存为别名或一键启动脚本。</p>
+                </div>
+
+                <div class="endpoints-grid" id="desktop-endpoints"></div>
+            </section>
+
+            <!-- Codex Section -->
+            <section id="section-codex" class="tab-section" style="display: none;">
+                <div class="section-header">
+                    <div>
+                        <h2>Codex 代理</h2>
+                        <p>为兼容 OpenAI 接口的独立 Codex 客户端提供下游代理支持。</p>
+                    </div>
+                    <button class="btn" onclick="addEndpoint('codex')">
+                        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="12" y1="5" x2="12" y2="19"></line><line x1="5" y1="12" x2="19" y2="12"></line></svg>添加节点</button>
+                </div>
+
+                <div class="usage-guide">
+                    <h3>🚀 如何连接此网关？</h3>
+                    <p>对于独立的 Codex 桌面端或命令行，网关会自动在 <code>~/.codex/</code> 生成 <code>gateway-model-catalog.json</code> 模型目录文件。你只需要将以下配置片段粘贴到你的 <code>~/.codex/config.toml</code> 文件中（确保放在第一个 <code>[section]</code> 之前）：</p>
+                    <div class="code-snippet" style="margin-top: 10px;">
+                        <pre style="margin: 0; color: inherit; font-family: inherit; font-size: inherit; background: transparent; padding: 0; overflow-x: auto;">
+model_provider = "custom"
+model_catalog_json = "<span class="cfg-home-dir">~</span>/.codex/gateway-model-catalog.json"
+openai_base_url = "http://<span class="cfg-host">127.0.0.1</span>:<span class="cfg-port">8787</span>/codex/v1"
+
+[model_providers.custom]
+name = "Local AI Gateway"
+base_url = "http://<span class="cfg-host">127.0.0.1</span>:<span class="cfg-port">8787</span>/codex/v1"
+wire_api = "responses"
+requires_openai_auth = true
+experimental_bearer_token = "dummy"</pre>
+                    </div>
+                </div>
+
+                <div class="endpoints-grid" id="codex-endpoints"></div>
+            </section>
+        </main>
+    </div>
+
+    <div class="toast-container" id="toast-container"></div>
+
+    <script>
+        let config = {
+            server: { host: "127.0.0.1", port: 8787 },
+            clients: { code: { endpoints: [] }, desktop: { endpoints: [] }, codex: { endpoints: [] } }
+        };
+
+        const ENDPOINT_TYPES = [
+            { value: "anthropic", label: "Anthropic 官方" },
+            { value: "openai-chat", label: "OpenAI Chat 补全格式" },
+            { value: "openai-responses", label: "OpenAI Responses (实验性)" }
+        ];
+
+        async function init() {
+            try {
+                const res = await fetch('/v1/config');
+                if (res.ok) {
+                    const data = await res.json();
+                    if (data && data.clients) {
+                        config = {
+                            ...config,
+                            ...data,
+                            clients: {
+                                code: data.clients.code || { endpoints: [] },
+                                desktop: data.clients.desktop || { endpoints: [] },
+                                codex: data.clients.codex || { endpoints: [] }
+                            }
+                        };
+                    }
+                }
+            } catch (e) {
+                console.warn('加载初始配置失败，使用默认配置。');
+            }
+            render();
+        }
+
+        function formatModelMapping(mapping) {
+            if (!mapping) return "";
+            return Object.entries(mapping).map(([k, v]) => `${k}=${v}`).join(', ');
+        }
+
+        function createEndpointHTML(client, index, ep) {
+            const availableTypes = (client === 'code' || client === 'desktop') 
+                ? ENDPOINT_TYPES.filter(t => t.value === 'anthropic')
+                : ENDPOINT_TYPES.filter(t => t.value === 'openai-responses');
+
+            const typeOptions = availableTypes.map(t => 
+                `<option value="${t.value}" ${ep.type === t.value ? 'selected' : ''}>${t.label}</option>`
+            ).join('');
+
+            return `
+                <div class="card" id="ep-${client}-${index}">
+                    <div class="card-header">
+                        <h3>节点 ${index + 1}</h3>
+                        <button class="btn btn-sm btn-danger" onclick="removeEndpoint('${client}', ${index})">
+                            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="3 6 5 6 21 6"></polyline><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path></svg>删除</button>
+                    </div>
+                    <div class="form-grid">
+                        <div class="form-group">
+                            <label>名称</label>
+                            <input type="text" value="${ep.name || ''}" placeholder="例如：OpenRouter" onchange="updateEndpoint('${client}', ${index}, 'name', this.value)">
+                        </div>
+                        <div class="form-group">
+                            <label>类型</label>
+                            <select onchange="updateEndpoint('${client}', ${index}, 'type', this.value)">
+                                ${typeOptions}
+                            </select>
+                        </div>
+                        <div class="form-group full">
+                            <label>接口地址 (Base URL)</label>
+                            <input class="mono" type="text" value="${ep.base_url || ''}" placeholder="https://api.openai.com/v1" onchange="updateEndpoint('${client}', ${index}, 'base_url', this.value)">
+                        </div>
+                        <div class="form-group full">
+                            <label>密钥 (API Key)</label>
+                            <div class="password-input-wrapper">
+                                <input class="mono" type="password" id="api-key-${client}-${index}" value="${ep.api_key || ''}" placeholder="sk-..." onchange="updateEndpoint('${client}', ${index}, 'api_key', this.value)">
+                                <button type="button" class="password-toggle-btn" onclick="togglePasswordVisibility('api-key-${client}-${index}')" title="显示/隐藏密钥">
+                                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                                        <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"></path>
+                                        <circle cx="12" cy="12" r="3"></circle>
+                                    </svg>
+                                </button>
+                            </div>
+                        </div>
+                        <div class="form-group full">
+                            <label>上游模型列表 (输入模型名称后按回车添加)</label>
+                            ${(ep.models && ep.models.length > 0) ? `
+                            <div class="tags-list">
+                                ${ep.models.map((m, i) => `
+                                    <span class="tag">${m} <button type="button" onclick="removeTag('${client}', ${index}, 'models', ${i})" title="移除模型">×</button></span>
+                                `).join('')}
+                            </div>
+                            ` : ''}
+                            <input type="text" id="input-models-${client}-${index}" class="mono" placeholder="添加新模型并按回车 (例如: glm-5.2)..." onkeydown="handleTagInput(event, '${client}', ${index}, 'models')">
+                        </div>
+                        <div class="form-group full">
+                            <label>模型映射关系 (输入 原模型 → 映射模型，按回车添加)</label>
+                            ${Object.keys(ep.model_mapping || {}).length > 0 ? `
+                            <div class="tags-list">
+                                ${Object.entries(ep.model_mapping).map(([k, v]) => `
+                                    <span class="tag">${k} <span style="color: var(--text-secondary); margin: 0 4px;">→</span> ${v} <button type="button" onclick="removeMapping('${client}', ${index}, '${k}')" title="移除映射">×</button></span>
+                                `).join('')}
+                            </div>
+                            ` : ''}
+                            <div class="add-mapping-row">
+                                <input type="text" id="input-mapping-req-${client}-${index}" class="mono" placeholder="原模型 (如 claude-opus)" onkeydown="handleMappingInput(event, '${client}', ${index}, true)">
+                                <span class="mapping-arrow">→</span>
+                                <input type="text" id="input-mapping-up-${client}-${index}" class="mono" placeholder="映射模型 (如 glm-5.2) + 回车" onkeydown="handleMappingInput(event, '${client}', ${index}, false)">
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            `;
+        }
+
+        function render() {
+            const host = config.server?.host || "127.0.0.1";
+            const port = config.server?.port || 8787;
+            document.querySelectorAll('.cfg-host').forEach(el => el.textContent = host === '0.0.0.0' ? '127.0.0.1' : host);
+            document.querySelectorAll('.cfg-port').forEach(el => el.textContent = port);
+
+            ['code', 'desktop', 'codex'].forEach(client => {
+                const container = document.getElementById(`${client}-endpoints`);
+                const eps = config.clients[client].endpoints || [];
+                
+                if (eps.length === 0) {
+                    container.innerHTML = `
+                        <div class="empty-state">
+                            <p>${client} 尚未配置任何节点。</p>
+                            <button class="btn" onclick="addEndpoint('${client}')">创建第一个节点</button>
+                        </div>
+                    `;
+                } else {
+                    container.innerHTML = eps.map((ep, i) => createEndpointHTML(client, i, ep)).join('');
+                }
+            });
+        }
+
+        window.switchTab = function(tabId) {
+            // Update nav items
+            document.querySelectorAll('.nav-item').forEach(el => {
+                el.classList.remove('active');
+            });
+            const navItem = document.querySelector(`.nav-item[href="#${tabId}"]`);
+            if (navItem) {
+                navItem.classList.add('active');
+            }
+
+            // Update sections
+            document.querySelectorAll('.tab-section').forEach(el => {
+                el.style.display = 'none';
+                el.classList.remove('active');
+            });
+            const activeSection = document.getElementById(`section-${tabId}`);
+            if (activeSection) {
+                activeSection.style.display = 'block';
+                activeSection.classList.add('active');
+            }
+
+            // Scroll to top
+            document.querySelector('.content-area').scrollTop = 0;
+        }
+
+        window.addEventListener('load', () => {
+            const hash = window.location.hash.replace('#', '');
+            if (hash === 'code' || hash === 'desktop' || hash === 'codex') {
+                switchTab(hash);
+            }
+        });
+
+        window.addEndpoint = function(client) {
+            config.clients[client].endpoints = config.clients[client].endpoints || [];
+            config.clients[client].endpoints.push({
+                name: "新服务商",
+                type: "anthropic",
+                base_url: "",
+                api_key: "",
+                models: [],
+                model_mapping: {}
+            });
+            render();
+        }
+
+        window.removeEndpoint = function(client, index) {
+            config.clients[client].endpoints.splice(index, 1);
+            render();
+        }
+
+        window.updateEndpoint = function(client, index, field, value) {
+            config.clients[client].endpoints[index][field] = value;
+        }
+
+        window.handleTagInput = function(e, client, index, field) {
+            if (e.key === 'Enter') {
+                e.preventDefault();
+                const val = e.target.value.trim();
+                if (val) {
+                    config.clients[client].endpoints[index][field] = config.clients[client].endpoints[index][field] || [];
+                    if (!config.clients[client].endpoints[index][field].includes(val)) {
+                        config.clients[client].endpoints[index][field].push(val);
+                    }
+                    e.target.value = '';
+                    render();
+                    setTimeout(() => {
+                        const input = document.getElementById(`input-${field}-${client}-${index}`);
+                        if (input) input.focus();
+                    }, 0);
+                }
+            }
+        };
+
+        window.removeTag = function(client, index, field, tagIndex) {
+            if (config.clients[client].endpoints[index][field]) {
+                config.clients[client].endpoints[index][field].splice(tagIndex, 1);
+                render();
+            }
+        };
+
+        window.handleMappingInput = function(e, client, index, isReq) {
+            if (e.key === 'Enter') {
+                e.preventDefault();
+                const reqInput = document.getElementById(`input-mapping-req-${client}-${index}`);
+                const upInput = document.getElementById(`input-mapping-up-${client}-${index}`);
+                if (!reqInput || !upInput) return;
+                
+                const k = reqInput.value.trim();
+                const v = upInput.value.trim();
+
+                if (isReq && k && !v) {
+                    upInput.focus();
+                    return;
+                }
+
+                if (k && v) {
+                    config.clients[client].endpoints[index].model_mapping = config.clients[client].endpoints[index].model_mapping || {};
+                    config.clients[client].endpoints[index].model_mapping[k] = v;
+                    render();
+                    setTimeout(() => {
+                        const input = document.getElementById(`input-mapping-req-${client}-${index}`);
+                        if (input) input.focus();
+                    }, 0);
+                }
+            }
+        };
+
+        window.togglePasswordVisibility = function(inputId) {
+            const input = document.getElementById(inputId);
+            if (!input) return;
+            const btn = input.nextElementSibling;
+            if (input.type === 'password') {
+                input.type = 'text';
+                btn.innerHTML = `<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                    <path d="M17.94 17.94A10.07 10.07 0 0 1 12 20c-7 0-11-8-11-8a18.45 18.45 0 0 1 5.06-5.94M9.9 4.24A9.12 9.12 0 0 1 12 4c7 0 11 8 11 8a18.5 18.5 0 0 1-2.16 3.19m-6.72-1.07a3 3 0 1 1-4.24-4.24"></path>
+                    <line x1="1" y1="1" x2="23" y2="23"></line>
+                </svg>`;
+            } else {
+                input.type = 'password';
+                btn.innerHTML = `<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                    <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"></path>
+                    <circle cx="12" cy="12" r="3"></circle>
+                </svg>`;
+            }
+        };
+
+        window.removeMapping = function(client, index, key) {
+            if (config.clients[client].endpoints[index].model_mapping) {
+                delete config.clients[client].endpoints[index].model_mapping[key];
+                render();
+            }
+        };
+
+        window.saveConfig = async function() {
+            const btn = document.getElementById('save-btn');
+            const originalContent = btn.innerHTML;
+            
+            btn.innerHTML = `<svg class="spinner" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" style="animation: spin 1s linear infinite;"><line x1="12" y1="2" x2="12" y2="6"></line><line x1="12" y1="18" x2="12" y2="22"></line><line x1="4.93" y1="4.93" x2="7.76" y2="7.76"></line><line x1="16.24" y1="16.24" x2="19.07" y2="19.07"></line><line x1="2" y1="12" x2="6" y2="12"></line><line x1="18" y1="12" x2="22" y2="12"></line><line x1="4.93" y1="19.07" x2="7.76" y2="16.24"></line><line x1="16.24" y1="7.76" x2="19.07" y2="4.93"></line></svg> Saving...`;
+            btn.disabled = true;
+
+            try {
+                const res = await fetch('/v1/config/save', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(config)
+                });
+                
+                if (res.ok) {
+                    showToast('配置已生效，服务已重新加载', 'success');
+                } else {
+                    const err = await res.text();
+                    showToast(err || '保存配置失败', 'error');
+                }
+            } catch (e) {
+                showToast('保存时网络出错', 'error');
+            } finally {
+                btn.innerHTML = originalContent;
+                btn.disabled = false;
+            }
+        }
+
+        function showToast(message, type = 'success') {
+            const container = document.getElementById('toast-container');
+            const toast = document.createElement('div');
+            toast.className = `toast ${type}`;
+            
+            const icon = type === 'success' 
+                ? `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"></path><polyline points="22 4 12 14.01 9 11.01"></polyline></svg>`
+                : `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"></circle><line x1="12" y1="8" x2="12" y2="12"></line><line x1="12" y1="16" x2="12.01" y2="16"></line></svg>`;
+            
+            toast.innerHTML = `${icon} <span>${message}</span>`;
+            container.appendChild(toast);
+            
+            setTimeout(() => {
+                toast.style.animation = 'toastExit 0.3s forwards';
+                setTimeout(() => toast.remove(), 300);
+            }, 3500);
+        }
+
+        // Add spinner keyframes
+        const style = document.createElement('style');
+        style.textContent = `@keyframes spin { 100% { transform: rotate(360deg); } }`;
+        document.head.appendChild(style);
+
+        // Theme management
+        window.toggleTheme = function() {
+            const root = document.documentElement;
+            const currentTheme = root.getAttribute('data-theme') || 'dark';
+            const newTheme = currentTheme === 'dark' ? 'light' : 'dark';
+            
+            root.setAttribute('data-theme', newTheme);
+            localStorage.setItem('app-theme', newTheme);
+            updateThemeIcon(newTheme);
+        };
+
+        function updateThemeIcon(theme) {
+            const darkIcon = document.getElementById('theme-icon-dark');
+            const lightIcon = document.getElementById('theme-icon-light');
+            if (!darkIcon || !lightIcon) return;
+            
+            if (theme === 'dark') {
+                darkIcon.style.display = 'block';
+                lightIcon.style.display = 'none';
+            } else {
+                darkIcon.style.display = 'none';
+                lightIcon.style.display = 'block';
+            }
+        }
+
+        document.addEventListener('DOMContentLoaded', () => {
+            init();
+            const currentTheme = document.documentElement.getAttribute('data-theme') || 'dark';
+            updateThemeIcon(currentTheme);
+        });
+    </script>
+</body>
+</html>
