@@ -132,30 +132,29 @@
             100% { box-shadow: 0 0 0 0 rgba(76, 195, 138, 0); }
         }
 
-        /* Buttons */
         .btn {
             background: transparent;
             color: var(--text-primary);
             border: 1px solid var(--border-color);
-            padding: 8px 16px;
+            padding: 6px 14px;
             border-radius: var(--radius-md);
-            font-size: 14px;
+            font-size: 13px;
             font-weight: 500;
             cursor: pointer;
             transition: all var(--transition-fast);
             display: inline-flex;
             align-items: center;
             justify-content: center;
-            gap: 8px;
+            gap: 6px;
         }
 
         .btn:hover:not(:disabled) {
             background: var(--surface-hover);
-            border-color: #383c44;
+            border-color: var(--text-secondary);
         }
 
         .btn:active:not(:disabled) {
-            transform: scale(0.97);
+            transform: scale(0.98);
         }
         
         .btn:disabled {
@@ -164,32 +163,32 @@
         }
 
         .btn-primary {
-            background: var(--brand-primary);
-            color: var(--brand-text);
-            border: 1px solid var(--brand-primary);
-            box-shadow: 0 2px 8px var(--brand-glow);
+            background: var(--text-primary);
+            color: var(--bg-color);
+            border: 1px solid transparent;
+            font-weight: 600;
         }
 
         .btn-primary:hover:not(:disabled) {
-            background: var(--brand-hover);
-            transform: translateY(-1px);
-            box-shadow: 0 4px 12px var(--brand-glow);
+            opacity: 0.9;
+            transform: none;
         }
         
         .btn-danger {
-            background: var(--danger-bg);
-            color: var(--danger);
+            background: transparent;
+            color: var(--text-secondary);
             border: 1px solid transparent;
         }
 
         .btn-danger:hover:not(:disabled) {
-            background: var(--danger);
-            color: white;
+            background: var(--danger-bg);
+            color: var(--danger);
+            border-color: transparent;
         }
 
         .btn-sm {
-            padding: 6px 12px;
-            font-size: 13px;
+            padding: 4px 10px;
+            font-size: 12px;
         }
 
         /* Main Container */
@@ -208,27 +207,28 @@
             display: flex;
             justify-content: space-between;
             align-items: flex-end;
-            padding-bottom: 16px;
+            padding-bottom: 12px;
             border-bottom: 1px solid var(--border-color);
         }
 
         .section-header h2 {
-            font-size: 22px;
+            font-size: 18px;
             font-weight: 600;
-            letter-spacing: -0.02em;
-            margin-bottom: 6px;
+            letter-spacing: -0.01em;
+            margin-bottom: 4px;
+            color: var(--text-primary);
         }
 
         .section-header p {
             color: var(--text-secondary);
-            font-size: 14px;
+            font-size: 13px;
         }
 
         /* Endpoints Grid */
         .endpoints-grid {
             display: grid;
             grid-template-columns: 1fr;
-            gap: 24px;
+            gap: 20px;
         }
 
         /* Cards */
@@ -236,9 +236,8 @@
             background: var(--surface);
             border: 1px solid var(--border-color);
             border-radius: var(--radius-lg);
-            padding: 24px 32px;
-            box-shadow: var(--shadow-card);
-            transition: border-color var(--transition-fast), box-shadow var(--transition-fast);
+            padding: 24px;
+            transition: border-color var(--transition-fast);
         }
 
         .card:hover {
@@ -250,30 +249,26 @@
             justify-content: space-between;
             align-items: center;
             margin-bottom: 24px;
+            padding-bottom: 16px;
+            border-bottom: 1px dashed var(--border-color);
         }
 
         .card-header h3 {
-            font-size: 16px;
+            font-size: 14px;
             font-weight: 600;
             display: flex;
             align-items: center;
             gap: 8px;
-        }
-        
-        .card-header h3::before {
-            content: "";
-            display: inline-block;
-            width: 4px;
-            height: 16px;
-            background: var(--brand-primary);
-            border-radius: 2px;
+            text-transform: uppercase;
+            letter-spacing: 0.05em;
+            color: var(--text-secondary);
         }
 
         /* Form Grid */
         .form-grid {
             display: grid;
             grid-template-columns: 1fr 1fr;
-            gap: 20px;
+            gap: 24px;
         }
 
         .form-group {
@@ -287,21 +282,24 @@
         }
 
         label {
-            font-size: 13px;
-            font-weight: 500;
+            font-size: 12px;
+            font-weight: 600;
             color: var(--text-secondary);
+            text-transform: uppercase;
+            letter-spacing: 0.05em;
         }
 
         input, select {
             background: var(--input-bg);
             border: 1px solid var(--border-color);
             color: var(--text-primary);
-            padding: 10px 14px;
+            padding: 8px 12px;
             border-radius: var(--radius-md);
-            font-size: 14px;
+            font-size: 13px;
             font-family: var(--font-sans);
-            transition: all var(--transition-fast);
+            transition: border-color var(--transition-fast);
             width: 100%;
+            height: 36px;
         }
         
         input.mono {
@@ -317,14 +315,13 @@
             outline: none;
             border-color: var(--text-primary);
             background: var(--input-focus-bg);
-            box-shadow: 0 0 0 1px var(--text-primary);
         }
 
         /* Empty State */
         .empty-state {
             text-align: center;
             padding: 48px;
-            background: rgba(20, 21, 24, 0.4);
+            background: var(--input-bg);
             border: 1px dashed var(--border-color);
             border-radius: var(--radius-lg);
             color: var(--text-secondary);
@@ -339,31 +336,30 @@
         .tag-input-container {
             display: flex;
             flex-wrap: wrap;
-            gap: 8px;
+            gap: 6px;
             background: var(--input-bg);
             border: 1px solid var(--border-color);
-            padding: 8px 12px;
+            padding: 6px;
             border-radius: var(--radius-md);
-            min-height: 42px;
+            min-height: 36px;
             align-items: center;
-            transition: all var(--transition-fast);
+            transition: border-color var(--transition-fast);
             cursor: text;
         }
         .tag-input-container:focus-within {
             border-color: var(--text-primary);
             background: var(--input-focus-bg);
-            box-shadow: 0 0 0 1px var(--text-primary);
         }
         .tag-input-container input {
             border: none;
             background: transparent;
-            padding: 0;
+            padding: 0 4px;
             margin: 0;
             min-width: 120px;
             flex: 1;
             font-size: 13px;
             box-shadow: none !important;
-            height: 24px;
+            height: 22px;
             color: var(--text-primary);
         }
         .tag-input-container input:focus {
@@ -375,7 +371,8 @@
             background: var(--input-bg) !important;
             border: 1px dashed var(--inline-input-border) !important;
             border-radius: 4px;
-            padding: 2px 8px !important;
+            padding: 2px 6px !important;
+            height: 24px !important;
         }
         .inline-input:focus {
             border-style: solid !important;
@@ -383,14 +380,14 @@
             background: var(--input-focus-bg) !important;
         }
         .tag {
-            background: var(--tag-bg);
+            background: var(--surface-hover);
             border: 1px solid var(--border-color);
-            padding: 4px 10px;
-            border-radius: 12px;
+            padding: 2px 8px;
+            border-radius: 4px;
             font-size: 12px;
             display: inline-flex;
             align-items: center;
-            gap: 8px;
+            gap: 6px;
             font-family: var(--font-mono);
             color: var(--text-primary);
         }
@@ -401,10 +398,21 @@
             cursor: pointer;
             font-size: 14px;
             line-height: 1;
-            transition: color var(--transition-fast);
+            transition: color var(--transition-fast), opacity var(--transition-fast);
+            opacity: 0;
+        }
+        .tag:hover button {
+            opacity: 1;
         }
         .tag button:hover {
             color: var(--danger);
+        }
+
+        .card .btn-danger {
+            opacity: 0;
+        }
+        .card:hover .btn-danger {
+            opacity: 1;
         }
 
         /* Toast */
@@ -600,14 +608,14 @@
                             </div>
                         </div>
                         <div class="form-group full">
-                            <label>模型映射关系 (输入 原模型 ➔ 映射模型，按回车添加)</label>
+                            <label>模型映射关系 (输入 原模型 → 映射模型，按回车添加)</label>
                             <div class="tag-input-container" onclick="if(event.target.tagName !== 'INPUT' && event.target.tagName !== 'BUTTON') document.getElementById('input-mapping-req-${client}-${index}').focus()">
                                 ${Object.entries(ep.model_mapping || {}).map(([k, v]) => `
-                                    <span class="tag">${k} ➔ ${v} <button type="button" onclick="removeMapping('${client}', ${index}, '${k}')" title="移除映射">×</button></span>
+                                    <span class="tag">${k} <span style="color: var(--text-secondary); margin: 0 2px;">→</span> ${v} <button type="button" onclick="removeMapping('${client}', ${index}, '${k}')" title="移除映射">×</button></span>
                                 `).join('')}
                                 <div style="display: flex; align-items: center; gap: 8px; flex: 1; min-width: 250px;">
                                     <input type="text" id="input-mapping-req-${client}-${index}" class="mono inline-input" placeholder="原模型 (如 claude-opus)" style="min-width: 120px; flex: 1;" onkeydown="handleMappingInput(event, '${client}', ${index}, true)">
-                                    <span style="color: var(--text-secondary);">➔</span>
+                                    <span style="color: var(--text-secondary); font-size: 12px;">→</span>
                                     <input type="text" id="input-mapping-up-${client}-${index}" class="mono inline-input" placeholder="映射模型 (如 glm-5.2) + 回车" style="min-width: 150px; flex: 1;" onkeydown="handleMappingInput(event, '${client}', ${index}, false)">
                                 </div>
                             </div>
