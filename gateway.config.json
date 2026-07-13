@@ -1,0 +1,64 @@
+{
+  "server": {
+    "host": "127.0.0.1",
+    "port": 8787
+  },
+  "providers": {
+    "volcengine-anthropic": {
+      "type": "anthropic",
+      "base_url": "https://ark.cn-beijing.volces.com/api/plan/v1",
+      "api_key_env": "ARK_API_KEY",
+      "auth": "bearer"
+    },
+    "volcengine-openai": {
+      "type": "openai-responses",
+      "base_url": "https://ark.cn-beijing.volces.com/api/plan/v3",
+      "api_key_env": "ARK_API_KEY",
+      "auth": "bearer"
+    }
+  },
+  "models": [
+    {
+      "id": "claude-opus-4-8",
+      "display_name": "GLM 5.2 via Volcengine",
+      "provider": "volcengine-anthropic",
+      "upstream_model": "glm-5.2",
+      "aliases": ["claude-fable", "fable"]
+    },
+    {
+      "id": "claude-haiku-4-0",
+      "display_name": "GLM 5.2 via Volcengine",
+      "provider": "volcengine-anthropic",
+      "upstream_model": "glm-5.2",
+      "aliases": ["claude-haiku", "haiku"]
+    },
+    {
+      "id": "claude-opus-4-7",
+      "display_name": "Minimax M3 via Volcengine",
+      "provider": "volcengine-anthropic",
+      "upstream_model": "minimax-m3",
+      "aliases": ["claude-opus", "opus", "minimax-m3"]
+    },
+    {
+      "id": "claude-sonnet-4-5",
+      "display_name": "DeepSeek V4 Pro via Volcengine",
+      "provider": "volcengine-anthropic",
+      "upstream_model": "deepseek-v4-pro",
+      "aliases": ["claude-sonnet", "sonnet", "deepseek-v4-pro"]
+    },
+    {
+      "id": "glm-5.2",
+      "display_name": "GLM 5.2 via Volcengine",
+      "provider": "volcengine-openai",
+      "upstream_model": "glm-5.2",
+      "aliases": ["glm"]
+    }
+  ],
+  "official_models": {
+    "anthropic": [
+      "claude-fable-5",
+      "claude-sonnet-4-6",
+      "claude-haiku-4-5-20251001"
+    ]
+  }
+}
