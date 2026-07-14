@@ -824,10 +824,10 @@ experimental_bearer_token = "dummy"</pre>
                 <div class="card" id="ep-${client}-${index}">
                     <div class="card-header">
                         <div style="display: flex; align-items: center; gap: 12px;">
-                            <h3>节点 ${index + 1}</h3>
-                            <label style="display: flex; align-items: center; gap: 4px; font-size: 0.9em; cursor: pointer; color: var(--text-secondary);">
-                                <input type="radio" name="default-${client}" ${ep.is_default ? 'checked' : ''} onchange="setAsDefault('${client}', ${index})">
-                                设为当前客户端默认兜底节点
+                            <h3 style="margin: 0;">节点 ${index + 1}</h3>
+                            <label style="display: flex; align-items: center; gap: 6px; font-size: 13px; cursor: pointer; color: var(--text-secondary); font-weight: normal; margin: 0;">
+                                <input type="radio" name="default-${client}" ${ep.is_default ? 'checked' : ''} onchange="setAsDefault('${client}', ${index})" style="width: auto; margin: 0; padding: 0; accent-color: var(--primary);">
+                                设为默认兜底节点
                             </label>
                         </div>
                         <button class="btn btn-sm btn-danger" onclick="removeEndpoint('${client}', ${index})">
