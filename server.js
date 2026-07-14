@@ -1907,6 +1907,32 @@ function resolveConfiguredModel(requestedModel, allowedTypes = [], client = null
 
   for (const c of clientsToCheck) {
     const endpoints = GATEWAY_CONFIG.clients?.[c]?.endpoints || [];
+    
+    // Find the default endpoint first
+    const defaultEp = endpoints.find(ep => ep.is_default && (allowed.size === 0 || allowed.has(ep.type)));
+
+    // 1. If default endpoint is defined, check its precise models and mappings first
+    if (defaultEp) {
+      let targetModel = text;
+      let matched = false;
+
+      if (defaultEp.models?.includes(text)) {
+        matched = true;
+      } else if (defaultEp.model_mapping && defaultEp.model_mapping[text]) {
+        targetModel = defaultEp.model_mapping[text];
+        matched = true;
+      }
+
+      if (matched) {
+        return {
+          model: { id: text, display_name: text, upstream_model: targetModel, aliases: [] },
+          provider: { id: defaultEp.name, type: defaultEp.type, base_url: defaultEp.base_url, api_key: defaultEp.api_key, auth: "bearer" },
+          upstream_model: targetModel
+        };
+      }
+    }
+
+    // 2. Check all endpoints (including non-default ones) in order for precise matches
     for (const ep of endpoints) {
       if (allowed.size === 0 || allowed.has(ep.type)) {
         let targetModel = text;
@@ -1923,25 +1949,18 @@ function resolveConfiguredModel(requestedModel, allowedTypes = [], client = null
         }
       }
     }
-  }
 
-  // Second pass: fallback to default endpoint
-  for (const c of clientsToCheck) {
-    const endpoints = GATEWAY_CONFIG.clients?.[c]?.endpoints || [];
-    for (const ep of endpoints) {
-      if (allowed.size === 0 || allowed.has(ep.type)) {
-        if (ep.is_default) {
-          let targetModel = text;
-          if (ep.model_mapping && ep.model_mapping[text]) {
-            targetModel = ep.model_mapping[text];
-          }
-          return {
-             model: { id: text, display_name: text, upstream_model: targetModel, aliases: [] },
-             provider: { id: ep.name, type: ep.type, base_url: ep.base_url, api_key: ep.api_key, auth: "bearer" },
-             upstream_model: targetModel
-          };
-        }
+    // 3. Fallback to default endpoint if still not matched
+    if (defaultEp) {
+      let targetModel = text;
+      if (defaultEp.model_mapping && defaultEp.model_mapping[text]) {
+        targetModel = defaultEp.model_mapping[text];
       }
+      return {
+         model: { id: text, display_name: text, upstream_model: targetModel, aliases: [] },
+         provider: { id: defaultEp.name, type: defaultEp.type, base_url: defaultEp.base_url, api_key: defaultEp.api_key, auth: "bearer" },
+         upstream_model: targetModel
+      };
     }
   }
 
