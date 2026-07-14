@@ -623,14 +623,20 @@
                 <a href="#desktop" class="nav-item" onclick="switchTab('desktop')">Claude Desktop 代理</a>
                 <a href="#codex" class="nav-item" onclick="switchTab('codex')">Codex 代理</a>
             </nav>
-            <div class="sidebar-footer">
-                <button class="btn" id="theme-toggle" onclick="toggleTheme()" aria-label="Toggle Theme" style="padding: 8px; border-radius: 50%;">
-                    <svg id="theme-icon-dark" style="display: none;" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"></path></svg>
-                    <svg id="theme-icon-light" style="display: none;" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="5"></circle><line x1="12" y1="1" x2="12" y2="3"></line><line x1="12" y1="21" x2="12" y2="23"></line><line x1="4.22" y1="4.22" x2="5.64" y2="5.64"></line><line x1="18.36" y1="18.36" x2="19.78" y2="19.78"></line><line x1="1" y1="12" x2="3" y2="12"></line><line x1="21" y1="12" x2="23" y2="12"></line><line x1="4.22" y1="19.78" x2="5.64" y2="18.36"></line><line x1="18.36" y1="5.64" x2="19.78" y2="4.22"></line></svg>
-                </button>
-                <button class="btn btn-primary" id="save-btn" onclick="saveConfig()" style="flex: 1;">
-                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z"></path><polyline points="17 21 17 13 7 13 7 21"></polyline><polyline points="7 3 7 8 15 8"></polyline></svg>
-                    保存配置
+            <div class="sidebar-footer" style="flex-direction: column;">
+                <div style="display: flex; gap: 12px; width: 100%;">
+                    <button class="btn" id="theme-toggle" onclick="toggleTheme()" aria-label="Toggle Theme" style="padding: 8px; border-radius: 50%;">
+                        <svg id="theme-icon-dark" style="display: none;" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"></path></svg>
+                        <svg id="theme-icon-light" style="display: none;" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="5"></circle><line x1="12" y1="1" x2="12" y2="3"></line><line x1="12" y1="21" x2="12" y2="23"></line><line x1="4.22" y1="4.22" x2="5.64" y2="5.64"></line><line x1="18.36" y1="18.36" x2="19.78" y2="19.78"></line><line x1="1" y1="12" x2="3" y2="12"></line><line x1="21" y1="12" x2="23" y2="12"></line><line x1="4.22" y1="19.78" x2="5.64" y2="18.36"></line><line x1="18.36" y1="5.64" x2="19.78" y2="4.22"></line></svg>
+                    </button>
+                    <button class="btn btn-primary" id="save-btn" onclick="saveConfig()" style="flex: 1;">
+                        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z"></path><polyline points="17 21 17 13 7 13 7 21"></polyline><polyline points="7 3 7 8 15 8"></polyline></svg>
+                        保存配置
+                    </button>
+                </div>
+                <button class="btn" onclick="loadDefaultTemplate()" style="width: 100%; border-color: transparent; color: var(--text-secondary); margin-top: 4px; background: var(--input-bg);">
+                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 12a9 9 0 1 0 9-9 9.75 9.75 0 0 0-6.74 2.74L3 8"></path><polyline points="3 3 3 8 8 8"></polyline></svg>
+                    恢复默认模板
                 </button>
             </div>
         </aside>
@@ -739,6 +745,43 @@ experimental_bearer_token = "dummy"</pre>
             { value: "openai-chat", label: "OpenAI Chat 补全格式" },
             { value: "openai-responses", label: "OpenAI Responses (实验性)" }
         ];
+
+        function loadDefaultTemplate() {
+            if (!confirm('这会覆盖你当前的所有配置，确定要恢复默认模板吗？')) return;
+            const templateEndpoint = {
+                name: "volcengine-anthropic",
+                type: "anthropic",
+                base_url: "https://ark.cn-beijing.volces.com/api/plan/v1",
+                api_key: "env:ARK_API_KEY",
+                models: ["glm-5.2", "minimax-m3", "deepseek-v4-pro"],
+                model_mapping: {
+                    "claude-opus-4-8": "glm-5.2",
+                    "claude-fable": "glm-5.2",
+                    "fable": "glm-5.2",
+                    "claude-haiku-4-0": "glm-5.2",
+                    "claude-haiku": "glm-5.2",
+                    "haiku": "glm-5.2",
+                    "claude-opus-4-7": "minimax-m3",
+                    "claude-opus": "minimax-m3",
+                    "opus": "minimax-m3",
+                    "minimax-m3": "minimax-m3",
+                    "claude-sonnet-4-5": "deepseek-v4-pro",
+                    "claude-sonnet": "deepseek-v4-pro",
+                    "sonnet": "deepseek-v4-pro",
+                    "deepseek-v4-pro": "deepseek-v4-pro"
+                }
+            };
+            config = {
+                server: { host: "127.0.0.1", port: 8787 },
+                clients: {
+                    code: { endpoints: [JSON.parse(JSON.stringify(templateEndpoint))] },
+                    desktop: { endpoints: [JSON.parse(JSON.stringify(templateEndpoint))] },
+                    codex: { endpoints: [JSON.parse(JSON.stringify(templateEndpoint))] }
+                }
+            };
+            render();
+            saveConfig();
+        }
 
         async function init() {
             try {
