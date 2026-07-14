@@ -543,10 +543,12 @@
             color: var(--danger);
         }
 
-        .card .btn-danger {
+        .card .card-actions {
             opacity: 0;
+            transition: opacity 0.2s;
         }
-        .card:hover .btn-danger {
+        .card:hover .card-actions,
+        .card .card-actions:has(input:checked) {
             opacity: 1;
         }
 
@@ -824,7 +826,7 @@ experimental_bearer_token = "dummy"</pre>
                 <div class="card" id="ep-${client}-${index}">
                     <div class="card-header">
                         <h3 style="margin: 0;">节点 ${index + 1}</h3>
-                        <div style="display: flex; align-items: center; gap: 16px;">
+                        <div class="card-actions" style="display: flex; align-items: center; gap: 16px;">
                             <label style="display: flex; align-items: center; gap: 6px; font-size: 13px; cursor: pointer; color: var(--text-secondary); font-weight: normal; margin: 0;">
                                 <input type="radio" name="default-${client}" ${ep.is_default ? 'checked' : ''} onchange="setAsDefault('${client}', ${index})" style="width: auto; margin: 0; padding: 0; accent-color: var(--primary);">
                                 设为默认节点
