@@ -1919,6 +1919,27 @@ function resolveConfiguredModel(requestedModel, allowedTypes = [], client = null
       }
     }
   }
+
+  // Second pass: fallback to default endpoint
+  for (const c of clientsToCheck) {
+    const endpoints = GATEWAY_CONFIG.clients?.[c]?.endpoints || [];
+    for (const ep of endpoints) {
+      if (allowed.size === 0 || allowed.has(ep.type)) {
+        if (ep.is_default) {
+          let targetModel = text;
+          if (ep.model_mapping && ep.model_mapping[text]) {
+            targetModel = ep.model_mapping[text];
+          }
+          return {
+             model: { id: text, display_name: text, upstream_model: targetModel, aliases: [] },
+             provider: { id: ep.name, type: ep.type, base_url: ep.base_url, api_key: ep.api_key, auth: "bearer" },
+             upstream_model: targetModel
+          };
+        }
+      }
+    }
+  }
+
   return null;
 }
 
