@@ -40,9 +40,7 @@ const OFFICIAL_CLAUDE_MODELS = parseList(
     "claude-3-5-sonnet-20241022,claude-3-5-sonnet-latest,claude-3-5-haiku-20241022,claude-3-5-haiku-latest,claude-3-opus-20240229,claude-3-opus-latest",
 );
 const OFFICIAL_CLAUDE_MODEL_IDS = new Set(OFFICIAL_CLAUDE_MODELS);
-const MODEL_MAP_FILE = resolveProjectPath(process.env.MODEL_MAP_FILE || "models.json");
-const MODEL_MAP = loadModelMap(MODEL_MAP_FILE);
-let GATEWAY_CONFIG = loadGatewayConfig(GATEWAY_CONFIG_FILE, MODEL_MAP);
+let GATEWAY_CONFIG = loadGatewayConfig(GATEWAY_CONFIG_FILE);
 const LISTEN_HOST = ENV_HOST || GATEWAY_CONFIG.server?.host || "127.0.0.1";
 const LISTEN_PORT = ENV_PORT || Number(GATEWAY_CONFIG.server?.port) || 8787;
 const _allEndpoints = [
@@ -111,7 +109,7 @@ server.listen(LISTEN_PORT, LISTEN_HOST, () => {
   console.log(`Ark Anthropic messages URL: ${ARK_MESSAGES_URL}`);
   console.log(`Ark Codex/OpenAI URL: ${ARK_CODEX_BASE_URL}`);
   console.log(`Official Anthropic messages URL: ${ANTHROPIC_MESSAGES_URL}`);
-  console.log(`Gateway config: ${fs.existsSync(GATEWAY_CONFIG_FILE) ? GATEWAY_CONFIG_FILE : "legacy .env/models.json"}`);
+  console.log(`Gateway config: ${fs.existsSync(GATEWAY_CONFIG_FILE) ? GATEWAY_CONFIG_FILE : "not found"}`);
   console.log(`Providers: ${_allEndpoints.map(e => e.name).join(", ")}`);
   console.log(`Exposed models: ${EXPOSED_MODELS.join(", ")}`);
   console.log(`Official Claude models: ${OFFICIAL_CLAUDE_MODELS.join(", ")}`);
@@ -2855,36 +2853,11 @@ function normalizeOfficialCodexBody(body, backend) {
   return normalized;
 }
 
-function loadModelMap(filePath) {
-  const empty = { models: [], aliases: {}, displayNames: {} };
-  if (!filePath || !fs.existsSync(filePath)) return empty;
-
-  const raw = fs.readFileSync(filePath, "utf8");
-  const json = JSON.parse(raw);
-  const models = Array.isArray(json.models) ? json.models : [];
-  const aliases = {};
-  const displayNames = {};
-
-  for (const model of models) {
-    if (!model.id || !model.ark_model) continue;
-    aliases[model.id] = model.ark_model;
-    displayNames[model.id] = model.name || model.id;
-
-    for (const alias of model.aliases || []) {
-      if (alias) aliases[alias] = model.ark_model;
-    }
-  }
-
-  return { models, aliases, displayNames };
-}
-
-function loadGatewayConfig(filePath, legacyModelMap) {
+function loadGatewayConfig(filePath) {
   let config = {};
   if (filePath && fs.existsSync(filePath)) {
     const raw = fs.readFileSync(filePath, "utf8").replace(/^\uFEFF/, "");
     config = JSON.parse(raw);
-  } else {
-    config = buildLegacyGatewayConfig(legacyModelMap);
   }
 
   if (!config.clients) {
@@ -2964,7 +2937,7 @@ function loadGatewayConfig(filePath, legacyModelMap) {
 }
 
 function reloadGatewayConfig() {
-  GATEWAY_CONFIG = loadGatewayConfig(GATEWAY_CONFIG_FILE, MODEL_MAP);
+  GATEWAY_CONFIG = loadGatewayConfig(GATEWAY_CONFIG_FILE);
   const _endpoints = [
     ...(GATEWAY_CONFIG.clients?.code?.endpoints || []),
     ...(GATEWAY_CONFIG.clients?.desktop?.endpoints || []),
@@ -3028,83 +3001,6 @@ function normalizeGatewayConfig(config) {
     aliases,
     displayNames,
     officialModels: config.official_models || {},
-  };
-}
-
-function buildLegacyGatewayConfig(legacyModelMap) {
-  const providers = {
-    "volcengine-anthropic": {
-      id: "volcengine-anthropic",
-      type: "anthropic",
-      base_url: trimRight(ARK_MESSAGES_URL.replace(/\/messages$/, ""), "/"),
-      api_key_env: "ARK_API_KEY",
-      api_key: ARK_API_KEY,
-      auth: ARK_AUTH_SCHEME,
-      headers: {},
-    },
-    "volcengine-openai": {
-      id: "volcengine-openai",
-      type: "openai-responses",
-      base_url: ARK_CODEX_BASE_URL,
-      api_key_env: "ARK_API_KEY",
-      api_key: ARK_API_KEY,
-      auth: ARK_AUTH_SCHEME,
-      headers: {},
-    },
-    anthropic: {
-      id: "anthropic",
-      type: "anthropic",
-      base_url: trimRight(ANTHROPIC_MESSAGES_URL.replace(/\/messages$/, ""), "/"),
-      api_key_env: "ANTHROPIC_API_KEY",
-      api_key: process.env.OFFICIAL_ANTHROPIC_API_KEY || process.env.ANTHROPIC_API_KEY || "",
-      auth: "x-api-key",
-      headers: {},
-    },
-  };
-
-  const models = [];
-  const seenOpenAIModels = new Set();
-
-  for (const model of legacyModelMap.models) {
-    const aliases = Array.isArray(model.aliases) ? model.aliases : [];
-    models.push({
-      id: model.id,
-      provider: "volcengine-anthropic",
-      upstream_model: model.ark_model,
-      display_name: model.name || model.id,
-      aliases: aliases.filter((alias) => alias !== model.ark_model),
-      owned_by: "volcengine",
-    });
-
-    if (model.ark_model && !seenOpenAIModels.has(model.ark_model)) {
-      seenOpenAIModels.add(model.ark_model);
-      models.push({
-        id: model.ark_model,
-        provider: "volcengine-openai",
-        upstream_model: model.ark_model,
-        display_name: model.ark_model,
-        aliases: [],
-        owned_by: "volcengine",
-      });
-    }
-  }
-
-  const aliases = {};
-  const displayNames = {};
-  for (const model of models) {
-    aliases[model.id] = model.upstream_model;
-    displayNames[model.id] = model.display_name;
-    for (const alias of model.aliases) {
-      if (alias) aliases[alias] = model.upstream_model;
-    }
-  }
-
-  return {
-    providers,
-    models,
-    aliases,
-    displayNames,
-    officialModels: { anthropic: OFFICIAL_CLAUDE_MODELS },
   };
 }
 

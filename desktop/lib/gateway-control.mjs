@@ -49,7 +49,6 @@ export async function getGatewayPort(rootDir, env = process.env) {
 export function buildGatewayEnvironment(rootDir, baseEnv = process.env, dataDir = rootDir) {
   const env = { ...baseEnv };
   env.GATEWAY_CONFIG_FILE ||= path.join(dataDir, "gateway.config.json");
-  env.MODEL_MAP_FILE ||= path.join(dataDir, "models.json");
   env.LOG_FILE ||= path.join(dataDir, "gateway.log");
 
   if (
