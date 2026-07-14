@@ -884,13 +884,18 @@ function providerApiKey(provider, req) {
     passedKey = req.headers["x-api-key"];
   }
 
+  const configuredKey = getConfiguredProviderApiKey(provider);
+  if (configuredKey) {
+    return configuredKey;
+  }
+
   const isGatewayAuthKey = process.env.GATEWAY_API_KEY && passedKey === process.env.GATEWAY_API_KEY;
 
   if (passedKey && !isGatewayAuthKey) {
     return passedKey;
   }
 
-  return getConfiguredProviderApiKey(provider);
+  return "";
 }
 
 function providerHeaders(provider, apiKey, baseHeaders = {}) {
