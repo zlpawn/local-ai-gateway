@@ -1898,6 +1898,16 @@ function resolveAnthropicRoute(requestedModel, client) {
   return { kind: "volcengine", model: ARK_MODEL || requestedModel };
 }
 
+function hasConfiguredApiKey(ep) {
+  if (ep.type === "official" || ep.name === "official") return true;
+  if (!ep.api_key) return false;
+  if (ep.api_key.startsWith("env:")) {
+    const envVar = ep.api_key.slice(4);
+    return Boolean(process.env[envVar]);
+  }
+  return true;
+}
+
 function resolveConfiguredModel(requestedModel, allowedTypes = [], client = null) {
   if (!requestedModel) return null;
   const text = String(requestedModel);
@@ -1906,7 +1916,8 @@ function resolveConfiguredModel(requestedModel, allowedTypes = [], client = null
   const clientsToCheck = client ? [client] : ["code", "desktop", "claude", "codex"];
 
   for (const c of clientsToCheck) {
-    const endpoints = GATEWAY_CONFIG.clients?.[c]?.endpoints || [];
+    const allEndpoints = GATEWAY_CONFIG.clients?.[c]?.endpoints || [];
+    const endpoints = allEndpoints.filter(ep => hasConfiguredApiKey(ep));
     
     // Find the default endpoint first
     const defaultEp = endpoints.find(ep => ep.is_default && (allowed.size === 0 || allowed.has(ep.type)));
@@ -1916,10 +1927,10 @@ function resolveConfiguredModel(requestedModel, allowedTypes = [], client = null
       let targetModel = text;
       let matched = false;
 
-      if (defaultEp.models?.includes(text)) {
-        matched = true;
-      } else if (defaultEp.model_mapping && defaultEp.model_mapping[text]) {
+      if (defaultEp.model_mapping && defaultEp.model_mapping[text]) {
         targetModel = defaultEp.model_mapping[text];
+        matched = true;
+      } else if (defaultEp.models?.includes(text)) {
         matched = true;
       }
 

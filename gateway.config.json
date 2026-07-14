@@ -146,11 +146,27 @@
           "api_key": "sk-tHREjgxnTI2KWHH6KDZjPBgTPtgwBxnx4bPToKR5wZId4a71",
           "models": [
             "claude-opus-4-8",
-            "claude-opus-4-7"
+            "claude-opus-4-7",
+            "claude-opus",
+            "opus",
+            "claude-sonnet-4-5",
+            "claude-sonnet",
+            "sonnet",
+            "claude-haiku-4-0",
+            "claude-haiku",
+            "haiku"
           ],
           "model_mapping": {
             "claude-opus-4-8": "claude-opus-4-8",
-            "claude-opus-4-7": "claude-opus-4-7"
+            "claude-opus-4-7": "claude-opus-4-7",
+            "claude-opus": "claude-opus-4-8",
+            "opus": "claude-opus-4-8",
+            "claude-sonnet-4-5": "claude-sonnet-4-6",
+            "claude-sonnet": "claude-sonnet-4-6",
+            "sonnet": "claude-sonnet-4-6",
+            "claude-haiku-4-0": "claude-haiku-4-5-20251001",
+            "claude-haiku": "claude-haiku-4-5-20251001",
+            "haiku": "claude-haiku-4-5-20251001"
           },
           "is_default": true
         }
