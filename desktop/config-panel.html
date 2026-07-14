@@ -970,6 +970,7 @@ experimental_bearer_token = "dummy"</pre>
             config.clients[client].endpoints.forEach((ep, i) => {
                 ep.is_default = (i === index);
             });
+            saveConfig();
         }
 
         window.updateEndpoint = function(client, index, field, value) {
