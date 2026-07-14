@@ -770,8 +770,8 @@ experimental_bearer_token = "dummy"</pre>
 
         function createEndpointHTML(client, index, ep) {
             const availableTypes = (client === 'code' || client === 'desktop')
-                ? ENDPOINT_TYPES.filter(t => t.value === 'anthropic')
-                : ENDPOINT_TYPES.filter(t => t.value === 'openai-responses');
+                ? ENDPOINT_TYPES.filter(t => ['anthropic', 'openai-chat'].includes(t.value))
+                : ENDPOINT_TYPES.filter(t => ['openai-responses', 'openai-chat'].includes(t.value));
 
             const typeOptions = availableTypes.map(t =>
                 `<option value="${t.value}" ${ep.type === t.value ? 'selected' : ''}>${t.label}</option>`
