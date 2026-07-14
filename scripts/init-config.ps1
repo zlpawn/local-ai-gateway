@@ -25,10 +25,9 @@ function Copy-TemplateIfMissing {
 }
 
 Copy-TemplateIfMissing ".env.example" ".env"
-Copy-TemplateIfMissing "gateway.config.example.json" "gateway.config.json"
 
 Write-Host ""
 Write-Host "Next steps:"
-Write-Host "  1. Edit .env and gateway.config.json"
-Write-Host "  2. Run: npm run validate:config"
-Write-Host "  3. Run: npm run gateway:start"
+Write-Host "  1. Edit .env"
+Write-Host "  2. Start the gateway and open http://127.0.0.1:8787/config"
+Write-Host "  3. Save the web config page to create gateway.config.json"

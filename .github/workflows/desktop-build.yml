@@ -50,9 +50,6 @@ jobs:
       - name: Test desktop control layer
         run: npm run desktop:test
 
-      - name: Validate example config
-        run: node scripts/validate-config.mjs gateway.config.example.json
-
       - name: Build desktop package
         run: npm run ${{ matrix.build-script }}
 
