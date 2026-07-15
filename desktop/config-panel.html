@@ -838,7 +838,7 @@ experimental_bearer_token = "dummy"</pre>
                     <div class="form-grid">
                         <div class="form-group">
                             <label>名称</label>
-                            <input type="text" value="${ep.name || ''}" placeholder="例如：OpenRouter" onchange="updateEndpoint('${client}', ${index}, 'name', this.value)">
+                            <input type="text" id="input-name-${client}-${index}" value="${ep.name || ''}" placeholder="例如：OpenRouter" onchange="updateEndpoint('${client}', ${index}, 'name', this.value)">
                         </div>
                         <div class="form-group">
                             <label>类型</label>
@@ -950,7 +950,7 @@ experimental_bearer_token = "dummy"</pre>
 
         window.addEndpoint = function(client) {
             config.clients[client].endpoints = config.clients[client].endpoints || [];
-            config.clients[client].endpoints.push({
+            config.clients[client].endpoints.unshift({
                 name: "新服务商",
                 type: "anthropic",
                 base_url: "",
@@ -959,6 +959,13 @@ experimental_bearer_token = "dummy"</pre>
                 model_mapping: {}
             });
             render();
+            setTimeout(() => {
+                const nameInput = document.getElementById(`input-name-${client}-0`);
+                if (nameInput) {
+                    nameInput.focus();
+                    nameInput.select();
+                }
+            }, 0);
         }
 
         window.removeEndpoint = function(client, index) {
