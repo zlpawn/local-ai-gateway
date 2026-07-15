@@ -16,6 +16,7 @@ const ENV_PORT = intEnv("GATEWAY_PORT", intEnv("PORT", 0));
 const ENV_HOST = process.env.GATEWAY_HOST || process.env.HOST || "";
 const REQUEST_TIMEOUT_MS = intEnv("REQUEST_TIMEOUT_MS", 120000);
 const GATEWAY_API_KEY = process.env.GATEWAY_API_KEY || "";
+const CONFIGURED_API_KEY_SENTINEL = "all";
 const ARK_API_KEY = process.env.ARK_API_KEY || "";
 const ARK_AUTH_SCHEME = (process.env.ARK_AUTH_SCHEME || "bearer").toLowerCase();
 const ARK_MODEL = process.env.ARK_MODEL || "";
@@ -296,7 +297,7 @@ async function forwardAnthropicMessages(body, clientReq, clientRes, context) {
   });
   const upstream =
     route.provider?.type === "openai-chat"
-      ? await fetchConfiguredOpenAI(route.provider, "/chat/completions", upstreamBody, clientReq)
+      ? await fetchConfiguredOpenAI(route.provider, "/v1/chat/completions", upstreamBody, clientReq)
       : route.provider
         ? await fetchConfiguredAnthropic(route.provider, upstreamBody, clientReq)
         : route.kind === "official"
@@ -379,7 +380,7 @@ async function forwardOpenAIChatCompletions(body, clientReq, clientRes, context)
       : route?.provider?.type === "openai-responses"
         ? await fetchConfiguredOpenAI(route.provider, "/responses", upstreamBody, clientReq)
         : route?.provider
-          ? await fetchConfiguredOpenAI(route.provider, "/chat/completions", upstreamBody, clientReq)
+          ? await fetchConfiguredOpenAI(route.provider, "/v1/chat/completions", upstreamBody, clientReq)
           : await fetchArkOpenAI("/chat/completions", upstreamBody, clientReq);
   logInfo("openai_chat_response", {
     request_id: context.requestId,
@@ -475,7 +476,7 @@ async function forwardOpenAIResponses(body, clientReq, clientRes, context) {
 
   const upstream =
     route?.provider?.type === "openai-chat"
-      ? await fetchConfiguredOpenAI(route.provider, "/chat/completions", upstreamBody, clientReq)
+      ? await fetchConfiguredOpenAI(route.provider, "/v1/chat/completions", upstreamBody, clientReq)
       : route?.provider
         ? await fetchConfiguredOpenAI(route.provider, "/responses", upstreamBody, clientReq)
         : await fetchArkOpenAI("/responses", upstreamBody, clientReq);
@@ -648,11 +649,6 @@ function resolveUrl(baseUrl, defaultPath) {
     return `${trimmed}${defaultPath}`;
   }
 
-  const pathname = parsed.pathname;
-  if (pathname === "" || pathname === "/") {
-    return trimmed;
-  }
-
   if (defaultPath === "/v1/messages") {
     if (trimmed.endsWith("/v1/messages") || trimmed.endsWith("/messages")) {
       return trimmed;
@@ -661,6 +657,16 @@ function resolveUrl(baseUrl, defaultPath) {
       return `${trimmed}/messages`;
     }
     return `${trimmed}/v1/messages`;
+  }
+
+  if (defaultPath === "/v1/chat/completions") {
+    if (trimmed.endsWith("/v1/chat/completions") || trimmed.endsWith("/chat/completions")) {
+      return trimmed;
+    }
+    if (trimmed.endsWith("/v1")) {
+      return `${trimmed}/chat/completions`;
+    }
+    return `${trimmed}/v1/chat/completions`;
   }
 
   const cleanPath = defaultPath.startsWith("/") ? defaultPath : `/${defaultPath}`;
@@ -876,17 +882,15 @@ function getConfiguredProviderApiKey(provider) {
 }
 
 function providerApiKey(provider, req) {
-  const auth = req.headers.authorization || "";
-  let passedKey = "";
-  if (auth.toLowerCase().startsWith("bearer ")) {
-    passedKey = auth.slice(7);
-  } else if (req.headers["x-api-key"]) {
-    passedKey = req.headers["x-api-key"];
-  }
+  const passedKey = requestApiKey(req);
 
   const configuredKey = getConfiguredProviderApiKey(provider);
   if (configuredKey) {
     return configuredKey;
+  }
+
+  if (isConfiguredApiKeySentinel(passedKey)) {
+    return "";
   }
 
   const isGatewayAuthKey = process.env.GATEWAY_API_KEY && passedKey === process.env.GATEWAY_API_KEY;
@@ -937,9 +941,8 @@ function officialAnthropicHeaders(clientReq, auth) {
 
 function getUpstreamApiKey(req) {
   if (ARK_API_KEY) return ARK_API_KEY;
-  const auth = req.headers.authorization || "";
-  if (auth.toLowerCase().startsWith("bearer ")) return auth.slice(7);
-  return req.headers["x-api-key"] || "";
+  const passedKey = requestApiKey(req);
+  return isConfiguredApiKeySentinel(passedKey) ? "" : passedKey;
 }
 
 function missingApiKeyMessage(envName, req) {
@@ -1767,7 +1770,7 @@ function openAIChatCompletionToAnthropicMessage(upstreamJson, requestedModel) {
   const choice = upstreamJson.choices?.[0] || {};
   const message = choice.message || {};
   const content = [];
-  const text = typeof message.content === "string" ? message.content : openAIContentToText(message.content);
+  const text = openAIChatMessageText(message);
 
   if (text) content.push({ type: "text", text });
 
@@ -1795,6 +1798,31 @@ function openAIChatCompletionToAnthropicMessage(upstreamJson, requestedModel) {
       output_tokens: upstreamJson.usage?.completion_tokens || 0,
     },
   };
+}
+
+function openAIChatMessageText(message = {}) {
+  return firstNonEmptyText(
+    typeof message.content === "string" ? message.content : openAIContentToText(message.content),
+    message.reasoning_content,
+    message.reasoning,
+    message.text,
+  );
+}
+
+function openAIChatDeltaText(delta = {}) {
+  return firstNonEmptyText(
+    typeof delta.content === "string" ? delta.content : openAIContentToText(delta.content),
+    delta.reasoning_content,
+    delta.reasoning,
+    delta.text,
+  );
+}
+
+function firstNonEmptyText(...values) {
+  for (const value of values) {
+    if (typeof value === "string" && value.length > 0) return value;
+  }
+  return "";
 }
 
 function openAIChatFinishReasonToAnthropic(finishReason, content = []) {
@@ -2330,6 +2358,18 @@ async function streamOpenAIChatAsAnthropicMessages(upstream, clientRes, requeste
   await consumeSse(upstream.body, (_eventName, payloadText) => {
     if (payloadText === "[DONE]") return;
     const payload = parseJsonMaybe(payloadText) || {};
+    if (payload.error) {
+      const message = payload.error.message || payload.error.code || payload.error.type || "Unknown upstream error";
+      ensureTextBlock();
+      sawText = true;
+      writeAnthropicSse(clientRes, "content_block_delta", {
+        type: "content_block_delta",
+        index: 0,
+        delta: { type: "text_delta", text: `[upstream error] ${message}` },
+      });
+      return;
+    }
+
     const choice = payload.choices?.[0] || {};
     const delta = choice.delta || {};
 
@@ -2337,18 +2377,31 @@ async function streamOpenAIChatAsAnthropicMessages(upstream, clientRes, requeste
       finishReason = openAIChatFinishReasonToAnthropic(choice.finish_reason);
     }
 
-    if (delta.content) {
+    const text = openAIChatDeltaText(delta);
+    if (text) {
       ensureTextBlock();
       sawText = true;
       writeAnthropicSse(clientRes, "content_block_delta", {
         type: "content_block_delta",
         index: 0,
-        delta: { type: "text_delta", text: delta.content },
+        delta: { type: "text_delta", text },
       });
     }
   });
 
   if (!blockStarted) ensureTextBlock();
+  if (!sawText) {
+    logInfo("openai_chat_as_anthropic_stream_empty", { request_id: requestId });
+    sawText = true;
+    writeAnthropicSse(clientRes, "content_block_delta", {
+      type: "content_block_delta",
+      index: 0,
+      delta: {
+        type: "text_delta",
+        text: "[upstream returned no text] The provider completed the request without any OpenAI Chat content. Check the upstream model mapping and provider response.",
+      },
+    });
+  }
   writeAnthropicSse(clientRes, "content_block_stop", {
     type: "content_block_stop",
     index: 0,
@@ -2407,12 +2460,21 @@ function decodeRequestBody(buffer, contentEncoding = "") {
   return decoded;
 }
 
-function checkLocalAuth(req, res) {
-  if (!GATEWAY_API_KEY) return true;
+function requestApiKey(req) {
   const auth = req.headers.authorization || "";
   const bearer = auth.toLowerCase().startsWith("bearer ") ? auth.slice(7) : "";
   const apiKey = req.headers["x-api-key"] || "";
-  if (bearer === GATEWAY_API_KEY || apiKey === GATEWAY_API_KEY) return true;
+  return bearer || apiKey || "";
+}
+
+function isConfiguredApiKeySentinel(value) {
+  return String(value || "").trim().toLowerCase() === CONFIGURED_API_KEY_SENTINEL;
+}
+
+function checkLocalAuth(req, res) {
+  if (!GATEWAY_API_KEY) return true;
+  const apiKey = requestApiKey(req);
+  if (apiKey === GATEWAY_API_KEY || isConfiguredApiKeySentinel(apiKey)) return true;
 
   sendJson(res, 401, {
     error: {
