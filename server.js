@@ -30,6 +30,9 @@ const ARK_CODEX_BASE_URL = trimRight(
   "/",
 );
 const GATEWAY_CONFIG_FILE = resolveProjectPath(process.env.GATEWAY_CONFIG_FILE || "gateway.config.json");
+const CLAUDE_3P_CONFIG_FILE = process.env.CLAUDE_3P_CONFIG_FILE || "";
+const CLAUDE_3P_CONFIG_LIBRARY = process.env.CLAUDE_3P_CONFIG_LIBRARY || "";
+const CLAUDE_3P_SYNC_DISABLED = isTruthy(process.env.CLAUDE_3P_SYNC_DISABLED);
 const ANTHROPIC_BASE_URL = trimRight(
   process.env.OFFICIAL_ANTHROPIC_BASE_URL || process.env.ANTHROPIC_UPSTREAM_BASE_URL || "https://api.anthropic.com",
   "/",
@@ -163,8 +166,9 @@ async function route(req, res) {
       }
       const mergedConfig = { ...currentConfig, server: newConfig.server, clients: newConfig.clients };
       fs.writeFileSync(GATEWAY_CONFIG_FILE, JSON.stringify(mergedConfig, null, 2));
+      const claude3pSync = syncClaudeThirdPartyInferenceConfig(mergedConfig);
       reloadGatewayConfig();
-      sendJson(res, 200, { success: true });
+      sendJson(res, 200, { success: true, claude3pSync });
     } catch(e) {
       sendJson(res, 500, { error: e.message });
     }
@@ -2579,6 +2583,14 @@ function resolveProjectPath(targetPath) {
   return path.isAbsolute(targetPath) ? targetPath : path.join(PROJECT_ROOT, targetPath);
 }
 
+function resolveUserPath(targetPath) {
+  if (!targetPath) return "";
+  const expanded = targetPath === "~" || targetPath.startsWith("~/") || targetPath.startsWith("~\\")
+    ? path.join(os.homedir(), targetPath.slice(2))
+    : targetPath;
+  return path.isAbsolute(expanded) ? expanded : path.join(PROJECT_ROOT, expanded);
+}
+
 function openAIContentToAnthropicBlocks(content) {
   if (typeof content === "string") {
     return content ? [{ type: "text", text: content }] : [];
@@ -2969,6 +2981,170 @@ function normalizeOfficialCodexBody(body, backend) {
   }
 
   return normalized;
+}
+
+function syncClaudeThirdPartyInferenceConfig(config) {
+  if (CLAUDE_3P_SYNC_DISABLED) {
+    return { updated: false, reason: "disabled" };
+  }
+
+  try {
+    const target = findClaudeThirdPartyConfigPath();
+    if (!target.path) {
+      return { updated: false, reason: target.reason };
+    }
+
+    const endpoints = config.clients?.desktop?.endpoints || [];
+    const defaultEndpoint = endpoints.find((endpoint) => endpoint?.is_default);
+    if (!defaultEndpoint) {
+      return { updated: false, reason: "no-desktop-default-endpoint", path: target.path };
+    }
+
+    const existingConfig = JSON.parse(fs.readFileSync(target.path, "utf8"));
+    const inferenceModels = buildClaudeThirdPartyInferenceModels(
+      defaultEndpoint,
+      existingConfig.inferenceModels,
+    );
+
+    if (inferenceModels.length === 0) {
+      return { updated: false, reason: "no-claude-model-mappings", path: target.path };
+    }
+
+    const nextConfig = {
+      ...existingConfig,
+      inferenceGatewayBaseUrl: buildClaudeThirdPartyGatewayBaseUrl(config),
+      inferenceGatewayApiKey: existingConfig.inferenceGatewayApiKey || CONFIGURED_API_KEY_SENTINEL,
+      inferenceModels,
+      inferenceProvider: "gateway",
+      inferenceCredentialKind: existingConfig.inferenceCredentialKind || "static",
+    };
+
+    fs.writeFileSync(target.path, `${JSON.stringify(nextConfig, null, 2)}\n`);
+    logInfo("claude3p_config_synced", {
+      path: target.path,
+      default_endpoint: defaultEndpoint.name || null,
+      models: inferenceModels.length,
+    });
+    return {
+      updated: true,
+      path: target.path,
+      models: inferenceModels.length,
+      defaultEndpoint: defaultEndpoint.name || null,
+    };
+  } catch (error) {
+    logError("claude3p_config_sync_failed", error);
+    return {
+      updated: false,
+      reason: "sync-failed",
+      error: error instanceof Error ? error.message : String(error),
+    };
+  }
+}
+
+function findClaudeThirdPartyConfigPath() {
+  if (CLAUDE_3P_CONFIG_FILE) {
+    const explicitPath = resolveUserPath(CLAUDE_3P_CONFIG_FILE);
+    return fs.existsSync(explicitPath)
+      ? { path: explicitPath }
+      : { path: "", reason: "explicit-config-file-not-found" };
+  }
+
+  const libraryPath = resolveClaudeThirdPartyConfigLibraryPath();
+  if (!libraryPath || !fs.existsSync(libraryPath)) {
+    return { path: "", reason: "config-library-not-found" };
+  }
+
+  const metaPath = path.join(libraryPath, "_meta.json");
+  if (fs.existsSync(metaPath)) {
+    const meta = JSON.parse(fs.readFileSync(metaPath, "utf8"));
+    const appliedId = meta.appliedId || meta.entries?.[0]?.id || "";
+    if (appliedId) {
+      const appliedPath = path.join(libraryPath, `${appliedId}.json`);
+      return fs.existsSync(appliedPath)
+        ? { path: appliedPath }
+        : { path: "", reason: "applied-config-file-not-found" };
+    }
+  }
+
+  const configFiles = fs
+    .readdirSync(libraryPath)
+    .filter((name) => name.endsWith(".json") && name !== "_meta.json");
+
+  if (configFiles.length === 1) {
+    return { path: path.join(libraryPath, configFiles[0]) };
+  }
+
+  return { path: "", reason: "applied-config-not-found" };
+}
+
+function resolveClaudeThirdPartyConfigLibraryPath() {
+  if (CLAUDE_3P_CONFIG_LIBRARY) return resolveUserPath(CLAUDE_3P_CONFIG_LIBRARY);
+  return defaultClaudeThirdPartyConfigLibraryPath(process.platform);
+}
+
+function defaultClaudeThirdPartyConfigLibraryPath(platform) {
+  if (platform === "win32") {
+    const localAppData = process.env.LOCALAPPDATA || path.join(os.homedir(), "AppData", "Local");
+    return path.join(localAppData, "Claude-3p", "configLibrary");
+  }
+
+  if (platform === "darwin") {
+    return path.join(os.homedir(), "Library", "Application Support", "Claude-3p", "configLibrary");
+  }
+
+  if (platform === "linux") {
+    const configHome = process.env.XDG_CONFIG_HOME || path.join(os.homedir(), ".config");
+    return path.join(configHome, "Claude-3p", "configLibrary");
+  }
+
+  return "";
+}
+
+function buildClaudeThirdPartyInferenceModels(endpoint, existingModels = []) {
+  const previousByName = new Map(
+    (Array.isArray(existingModels) ? existingModels : [])
+      .filter((model) => model?.name)
+      .map((model) => [model.name, model]),
+  );
+  const models = [];
+  const seen = new Set();
+  const seenLabels = new Set();
+
+  const addModel = (name, upstreamModel) => {
+    if (!isClaudeThirdPartyModelName(name) || seen.has(name)) return;
+    const labelOverride = upstreamModel || name;
+    if (seenLabels.has(labelOverride)) return;
+    seen.add(name);
+    seenLabels.add(labelOverride);
+    models.push({
+      ...(previousByName.get(name) || {}),
+      name,
+      labelOverride,
+    });
+  };
+
+  for (const [name, upstreamModel] of Object.entries(endpoint.model_mapping || {})) {
+    addModel(name, upstreamModel);
+  }
+
+  for (const name of endpoint.models || []) {
+    addModel(name, name);
+  }
+
+  return models;
+}
+
+function isClaudeThirdPartyModelName(name) {
+  return /^claude-[a-z0-9]+-\d/i.test(String(name || "").trim());
+}
+
+function buildClaudeThirdPartyGatewayBaseUrl(config) {
+  const serverConfig = config.server || {};
+  const host = serverConfig.host && serverConfig.host !== "0.0.0.0"
+    ? serverConfig.host
+    : "127.0.0.1";
+  const port = Number(serverConfig.port) || LISTEN_PORT || 8787;
+  return `http://${host}:${port}/desktop`;
 }
 
 function loadGatewayConfig(filePath) {

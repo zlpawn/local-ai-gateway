@@ -1078,7 +1078,12 @@ experimental_bearer_token = "dummy"</pre>
                 });
 
                 if (res.ok) {
-                    showToast('配置已生效，服务已重新加载', 'success');
+                    const payload = await res.json().catch(() => ({}));
+                    if (payload.claude3pSync?.updated) {
+                        showToast('配置已生效，并已同步 Claude 第三方模型列表', 'success');
+                    } else {
+                        showToast('配置已生效，服务已重新加载', 'success');
+                    }
                 } else {
                     const err = await res.text();
                     showToast(err || '保存配置失败', 'error');
