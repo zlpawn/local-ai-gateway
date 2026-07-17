@@ -136,6 +136,18 @@ const server = http.createServer(async (req, res) => {
   }
 });
 
+// Pin Claude Desktop (3p) to this gateway as soon as the process starts,
+// even if the listen port is already occupied.
+const startupClaude3pSync = syncClaudeThirdPartyInferenceConfig(GATEWAY_CONFIG);
+if (startupClaude3pSync?.updated) {
+  console.log(
+    `Claude Desktop 3p synced: ${startupClaude3pSync.path}` +
+    (startupClaude3pSync.models != null ? ` (${startupClaude3pSync.models} models)` : ""),
+  );
+} else if (startupClaude3pSync?.reason && startupClaude3pSync.reason !== "disabled") {
+  console.log(`Claude Desktop 3p sync skipped: ${startupClaude3pSync.reason}`);
+}
+
 server.listen(LISTEN_PORT, LISTEN_HOST, () => {
   const host = LISTEN_HOST === "0.0.0.0" ? "127.0.0.1" : LISTEN_HOST;
   const url = `http://${host}:${LISTEN_PORT}/`;
@@ -1096,7 +1108,11 @@ function grokProxyAgentFor(proxyUrl) {
 // requests that trip the subscription's rate/risk control.
 function grokAcquire(provider) {
   const id = provider?.id || provider?.name || "grok";
-  const limit = Math.max(1, Number(provider?.max_concurrency) || 1);
+  const configuredLimit = Number(provider?.max_concurrency);
+  if (!Number.isFinite(configuredLimit) || configuredLimit <= 0) {
+    return Promise.resolve();
+  }
+  const limit = Math.max(1, Math.floor(configuredLimit));
   let slot = _grokSemaphores.get(id);
   if (!slot) {
     slot = { running: 0, queue: [] };
@@ -3726,42 +3742,60 @@ function syncClaudeThirdPartyInferenceConfig(config) {
       return { updated: false, reason: target.reason };
     }
 
-    const endpoints = config.clients?.desktop?.endpoints || [];
-    const defaultEndpoint = endpoints.find((endpoint) => endpoint?.is_default);
-    if (!defaultEndpoint) {
-      return { updated: false, reason: "no-desktop-default-endpoint", path: target.path };
-    }
-
     const existingConfig = JSON.parse(fs.readFileSync(target.path, "utf8"));
-    const inferenceModels = buildClaudeThirdPartyInferenceModels(
-      defaultEndpoint,
-      existingConfig.inferenceModels,
-    );
+    const endpoints = config.clients?.desktop?.endpoints || [];
+    const defaultEndpoint =
+      endpoints.find((endpoint) => endpoint?.is_default) ||
+      endpoints[0] ||
+      null;
 
-    if (inferenceModels.length === 0) {
-      return { updated: false, reason: "no-claude-model-mappings", path: target.path };
-    }
+    const inferenceModels = defaultEndpoint
+      ? buildClaudeThirdPartyInferenceModels(
+          defaultEndpoint,
+          existingConfig.inferenceModels,
+        )
+      : Array.isArray(existingConfig.inferenceModels)
+        ? existingConfig.inferenceModels
+        : [];
 
+    const gatewayBaseUrl = buildClaudeThirdPartyGatewayBaseUrl(config);
+    // Always pin Desktop 3p credentials to this local gateway.
+    // "all" is the gateway's configured-key sentinel (see isConfiguredApiKeySentinel).
     const nextConfig = {
       ...existingConfig,
-      inferenceGatewayBaseUrl: buildClaudeThirdPartyGatewayBaseUrl(config),
-      inferenceGatewayApiKey: existingConfig.inferenceGatewayApiKey || CONFIGURED_API_KEY_SENTINEL,
+      inferenceGatewayBaseUrl: gatewayBaseUrl,
+      inferenceGatewayApiKey: CONFIGURED_API_KEY_SENTINEL,
       inferenceModels,
       inferenceProvider: "gateway",
-      inferenceCredentialKind: existingConfig.inferenceCredentialKind || "static",
+      inferenceCredentialKind: "static",
     };
+
+    const previous = JSON.stringify(existingConfig);
+    const next = JSON.stringify(nextConfig);
+    if (previous === next) {
+      return {
+        updated: false,
+        reason: "already-in-sync",
+        path: target.path,
+        models: inferenceModels.length,
+        defaultEndpoint: defaultEndpoint?.name || null,
+      };
+    }
 
     fs.writeFileSync(target.path, `${JSON.stringify(nextConfig, null, 2)}\n`);
     logInfo("claude3p_config_synced", {
       path: target.path,
-      default_endpoint: defaultEndpoint.name || null,
+      gateway_base_url: gatewayBaseUrl,
+      gateway_api_key: CONFIGURED_API_KEY_SENTINEL,
+      default_endpoint: defaultEndpoint?.name || null,
       models: inferenceModels.length,
     });
     return {
       updated: true,
       path: target.path,
       models: inferenceModels.length,
-      defaultEndpoint: defaultEndpoint.name || null,
+      defaultEndpoint: defaultEndpoint?.name || null,
+      gatewayBaseUrl,
     };
   } catch (error) {
     logError("claude3p_config_sync_failed", error);

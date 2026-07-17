@@ -13,7 +13,7 @@
           "auth_path": "~/.grok/auth.json",
           "agent_id_path": "~/.grok/agent_id",
           "proxy": "http://127.0.0.1:7897",
-          "max_concurrency": 1,
+          "max_concurrency": 0,
           "client_version": "0.2.101",
           "models": [
             "grok-4.5"
@@ -35,7 +35,7 @@
           "auth_path": "~/.grok/auth.json",
           "agent_id_path": "~/.grok/agent_id",
           "proxy": "http://127.0.0.1:7897",
-          "max_concurrency": 1,
+          "max_concurrency": 0,
           "client_version": "0.2.101",
           "models": [
             "grok-4.5"
