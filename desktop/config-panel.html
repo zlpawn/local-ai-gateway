@@ -320,11 +320,222 @@
         /* Endpoints Grid */
         .endpoints-grid {
             display: grid;
-            grid-template-columns: 1fr;
-            gap: 20px;
+            grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+            gap: 16px;
         }
 
-        /* Cards */
+        /* Summary cards (list) */
+        .node-card {
+            background: var(--surface);
+            border: 1px solid var(--border-color);
+            border-radius: var(--radius-lg);
+            padding: 18px 20px;
+            cursor: pointer;
+            transition: border-color var(--transition-fast), transform var(--transition-fast), box-shadow var(--transition-fast);
+            display: flex;
+            flex-direction: column;
+            gap: 12px;
+            min-height: 148px;
+            text-align: left;
+            width: 100%;
+            color: inherit;
+            font: inherit;
+        }
+
+        .node-card:hover {
+            border-color: var(--text-secondary);
+            transform: translateY(-1px);
+            box-shadow: var(--shadow-card);
+        }
+
+        .node-card:focus-visible {
+            outline: 2px solid var(--text-primary);
+            outline-offset: 2px;
+        }
+
+        .node-card-top {
+            display: flex;
+            justify-content: space-between;
+            align-items: flex-start;
+            gap: 12px;
+        }
+
+        .node-card-title {
+            font-size: 15px;
+            font-weight: 600;
+            color: var(--text-primary);
+            letter-spacing: -0.01em;
+            word-break: break-word;
+        }
+
+        .node-card-badges {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 6px;
+            justify-content: flex-end;
+            flex-shrink: 0;
+        }
+
+        .badge {
+            display: inline-flex;
+            align-items: center;
+            gap: 4px;
+            font-size: 11px;
+            font-weight: 600;
+            padding: 2px 8px;
+            border-radius: 999px;
+            border: 1px solid var(--border-color);
+            color: var(--text-secondary);
+            background: var(--input-bg);
+            white-space: nowrap;
+        }
+
+        .badge-default {
+            color: var(--success);
+            border-color: rgba(48, 164, 108, 0.35);
+            background: rgba(48, 164, 108, 0.12);
+        }
+
+        .node-card-meta {
+            display: flex;
+            flex-direction: column;
+            gap: 8px;
+            margin-top: auto;
+        }
+
+        .node-card-row {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            min-width: 0;
+            color: var(--text-secondary);
+            font-size: 12px;
+        }
+
+        .node-card-row .mono {
+            font-family: var(--font-mono);
+            font-size: 12px;
+            color: var(--text-secondary);
+            overflow: hidden;
+            text-overflow: ellipsis;
+            white-space: nowrap;
+        }
+
+        .node-card-models {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 6px;
+        }
+
+        .node-card-models .tag {
+            opacity: 0.9;
+        }
+
+        .node-card-models .tag button {
+            display: none;
+        }
+
+        .node-card-footer {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            gap: 8px;
+            padding-top: 4px;
+            color: var(--text-secondary);
+            font-size: 12px;
+        }
+
+        .node-card-cta {
+            color: var(--text-secondary);
+            font-size: 12px;
+            font-weight: 500;
+        }
+
+        .node-card:hover .node-card-cta {
+            color: var(--text-primary);
+        }
+
+        .node-card-actions {
+            display: flex;
+            align-items: center;
+            gap: 4px;
+            flex-shrink: 0;
+        }
+
+        .node-card-action {
+            background: transparent;
+            border: 1px solid transparent;
+            color: var(--text-secondary);
+            width: 30px;
+            height: 30px;
+            border-radius: var(--radius-md);
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            cursor: pointer;
+            transition: all var(--transition-fast);
+            padding: 0;
+        }
+
+        .node-card-action:hover {
+            background: var(--surface-hover);
+            color: var(--text-primary);
+            border-color: var(--border-color);
+        }
+
+        .node-card-action.is-default {
+            color: var(--success);
+            background: rgba(48, 164, 108, 0.12);
+            border-color: rgba(48, 164, 108, 0.35);
+        }
+
+        .node-card-action.is-default:hover {
+            color: var(--success);
+            background: rgba(48, 164, 108, 0.18);
+        }
+
+        .node-card-action.danger:hover {
+            background: var(--danger-bg);
+            color: var(--danger);
+            border-color: transparent;
+        }
+
+        /* Detail view */
+        .detail-view {
+            display: flex;
+            flex-direction: column;
+            gap: 16px;
+        }
+
+        .detail-toolbar {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            gap: 12px;
+        }
+
+        .detail-toolbar-left {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            min-width: 0;
+        }
+
+        .detail-title {
+            font-size: 16px;
+            font-weight: 600;
+            color: var(--text-primary);
+            overflow: hidden;
+            text-overflow: ellipsis;
+            white-space: nowrap;
+        }
+
+        .detail-subtitle {
+            font-size: 12px;
+            color: var(--text-secondary);
+        }
+
+        /* Cards (detail form) */
         .card {
             background: var(--surface);
             border: 1px solid var(--border-color);
@@ -544,12 +755,11 @@
         }
 
         .card .card-actions {
-            opacity: 0;
-            transition: opacity 0.2s;
-        }
-        .card:hover .card-actions,
-        .card .card-actions:has(input:checked) {
             opacity: 1;
+            transition: opacity 0.2s;
+            display: flex;
+            align-items: center;
+            gap: 16px;
         }
 
         /* Toast */
@@ -742,6 +952,9 @@ experimental_bearer_token = "dummy"</pre>
             clients: { code: { endpoints: [] }, desktop: { endpoints: [] }, codex: { endpoints: [] } }
         };
 
+        // Craft-style navigation: null = card list, {client,index} = detail editor
+        let selectedEndpoint = null;
+
         const ENDPOINT_TYPES = [
             { value: "anthropic", label: "Anthropic 官方" },
             { value: "openai-chat", label: "OpenAI Chat 补全格式" },
@@ -814,7 +1027,88 @@ experimental_bearer_token = "dummy"</pre>
             return Object.entries(mapping).map(([k, v]) => `${k}=${v}`).join(', ');
         }
 
-        function createEndpointHTML(client, index, ep) {
+        function escapeHtml(value) {
+            return String(value ?? '')
+                .replace(/&/g, '&amp;')
+                .replace(/</g, '&lt;')
+                .replace(/>/g, '&gt;')
+                .replace(/"/g, '&quot;')
+                .replace(/'/g, '&#39;');
+        }
+
+        function typeLabel(type) {
+            return ENDPOINT_TYPES.find(t => t.value === type)?.label || type || '未设置类型';
+        }
+
+        function shortUrl(url) {
+            if (!url) return '未设置接口地址';
+            try {
+                const u = new URL(url);
+                return u.host + (u.pathname === '/' ? '' : u.pathname.replace(/\/$/, ''));
+            } catch {
+                return url;
+            }
+        }
+
+        function createEndpointSummaryHTML(client, index, ep) {
+            const name = escapeHtml(ep.name || `节点 ${index + 1}`);
+            const type = escapeHtml(typeLabel(ep.type));
+            const url = escapeHtml(shortUrl(ep.base_url));
+            const models = Array.isArray(ep.models) ? ep.models : [];
+            const mappingCount = Object.keys(ep.model_mapping || {}).length;
+            const previewModels = models.slice(0, 3).map(m =>
+                `<span class="tag">${escapeHtml(m)}</span>`
+            ).join('');
+            const moreModels = models.length > 3
+                ? `<span class="badge">+${models.length - 3}</span>`
+                : '';
+            const defaultTitle = ep.is_default ? '当前默认节点' : '设为默认节点';
+            const defaultClass = ep.is_default ? 'node-card-action is-default' : 'node-card-action';
+
+            return `
+                <div class="node-card" id="ep-${client}-${index}" role="button" tabindex="0"
+                     onclick="openEndpoint('${client}', ${index})"
+                     onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();openEndpoint('${client}', ${index});}">
+                    <div class="node-card-top">
+                        <div class="node-card-title">${name}</div>
+                        <div class="node-card-actions" onclick="event.stopPropagation()">
+                            <button type="button" class="${defaultClass}" title="${defaultTitle}"
+                                onclick="event.stopPropagation(); setAsDefault('${client}', ${index})">
+                                <svg width="14" height="14" viewBox="0 0 24 24" fill="${ep.is_default ? 'currentColor' : 'none'}" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                                    <polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"></polygon>
+                                </svg>
+                            </button>
+                            <button type="button" class="node-card-action danger" title="删除节点"
+                                onclick="event.stopPropagation(); removeEndpoint('${client}', ${index})">
+                                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                                    <polyline points="3 6 5 6 21 6"></polyline>
+                                    <path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path>
+                                </svg>
+                            </button>
+                        </div>
+                    </div>
+                    <div class="node-card-meta">
+                        <div class="node-card-row">
+                            <span class="badge">${type}</span>
+                            ${ep.is_default ? '<span class="badge badge-default">默认</span>' : ''}
+                        </div>
+                        <div class="node-card-row">
+                            <span class="mono" title="${escapeHtml(ep.base_url || '')}">${url}</span>
+                        </div>
+                        <div class="node-card-models">
+                            ${previewModels || '<span class="badge">暂无上游模型</span>'}
+                            ${moreModels}
+                        </div>
+                    </div>
+                    <div class="node-card-footer">
+                        <span>${models.length} 模型 · ${mappingCount} 映射</span>
+                        <span class="node-card-cta">打开配置 →</span>
+                    </div>
+                </div>
+            `;
+        }
+
+        function createEndpointDetailHTML(client, index, ep) {
             const availableTypes = (client === 'code' || client === 'desktop')
                 ? ENDPOINT_TYPES.filter(t => ['anthropic', 'openai-chat', 'grok'].includes(t.value))
                 : ENDPOINT_TYPES.filter(t => ['openai-responses', 'openai-chat', 'grok'].includes(t.value));
@@ -823,11 +1117,22 @@ experimental_bearer_token = "dummy"</pre>
                 `<option value="${t.value}" ${ep.type === t.value ? 'selected' : ''}>${t.label}</option>`
             ).join('');
 
+            const title = escapeHtml(ep.name || `节点 ${index + 1}`);
+
             return `
-                <div class="card" id="ep-${client}-${index}">
-                    <div class="card-header">
-                        <h3 style="margin: 0;">节点 ${index + 1}</h3>
-                        <div class="card-actions" style="display: flex; align-items: center; gap: 16px;">
+                <div class="detail-view">
+                    <div class="detail-toolbar">
+                        <div class="detail-toolbar-left">
+                            <button class="btn btn-sm" onclick="closeEndpointDetail()" title="返回节点列表">
+                                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="15 18 9 12 15 6"></polyline></svg>
+                                返回
+                            </button>
+                            <div>
+                                <div class="detail-title">${title}</div>
+                                <div class="detail-subtitle">节点 ${index + 1} · 完整配置</div>
+                            </div>
+                        </div>
+                        <div class="card-actions">
                             <label style="display: flex; align-items: center; gap: 6px; font-size: 13px; cursor: pointer; color: var(--text-secondary); font-weight: normal; margin: 0;">
                                 <input type="radio" name="default-${client}" ${ep.is_default ? 'checked' : ''} onchange="setAsDefault('${client}', ${index})" style="width: auto; margin: 0; padding: 0; accent-color: var(--primary);">
                                 设为默认节点
@@ -836,62 +1141,73 @@ experimental_bearer_token = "dummy"</pre>
                                 <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="3 6 5 6 21 6"></polyline><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path></svg>删除</button>
                         </div>
                     </div>
-                    <div class="form-grid">
-                        <div class="form-group">
-                            <label>名称</label>
-                            <input type="text" id="input-name-${client}-${index}" value="${ep.name || ''}" placeholder="例如：OpenRouter" onchange="updateEndpoint('${client}', ${index}, 'name', this.value)">
-                        </div>
-                        <div class="form-group">
-                            <label>类型</label>
-                            <select onchange="updateEndpoint('${client}', ${index}, 'type', this.value)">
-                                ${typeOptions}
-                            </select>
-                        </div>
-                        <div class="form-group full">
-                            <label>接口地址 (Base URL)</label>
-                            <input class="mono" type="text" value="${ep.base_url || ''}" placeholder="https://api.openai.com/v1" onchange="updateEndpoint('${client}', ${index}, 'base_url', this.value)">
-                        </div>
-                        <div class="form-group full">
-                            <label>密钥 (API Key)</label>
-                            <div class="password-input-wrapper">
-                                <input class="mono" type="password" id="api-key-${client}-${index}" value="${ep.api_key || ''}" placeholder="sk-..." onchange="updateEndpoint('${client}', ${index}, 'api_key', this.value)">
-                                <button type="button" class="password-toggle-btn" onclick="togglePasswordVisibility('api-key-${client}-${index}')" title="显示/隐藏密钥">
-                                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-                                        <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"></path>
-                                        <circle cx="12" cy="12" r="3"></circle>
-                                    </svg>
-                                </button>
+                    <div class="card" id="ep-${client}-${index}">
+                        <div class="form-grid">
+                            <div class="form-group">
+                                <label>名称</label>
+                                <input type="text" id="input-name-${client}-${index}" value="${escapeHtml(ep.name || '')}" placeholder="例如：OpenRouter" onchange="updateEndpoint('${client}', ${index}, 'name', this.value)">
                             </div>
-                        </div>
-                        <div class="form-group full">
-                            <label>上游模型列表 (输入模型名称后按回车添加)</label>
-                            ${(ep.models && ep.models.length > 0) ? `
-                            <div class="tags-list">
-                                ${ep.models.map((m, i) => `
-                                    <span class="tag">${m} <button type="button" onclick="removeTag('${client}', ${index}, 'models', ${i})" title="移除模型">×</button></span>
-                                `).join('')}
+                            <div class="form-group">
+                                <label>类型</label>
+                                <select onchange="updateEndpoint('${client}', ${index}, 'type', this.value)">
+                                    ${typeOptions}
+                                </select>
                             </div>
-                            ` : ''}
-                            <input type="text" id="input-models-${client}-${index}" class="mono" placeholder="添加新模型并按回车 (例如: glm-5.2)..." onkeydown="handleTagInput(event, '${client}', ${index}, 'models')">
-                        </div>
-                        <div class="form-group full">
-                            <label>模型映射关系 (输入 原模型 → 映射模型，按回车添加)</label>
-                            ${Object.keys(ep.model_mapping || {}).length > 0 ? `
-                            <div class="tags-list">
-                                ${Object.entries(ep.model_mapping).map(([k, v]) => `
-                                    <span class="tag">${k} <span style="color: var(--text-secondary); margin: 0 4px;">→</span> ${v} <button type="button" onclick="removeMapping('${client}', ${index}, '${k}')" title="移除映射">×</button></span>
-                                `).join('')}
+                            <div class="form-group full">
+                                <label>接口地址 (Base URL)</label>
+                                <input class="mono" type="text" value="${escapeHtml(ep.base_url || '')}" placeholder="https://api.openai.com/v1" onchange="updateEndpoint('${client}', ${index}, 'base_url', this.value)">
                             </div>
-                            ` : ''}
-                            <div class="add-mapping-row">
-                                <input type="text" id="input-mapping-req-${client}-${index}" class="mono" placeholder="原模型 (如 claude-opus)" onkeydown="handleMappingInput(event, '${client}', ${index}, true)">
-                                <span class="mapping-arrow">→</span>
-                                <input type="text" id="input-mapping-up-${client}-${index}" class="mono" placeholder="映射模型 (如 glm-5.2) + 回车" onkeydown="handleMappingInput(event, '${client}', ${index}, false)">
+                            <div class="form-group full">
+                                <label>密钥 (API Key)</label>
+                                <div class="password-input-wrapper">
+                                    <input class="mono" type="password" id="api-key-${client}-${index}" value="${escapeHtml(ep.api_key || '')}" placeholder="sk-..." onchange="updateEndpoint('${client}', ${index}, 'api_key', this.value)">
+                                    <button type="button" class="password-toggle-btn" onclick="togglePasswordVisibility('api-key-${client}-${index}')" title="显示/隐藏密钥">
+                                        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                                            <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"></path>
+                                            <circle cx="12" cy="12" r="3"></circle>
+                                        </svg>
+                                    </button>
+                                </div>
+                            </div>
+                            <div class="form-group full">
+                                <label>上游模型列表 (输入模型名称后按回车添加)</label>
+                                ${(ep.models && ep.models.length > 0) ? `
+                                <div class="tags-list">
+                                    ${ep.models.map((m, i) => `
+                                        <span class="tag">${escapeHtml(m)} <button type="button" onclick="removeTag('${client}', ${index}, 'models', ${i})" title="移除模型">×</button></span>
+                                    `).join('')}
+                                </div>
+                                ` : ''}
+                                <input type="text" id="input-models-${client}-${index}" class="mono" placeholder="添加新模型并按回车 (例如: glm-5.2)..." onkeydown="handleTagInput(event, '${client}', ${index}, 'models')">
+                            </div>
+                            <div class="form-group full">
+                                <label>模型映射关系 (输入 原模型 → 映射模型，按回车添加)</label>
+                                ${Object.keys(ep.model_mapping || {}).length > 0 ? `
+                                <div class="tags-list">
+                                    ${Object.entries(ep.model_mapping).map(([k, v]) => `
+                                        <span class="tag">${escapeHtml(k)} <span style="color: var(--text-secondary); margin: 0 4px;">→</span> ${escapeHtml(v)} <button type="button" onclick='removeMapping(${JSON.stringify(client)}, ${index}, ${JSON.stringify(k)})' title="移除映射">×</button></span>
+                                    `).join('')}
+                                </div>
+                                ` : ''}
+                                <div class="add-mapping-row">
+                                    <input type="text" id="input-mapping-req-${client}-${index}" class="mono" placeholder="原模型 (如 claude-opus)" onkeydown="handleMappingInput(event, '${client}', ${index}, true)">
+                                    <span class="mapping-arrow">→</span>
+                                    <input type="text" id="input-mapping-up-${client}-${index}" class="mono" placeholder="映射模型 (如 glm-5.2) + 回车" onkeydown="handleMappingInput(event, '${client}', ${index}, false)">
+                                </div>
                             </div>
                         </div>
                     </div>
                 </div>
             `;
+        }
+
+        function setSectionChrome(client, detailMode) {
+            const section = document.getElementById(`section-${client}`);
+            if (!section) return;
+            const guide = section.querySelector('.usage-guide');
+            const addBtn = section.querySelector('.section-header .btn');
+            if (guide) guide.style.display = detailMode ? 'none' : '';
+            if (addBtn) addBtn.style.display = detailMode ? 'none' : '';
         }
 
         function render() {
@@ -900,24 +1216,59 @@ experimental_bearer_token = "dummy"</pre>
             document.querySelectorAll('.cfg-host').forEach(el => el.textContent = host === '0.0.0.0' ? '127.0.0.1' : host);
             document.querySelectorAll('.cfg-port').forEach(el => el.textContent = port);
 
+            // Keep selection valid after delete/reorder
+            if (selectedEndpoint) {
+                const eps = config.clients[selectedEndpoint.client]?.endpoints || [];
+                if (selectedEndpoint.index < 0 || selectedEndpoint.index >= eps.length) {
+                    selectedEndpoint = null;
+                }
+            }
+
             ['code', 'desktop', 'codex'].forEach(client => {
                 const container = document.getElementById(`${client}-endpoints`);
                 const eps = config.clients[client].endpoints || [];
+                const inDetail = selectedEndpoint && selectedEndpoint.client === client;
 
+                setSectionChrome(client, !!inDetail);
+
+                if (inDetail) {
+                    const ep = eps[selectedEndpoint.index];
+                    container.classList.remove('endpoints-grid');
+                    container.innerHTML = createEndpointDetailHTML(client, selectedEndpoint.index, ep);
+                    return;
+                }
+
+                container.classList.add('endpoints-grid');
                 if (eps.length === 0) {
                     container.innerHTML = `
-                        <div class="empty-state">
+                        <div class="empty-state" style="grid-column: 1 / -1;">
                             <p>${client} 尚未配置任何节点。</p>
                             <button class="btn" onclick="addEndpoint('${client}')">创建第一个节点</button>
                         </div>
                     `;
                 } else {
-                    container.innerHTML = eps.map((ep, i) => createEndpointHTML(client, i, ep)).join('');
+                    container.innerHTML = eps.map((ep, i) => createEndpointSummaryHTML(client, i, ep)).join('');
                 }
             });
         }
 
+        window.openEndpoint = function(client, index) {
+            selectedEndpoint = { client, index };
+            render();
+            document.querySelector('.content-area')?.scrollTo?.({ top: 0 });
+        };
+
+        window.closeEndpointDetail = function() {
+            selectedEndpoint = null;
+            render();
+        };
+
         window.switchTab = function(tabId) {
+            // Leaving a tab exits detail view
+            if (selectedEndpoint && selectedEndpoint.client !== tabId) {
+                selectedEndpoint = null;
+            }
+
             // Update nav items
             document.querySelectorAll('.nav-item').forEach(el => {
                 el.classList.remove('active');
@@ -937,6 +1288,8 @@ experimental_bearer_token = "dummy"</pre>
                 activeSection.style.display = 'block';
                 activeSection.classList.add('active');
             }
+
+            render();
 
             // Scroll to top
             document.querySelector('.content-area').scrollTop = 0;
@@ -959,6 +1312,7 @@ experimental_bearer_token = "dummy"</pre>
                 models: [],
                 model_mapping: {}
             });
+            selectedEndpoint = { client, index: 0 };
             render();
             setTimeout(() => {
                 const nameInput = document.getElementById(`input-name-${client}-0`);
@@ -970,7 +1324,11 @@ experimental_bearer_token = "dummy"</pre>
         }
 
         window.removeEndpoint = function(client, index) {
+            if (!confirm('确定删除这个节点吗？')) return;
             config.clients[client].endpoints.splice(index, 1);
+            if (selectedEndpoint && selectedEndpoint.client === client) {
+                selectedEndpoint = null;
+            }
             render();
         }
 
@@ -978,11 +1336,16 @@ experimental_bearer_token = "dummy"</pre>
             config.clients[client].endpoints.forEach((ep, i) => {
                 ep.is_default = (i === index);
             });
+            render();
             saveConfig();
         }
 
         window.updateEndpoint = function(client, index, field, value) {
             config.clients[client].endpoints[index][field] = value;
+            if (field === 'name' && selectedEndpoint && selectedEndpoint.client === client && selectedEndpoint.index === index) {
+                const title = document.querySelector('.detail-title');
+                if (title) title.textContent = value || `节点 ${index + 1}`;
+            }
         }
 
         window.handleTagInput = function(e, client, index, field) {
@@ -1149,6 +1512,15 @@ experimental_bearer_token = "dummy"</pre>
             init();
             const currentTheme = document.documentElement.getAttribute('data-theme') || 'dark';
             updateThemeIcon(currentTheme);
+        });
+
+        document.addEventListener('keydown', (e) => {
+            if (e.key === 'Escape' && selectedEndpoint) {
+                // Don't hijack Esc while typing in inputs unless it's a pure cancel
+                const tag = (e.target && e.target.tagName) || '';
+                if (tag === 'INPUT' || tag === 'SELECT' || tag === 'TEXTAREA') return;
+                closeEndpointDetail();
+            }
         });
     </script>
 </body>
