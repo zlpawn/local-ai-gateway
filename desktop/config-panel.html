@@ -1169,6 +1169,37 @@ experimental_bearer_token = "dummy"</pre>
                                     </button>
                                 </div>
                             </div>
+                            ${client === 'codex' ? `
+                            <div class="form-group full">
+                                <label>Codex 能力</label>
+                                <div class="checkbox-row">
+                                    <label>
+                                        <input
+                                            id="capabilities-input-image-${client}-${index}"
+                                            type="checkbox"
+                                            ${ep.capabilities?.input_modalities?.includes('image') ? 'checked' : ''}
+                                            onchange="updateCodexCapability('${client}', ${index}, 'image', this.checked)">
+                                        图片输入
+                                    </label>
+                                    <label>
+                                        <input
+                                            id="capabilities-reasoning-${client}-${index}"
+                                            type="checkbox"
+                                            ${ep.capabilities?.reasoning ? 'checked' : ''}
+                                            onchange="updateCodexCapability('${client}', ${index}, 'reasoning', this.checked)">
+                                        Reasoning 摘要
+                                    </label>
+                                    <label>
+                                        <input
+                                            id="capabilities-tools-${client}-${index}"
+                                            type="checkbox"
+                                            ${ep.capabilities?.tools !== false ? 'checked' : ''}
+                                            onchange="updateCodexCapability('${client}', ${index}, 'tools', this.checked)">
+                                        工具调用
+                                    </label>
+                                </div>
+                            </div>
+                            ` : ''}
                             <div class="form-group full">
                                 <label>上游模型列表 (输入模型名称后按回车添加)</label>
                                 ${(ep.models && ep.models.length > 0) ? `
@@ -1345,6 +1376,22 @@ experimental_bearer_token = "dummy"</pre>
             if (field === 'name' && selectedEndpoint && selectedEndpoint.client === client && selectedEndpoint.index === index) {
                 const title = document.querySelector('.detail-title');
                 if (title) title.textContent = value || `节点 ${index + 1}`;
+            }
+        }
+
+        window.updateCodexCapability = function(client, index, capability, enabled) {
+            const endpoint = config.clients[client].endpoints[index];
+            endpoint.capabilities ||= {
+                input_modalities: ['text'],
+                reasoning: false,
+                tools: true,
+            };
+            if (capability === 'image') {
+                endpoint.capabilities.input_modalities = enabled
+                    ? ['text', 'image']
+                    : ['text'];
+            } else {
+                endpoint.capabilities[capability] = enabled;
             }
         }
 

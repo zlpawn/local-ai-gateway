@@ -1,5 +1,9 @@
 import fs from "node:fs";
 import path from "node:path";
+import {
+  loadOfficialCodexIds,
+  validateCodexEndpoints,
+} from "../lib/codex/config-validation.mjs";
 
 const VALID_PROVIDER_TYPES = new Set(["anthropic", "openai-chat", "openai-responses", "grok"]);
 const VALID_AUTH_SCHEMES = new Set(["bearer", "x-api-key", "none", ""]);
@@ -38,6 +42,14 @@ if (config.server) {
     }
   }
 }
+
+const codexEndpoints = config.clients?.codex?.endpoints;
+const codexValidation = validateCodexEndpoints({
+  endpoints: Array.isArray(codexEndpoints) ? codexEndpoints : [],
+  officialIds: loadOfficialCodexIds({ warnings }),
+});
+errors.push(...codexValidation.errors);
+warnings.push(...codexValidation.warnings);
 
 finish();
 
