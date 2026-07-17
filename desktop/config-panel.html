@@ -745,7 +745,8 @@ experimental_bearer_token = "dummy"</pre>
         const ENDPOINT_TYPES = [
             { value: "anthropic", label: "Anthropic 官方" },
             { value: "openai-chat", label: "OpenAI Chat 补全格式" },
-            { value: "openai-responses", label: "OpenAI Responses (实验性)" }
+            { value: "openai-responses", label: "OpenAI Responses (实验性)" },
+            { value: "grok", label: "Grok 订阅" }
         ];
 
         function loadDefaultTemplate() {
@@ -815,8 +816,8 @@ experimental_bearer_token = "dummy"</pre>
 
         function createEndpointHTML(client, index, ep) {
             const availableTypes = (client === 'code' || client === 'desktop')
-                ? ENDPOINT_TYPES.filter(t => ['anthropic', 'openai-chat'].includes(t.value))
-                : ENDPOINT_TYPES.filter(t => ['openai-responses', 'openai-chat'].includes(t.value));
+                ? ENDPOINT_TYPES.filter(t => ['anthropic', 'openai-chat', 'grok'].includes(t.value))
+                : ENDPOINT_TYPES.filter(t => ['openai-responses', 'openai-chat', 'grok'].includes(t.value));
 
             const typeOptions = availableTypes.map(t =>
                 `<option value="${t.value}" ${ep.type === t.value ? 'selected' : ''}>${t.label}</option>`

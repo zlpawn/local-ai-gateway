@@ -1,7 +1,7 @@
 import fs from "node:fs";
 import path from "node:path";
 
-const VALID_PROVIDER_TYPES = new Set(["anthropic", "openai-chat", "openai-responses"]);
+const VALID_PROVIDER_TYPES = new Set(["anthropic", "openai-chat", "openai-responses", "grok"]);
 const VALID_AUTH_SCHEMES = new Set(["bearer", "x-api-key", "none", ""]);
 
 const configPath = path.resolve(process.argv[2] || process.env.GATEWAY_CONFIG_FILE || "gateway.config.json");
