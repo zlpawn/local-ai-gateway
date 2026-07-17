@@ -2,6 +2,7 @@ import fs from "node:fs";
 import path from "node:path";
 import { execFileSync } from "node:child_process";
 import { fileURLToPath } from "node:url";
+import { buildCodexCatalog } from "../lib/codex/model-catalog.mjs";
 
 const PROJECT_ROOT = path.dirname(path.dirname(fileURLToPath(import.meta.url)));
 const DEFAULT_CONFIG_PATH = path.join(PROJECT_ROOT, "gateway.config.json");
@@ -17,12 +18,17 @@ const outputPath = path.resolve(process.env.CODEX_MODEL_CATALOG_PATH || DEFAULT_
 const config = readJson(configPath);
 const bundledModels = loadBundledCodexModels();
 const officialModels = bundledModels.filter((model) => isOfficialCodexModel(model.slug));
-const referenceModel = officialModels[0] || bundledModels[0] || fallbackReferenceModel();
-const customModels = buildCustomModels(config, referenceModel);
+const builtCatalog = buildCodexCatalog({
+  officialModels,
+  endpoints: config.clients?.codex?.endpoints || [],
+});
+const customModels = builtCatalog.models.filter(
+  (model) => !builtCatalog.officialIds.has(model.slug),
+);
 const catalog = {
   generated_at: new Date().toISOString(),
   source: "volcengine-agent-plan-gateway",
-  models: [...officialModels, ...customModels],
+  models: builtCatalog.models,
 };
 
 fs.mkdirSync(path.dirname(outputPath), { recursive: true });
@@ -62,65 +68,6 @@ function loadBundledCodexModels() {
     console.warn(`Warning: failed to read bundled Codex models: ${error.message}`);
     return [];
   }
-}
-
-function buildCustomModels(config, referenceModel) {
-  const providers = config.providers || {};
-  const models = Array.isArray(config.models)
-    ? config.models
-    : Object.entries(config.models || {}).map(([id, model]) => ({ id, ...model }));
-  const seen = new Set();
-  const customModels = [];
-
-  for (const model of models) {
-    const provider = providers[model.provider];
-    if (!provider || !["openai-chat", "openai-responses"].includes(provider.type)) continue;
-
-    const id = model.id || model.upstream_model || model.model;
-    if (!id || seen.has(id)) continue;
-    seen.add(id);
-
-    customModels.push(buildCustomModel(id, model.display_name || id, referenceModel));
-  }
-
-  return customModels;
-}
-
-function buildCustomModel(id, displayName, referenceModel) {
-  const base = JSON.parse(JSON.stringify(referenceModel));
-  delete base.model_messages;
-  base.instructions_variables = {};
-
-  return {
-    ...base,
-    slug: id,
-    display_name: displayName,
-    description: `${id} via Volcengine Ark gateway.`,
-    visibility: "list",
-    supported_in_api: true,
-    priority: 1000,
-    input_modalities: ["text"],
-    owned_by: "volcengine",
-    base_instructions: "You are Codex, a coding agent. Follow the active system and developer instructions.",
-  };
-}
-
-function fallbackReferenceModel() {
-  return {
-    slug: "gpt-5.5",
-    display_name: "GPT-5.5",
-    description: "Official Codex fallback model",
-    visibility: "list",
-    supported_in_api: true,
-    default_reasoning_level: "medium",
-    supported_reasoning_levels: [
-      { effort: "low", description: "Fast responses with lighter reasoning" },
-      { effort: "medium", description: "Balanced reasoning" },
-      { effort: "high", description: "More reasoning" },
-    ],
-    shell_type: "shell_command",
-    input_modalities: ["text"],
-  };
 }
 
 function isOfficialCodexModel(slug) {
