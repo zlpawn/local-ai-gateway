@@ -6,6 +6,10 @@ import zlib from "node:zlib";
 import { execFileSync, exec } from "node:child_process";
 import { randomUUID } from "node:crypto";
 import { URL, fileURLToPath } from "node:url";
+import https from "node:https";
+import { Readable } from "node:stream";
+import HttpsProxyAgentPkg from "https-proxy-agent";
+const { HttpsProxyAgent } = HttpsProxyAgentPkg;
 
 const PROJECT_ROOT = path.dirname(fileURLToPath(import.meta.url));
 
@@ -80,6 +84,33 @@ const OFFICIAL_CODEX_MODELS = OFFICIAL_CODEX_CATALOG_MODELS.map((model) => ({
 }));
 const OFFICIAL_CODEX_MODEL_IDS = new Set(OFFICIAL_CODEX_MODELS.map((model) => model.id));
 const CODEX_CUSTOM_MODELS = buildCodexCustomModels(OFFICIAL_CODEX_CATALOG_MODELS[0] || null);
+
+// --- Grok CLI subscription provider ---------------------------------------
+// Forwards standard OpenAI requests to the Grok CLI chat proxy
+// (https://cli-chat-proxy.grok.com/v1), authenticating with the local
+// `grok login` session JWT from ~/.grok/auth.json so the user's SuperGrok
+// subscription quota is consumed instead of a paid API key. See
+// docs/superpowers/plans/grok-provider-integration.md.
+const GROK_HOME = process.env.GROK_HOME || path.join(os.homedir(), ".grok");
+const GROK_AUTH_PATH = process.env.GROK_AUTH_PATH || path.join(GROK_HOME, "auth.json");
+const GROK_MODELS_CACHE_PATH = path.join(GROK_HOME, "models_cache.json");
+const GROK_AGENT_ID_PATH = path.join(GROK_HOME, "agent_id");
+const GROK_VERSION_PATH = path.join(GROK_HOME, "version.json");
+const GROK_DEFAULT_BASE_URL = "https://cli-chat-proxy.grok.com/v1";
+// grok.com is GFW-blocked; the grok CLI reaches it via the Windows system
+// proxy (Clash/Mihomo on 127.0.0.1:7897). Node's fetch does not read the
+// system proxy, so we tunnel grok requests explicitly.
+const GROK_DEFAULT_PROXY = process.env.GROK_PROXY || "http://127.0.0.1:7897";
+const GROK_FALLBACK_BACKENDS = {
+  "grok-4.5": "responses",
+  "grok-build": "chat",
+  "grok-composer-2.5-fast": "responses",
+};
+let GROK_MODEL_CATALOG = loadGrokModelCatalog();
+const _grokProxyAgents = new Map();
+const _grokSemaphores = new Map();
+let _grokClientVersionCache;
+let _grokAgentIdCache;
 
 if (CODEX_WRITE_MODEL_CATALOG) {
   writeCodexModelCatalog();
@@ -299,6 +330,37 @@ async function forwardAnthropicMessages(body, clientReq, clientRes, context) {
     route: route.kind,
     stream: Boolean(body.stream),
   });
+  if (route.provider?.type === "grok") {
+    const backend = grokBackendFor(route.model);
+    if (backend === "responses") {
+      const chatBody = anthropicMessagesToOpenAIChat(body, route.model);
+      const responsesBody = openAIChatCompletionsToResponses(chatBody, route.model);
+      const upstream = await fetchGrok(route.provider, "/responses", responsesBody);
+      logInfo("grok_messages_response", { request_id: context.requestId, status: upstream.status, backend });
+      if (body.stream) {
+        await streamOpenAIResponseAsAnthropicMessages(upstream, clientRes, requestedModel, context.requestId);
+      } else {
+        if (await grokSendErrorIfNotOk(upstream, clientRes)) return;
+        const completion = await collectResponsesSseAsChatCompletion(upstream, requestedModel);
+        clientRes.writeHead(200, { "Content-Type": "application/json; charset=utf-8", "Access-Control-Allow-Origin": "*" });
+        clientRes.end(JSON.stringify(openAIChatCompletionToAnthropicMessage(completion, requestedModel)));
+      }
+    } else {
+      const chatBody = anthropicMessagesToOpenAIChat(body, route.model);
+      const upstream = await fetchGrok(route.provider, "/chat/completions", chatBody);
+      logInfo("grok_messages_response", { request_id: context.requestId, status: upstream.status, backend });
+      if (body.stream) {
+        await streamOpenAIChatAsAnthropicMessages(upstream, clientRes, requestedModel, context.requestId);
+      } else {
+        if (await grokSendErrorIfNotOk(upstream, clientRes)) return;
+        const completion = await collectChatSseAsChatCompletion(upstream, requestedModel);
+        clientRes.writeHead(200, { "Content-Type": "application/json; charset=utf-8", "Access-Control-Allow-Origin": "*" });
+        clientRes.end(JSON.stringify(openAIChatCompletionToAnthropicMessage(completion, requestedModel)));
+      }
+    }
+    return;
+  }
+
   const upstream =
     route.provider?.type === "openai-chat"
       ? await fetchConfiguredOpenAI(route.provider, "/v1/chat/completions", upstreamBody, clientReq)
@@ -355,7 +417,7 @@ async function forwardOpenAIChatCompletions(body, clientReq, clientRes, context)
     );
   }
 
-  const route = resolveConfiguredModel(requestedModel, ["anthropic", "openai-chat", "openai-responses"], context.client);
+  const route = resolveConfiguredModel(requestedModel, ["anthropic", "openai-chat", "openai-responses", "grok"], context.client);
   const resolvedModel = route?.upstream_model || resolveModel(requestedModel);
   const upstreamBody =
     route?.provider?.type === "anthropic"
@@ -377,6 +439,35 @@ async function forwardOpenAIChatCompletions(body, clientReq, clientRes, context)
     provider: route?.provider?.id || null,
     stream: Boolean(body.stream),
   });
+
+  if (route?.provider?.type === "grok") {
+    const backend = grokBackendFor(resolvedModel);
+    if (backend === "responses") {
+      const responsesBody = openAIChatCompletionsToResponses(body, resolvedModel);
+      const upstream = await fetchGrok(route.provider, "/responses", responsesBody);
+      logInfo("grok_chat_response", { request_id: context.requestId, status: upstream.status, backend });
+      if (body.stream) {
+        await streamOpenAIResponseAsChatCompletion(upstream, clientRes, requestedModel, context.requestId);
+      } else {
+        if (await grokSendErrorIfNotOk(upstream, clientRes)) return;
+        const completion = await collectResponsesSseAsChatCompletion(upstream, requestedModel);
+        clientRes.writeHead(200, { "Content-Type": "application/json; charset=utf-8", "Access-Control-Allow-Origin": "*" });
+        clientRes.end(JSON.stringify(completion));
+      }
+    } else {
+      const upstream = await fetchGrok(route.provider, "/chat/completions", { ...body, model: resolvedModel });
+      logInfo("grok_chat_response", { request_id: context.requestId, status: upstream.status, backend });
+      if (body.stream) {
+        await pipeGrokSse(upstream, clientRes, context.requestId);
+      } else {
+        if (await grokSendErrorIfNotOk(upstream, clientRes)) return;
+        const completion = await collectChatSseAsChatCompletion(upstream, requestedModel);
+        clientRes.writeHead(200, { "Content-Type": "application/json; charset=utf-8", "Access-Control-Allow-Origin": "*" });
+        clientRes.end(JSON.stringify(completion));
+      }
+    }
+    return;
+  }
 
   const upstream =
     route?.provider?.type === "anthropic"
@@ -456,7 +547,7 @@ async function forwardOpenAIResponses(body, clientReq, clientRes, context) {
     return;
   }
 
-  const route = resolveConfiguredModel(requestedModel, ["openai-chat", "openai-responses"], context.client);
+  const route = resolveConfiguredModel(requestedModel, ["openai-chat", "openai-responses", "grok"], context.client);
   const resolvedModel = route?.upstream_model || resolveModel(requestedModel);
   const upstreamBody =
     route?.provider?.type === "openai-chat"
@@ -477,6 +568,33 @@ async function forwardOpenAIResponses(body, clientReq, clientRes, context) {
     stream: Boolean(body.stream),
     route: route?.provider?.id || "volcengine",
   });
+
+  if (route?.provider?.type === "grok") {
+    const backend = grokBackendFor(resolvedModel);
+    let upstream;
+    if (backend === "responses") {
+      upstream = await fetchGrok(route.provider, "/responses", { ...body, model: resolvedModel });
+    } else {
+      const chatBody = openAIResponsesToChatCompletions(body, resolvedModel);
+      upstream = await fetchGrok(route.provider, "/chat/completions", chatBody);
+    }
+    logInfo("grok_responses_response", { request_id: context.requestId, status: upstream.status, backend });
+    if (body.stream) {
+      if (backend === "responses") {
+        await pipeGrokSse(upstream, clientRes, context.requestId);
+      } else {
+        await streamOpenAIChatAsOpenAIResponse(upstream, clientRes, requestedModel, context.requestId);
+      }
+    } else {
+      if (await grokSendErrorIfNotOk(upstream, clientRes)) return;
+      const completion = backend === "responses"
+        ? await collectResponsesSseAsChatCompletion(upstream, requestedModel)
+        : await collectChatSseAsChatCompletion(upstream, requestedModel);
+      clientRes.writeHead(200, { "Content-Type": "application/json; charset=utf-8", "Access-Control-Allow-Origin": "*" });
+      clientRes.end(JSON.stringify(openAIChatCompletionToResponse(completion, requestedModel)));
+    }
+    return;
+  }
 
   const upstream =
     route?.provider?.type === "openai-chat"
@@ -818,6 +936,458 @@ async function fetchConfiguredOpenAI(provider, endpointPath, body, clientReq) {
   } finally {
     clearTimeout(timeout);
   }
+}
+
+// --- Grok CLI subscription provider: credential / header / proxy / fetch ---
+
+function loadGrokModelCatalog() {
+  const catalog = new Map();
+  try {
+    const raw = fs.readFileSync(GROK_MODELS_CACHE_PATH, "utf8");
+    const data = JSON.parse(raw);
+    for (const [id, entry] of Object.entries(data?.models || {})) {
+      const info = entry?.info || {};
+      const backend =
+        info.api_backend === "chat_completions"
+          ? "chat"
+          : info.api_backend === "responses"
+            ? "responses"
+            : GROK_FALLBACK_BACKENDS[id] || "responses";
+      catalog.set(id, {
+        api_backend: backend,
+        reasoning_effort: info.reasoning_effort || null,
+        context_window: info.context_window || null,
+        display_name: info.name || id,
+      });
+    }
+  } catch {
+    // models_cache.json missing/unreadable - fall back to hardcoded set below.
+  }
+  for (const [id, backend] of Object.entries(GROK_FALLBACK_BACKENDS)) {
+    if (!catalog.has(id)) {
+      catalog.set(id, { api_backend: backend, reasoning_effort: null, context_window: null, display_name: id });
+    }
+  }
+  return catalog;
+}
+
+function grokBackendFor(model) {
+  const entry = GROK_MODEL_CATALOG.get(model);
+  if (entry) return entry.api_backend;
+  return "responses";
+}
+
+function grokClientVersion() {
+  if (_grokClientVersionCache !== undefined) return _grokClientVersionCache;
+  try {
+    _grokClientVersionCache = JSON.parse(fs.readFileSync(GROK_VERSION_PATH, "utf8")).version || "0.2.101";
+  } catch {
+    _grokClientVersionCache = "0.2.101";
+  }
+  return _grokClientVersionCache;
+}
+
+function grokAgentId() {
+  if (_grokAgentIdCache !== undefined) return _grokAgentIdCache;
+  try {
+    const id = fs.readFileSync(GROK_AGENT_ID_PATH, "utf8").trim();
+    _grokAgentIdCache = id || randomUUID();
+  } catch {
+    _grokAgentIdCache = randomUUID();
+  }
+  return _grokAgentIdCache;
+}
+
+function grokPlatformOs() {
+  if (process.platform === "win32") return "windows";
+  if (process.platform === "darwin") return "macos";
+  return "linux";
+}
+
+function grokPlatformArch() {
+  if (process.arch === "x64") return "x86_64";
+  if (process.arch === "arm64") return "arm64";
+  return process.arch;
+}
+
+function resolveHomePath(p) {
+  if (!p) return null;
+  if (p === "~/.grok/auth.json") return GROK_AUTH_PATH;
+  if (p.startsWith("~/")) return path.join(os.homedir(), p.slice(2));
+  return p;
+}
+
+// Read the session JWT from ~/.grok/auth.json fresh on every call so the
+// gateway picks up tokens the grok CLI refreshes in the background. Throws
+// a clear 401 when missing/expired so callers can surface it to the client.
+function readGrokToken(authPath = GROK_AUTH_PATH) {
+  let data;
+  try {
+    data = JSON.parse(fs.readFileSync(authPath, "utf8"));
+  } catch (e) {
+    throw httpError(401, `Grok auth not readable at ${authPath}. Run \`grok login\` first. (${e.message})`);
+  }
+  const scopes = Object.keys(data || {});
+  if (scopes.length === 0) throw httpError(401, "Grok auth.json has no credentials. Run `grok login`.");
+  const scope = scopes.find((s) => s.startsWith("https://auth.x.ai")) || scopes[0];
+  const entry = data[scope] || {};
+  if (!entry.key) throw httpError(401, "Grok auth.json entry has no session key. Run `grok login`.");
+  const expiresAt = entry.expires_at ? Date.parse(entry.expires_at) : NaN;
+  if (!Number.isNaN(expiresAt) && expiresAt < Date.now()) {
+    throw httpError(401, "Grok session token expired. Run `grok` (or `grok login`) to refresh, then retry.");
+  }
+  return { key: entry.key, user_id: entry.user_id || "", expires_at: entry.expires_at || "" };
+}
+
+// Lighter check used by hasConfiguredApiKey so an expired token still routes
+// to fetchGrok (which emits the clear expiry error) rather than vanishing.
+function grokHasCredentials(ep) {
+  try {
+    const authPath = resolveHomePath(ep?.auth_path) || GROK_AUTH_PATH;
+    const data = JSON.parse(fs.readFileSync(authPath, "utf8"));
+    const scopes = Object.keys(data || {});
+    if (!scopes.length) return false;
+    const scope = scopes.find((s) => s.startsWith("https://auth.x.ai")) || scopes[0];
+    return Boolean(data[scope]?.key);
+  } catch {
+    return false;
+  }
+}
+
+function grokHeaders(provider, model, authInfo) {
+  const version = provider?.client_version || grokClientVersion();
+  return {
+    "Content-Type": "application/json",
+    "Authorization": `Bearer ${authInfo.key}`,
+    "X-XAI-Token-Auth": "xai-grok-cli",
+    "x-grok-model-override": model,
+    "x-grok-conv-id": randomUUID(),
+    "x-grok-req-id": randomUUID(),
+    "x-grok-session-id": randomUUID(),
+    "x-grok-agent-id": grokAgentId(),
+    "x-grok-client-version": version,
+    "x-grok-client-identifier": "grok-cli",
+    "x-grok-user-id": authInfo.user_id || "",
+    "User-Agent": `grok-cli/${version} (${grokPlatformOs()}; ${grokPlatformArch()})`,
+    "accept": "text/event-stream",
+  };
+}
+
+function grokProxyAgentFor(proxyUrl) {
+  if (!proxyUrl) return undefined;
+  if (!_grokProxyAgents.has(proxyUrl)) {
+    _grokProxyAgents.set(proxyUrl, new HttpsProxyAgent(proxyUrl));
+  }
+  return _grokProxyAgents.get(proxyUrl);
+}
+
+// Per-provider concurrency guard so many client tabs cannot fan out parallel
+// requests that trip the subscription's rate/risk control.
+function grokAcquire(provider) {
+  const id = provider?.name || "grok";
+  const limit = Math.max(1, Number(provider?.max_concurrency) || 1);
+  let slot = _grokSemaphores.get(id);
+  if (!slot) {
+    slot = { running: 0, queue: [] };
+    _grokSemaphores.set(id, slot);
+  }
+  return new Promise((resolve) => {
+    const run = () => {
+      slot.running += 1;
+      resolve();
+    };
+    if (slot.running < limit) run();
+    else slot.queue.push(run);
+  });
+}
+
+function grokRelease(provider) {
+  const id = provider?.name || "grok";
+  const slot = _grokSemaphores.get(id);
+  if (!slot) return;
+  slot.running = Math.max(0, slot.running - 1);
+  const next = slot.queue.shift();
+  if (next) next();
+}
+
+// Adapt a node https.IncomingMessage into the fetch-like shape the existing
+// stream translators expect ({ ok, status, headers.get, body, text, json }).
+function nodeResToFetchLike(res) {
+  let webBody = null;
+  let bufferedPromise = null;
+  return {
+    status: res.statusCode,
+    ok: res.statusCode >= 200 && res.statusCode < 300,
+    headers: {
+      get(name) {
+        return res.headers[String(name).toLowerCase()] || null;
+      },
+    },
+    get body() {
+      if (!webBody) webBody = Readable.toWeb(res);
+      return webBody;
+    },
+    async text() {
+      if (bufferedPromise) return (await bufferedPromise).toString("utf8");
+      if (webBody) throw new Error("grok response body already streamed");
+      bufferedPromise = new Promise((resolve, reject) => {
+        const chunks = [];
+        res.on("data", (c) => chunks.push(c));
+        res.on("end", () => resolve(Buffer.concat(chunks)));
+        res.on("error", reject);
+      });
+      return (await bufferedPromise).toString("utf8");
+    },
+    async json() {
+      return JSON.parse(await this.text());
+    },
+  };
+}
+
+async function fetchGrok(provider, endpointPath, body) {
+  const authPath = resolveHomePath(provider?.auth_path) || GROK_AUTH_PATH;
+  const authInfo = readGrokToken(authPath);
+  const baseUrl = trimRight(provider?.base_url || GROK_DEFAULT_BASE_URL, "/");
+  const model = body?.model || "";
+  const headers = grokHeaders(provider, model, authInfo);
+  // The proxy only reliably supports streaming for most models, so force it
+  // upstream and aggregate back into a single JSON when the client asked for
+  // non-streaming.
+  const upstreamBody = { ...body, stream: true };
+  const url = `${baseUrl}${endpointPath}`;
+  const proxyUrl = provider?.proxy === "" ? "" : provider?.proxy ?? GROK_DEFAULT_PROXY;
+  const agent = grokProxyAgentFor(proxyUrl);
+  await grokAcquire(provider);
+  let timedOut = false;
+  let reqRef = null;
+  const timer = setTimeout(() => {
+    timedOut = true;
+    if (reqRef) reqRef.destroy(new Error("grok request timed out"));
+  }, REQUEST_TIMEOUT_MS);
+  try {
+    const res = await new Promise((resolve, reject) => {
+      reqRef = https.request(url, { method: "POST", headers, agent }, resolve);
+      reqRef.on("error", reject);
+      reqRef.write(JSON.stringify(upstreamBody));
+      reqRef.end();
+    });
+    return nodeResToFetchLike(res);
+  } catch (error) {
+    const message = timedOut
+      ? "Timed out calling Grok proxy"
+      : `Failed to call Grok proxy: ${error?.message || error}`;
+    throw httpError(502, message);
+  } finally {
+    clearTimeout(timer);
+    grokRelease(provider);
+  }
+}
+
+// Aggregate an OpenAI Responses SSE stream (always streamed by the grok
+// proxy) into a single chat.completion JSON for non-streaming clients.
+async function collectResponsesSseAsChatCompletion(upstream, requestedModel) {
+  let text = "";
+  let incomplete = false;
+  let usage = null;
+  let respId = "";
+  await consumeSse(upstream.body, (eventName, payloadText) => {
+    const payload = parseJsonMaybe(payloadText) || {};
+    if (eventName === "response.created" || payload.type === "response.created") {
+      respId = payload.response?.id || respId;
+    } else if (eventName === "response.output_text.delta" || payload.type === "response.output_text.delta") {
+      if (payload.delta) text += payload.delta;
+    } else if (eventName === "response.completed" || payload.type === "response.completed") {
+      if (payload.response?.status === "incomplete") incomplete = true;
+      usage = payload.response?.usage || usage;
+    }
+  });
+  const inputTokens = usage?.input_tokens || 0;
+  const outputTokens = usage?.output_tokens || 0;
+  return {
+    id: respId || `chatcmpl_${Date.now()}`,
+    object: "chat.completion",
+    created: Math.floor(Date.now() / 1000),
+    model: requestedModel || "grok",
+    choices: [
+      {
+        index: 0,
+        message: { role: "assistant", content: text },
+        finish_reason: incomplete ? "length" : "stop",
+      },
+    ],
+    usage: {
+      prompt_tokens: inputTokens,
+      completion_tokens: outputTokens,
+      total_tokens: inputTokens + outputTokens,
+    },
+  };
+}
+
+// Aggregate an OpenAI chat-completions SSE stream into a single
+// chat.completion JSON for non-streaming clients.
+async function collectChatSseAsChatCompletion(upstream, requestedModel) {
+  let text = "";
+  let finishReason = "stop";
+  let usage = null;
+  let id = "";
+  let created = Math.floor(Date.now() / 1000);
+  await consumeSse(upstream.body, (_eventName, payloadText) => {
+    if (payloadText === "[DONE]") return;
+    const payload = parseJsonMaybe(payloadText) || {};
+    if (payload.id) id = payload.id;
+    if (payload.created) created = payload.created;
+    const choice = payload.choices?.[0] || {};
+    const delta = choice.delta || {};
+    const deltaText =
+      typeof delta.content === "string" ? delta.content : openAIContentToText(delta.content);
+    if (deltaText) text += deltaText;
+    if (choice.finish_reason) finishReason = choice.finish_reason;
+    if (payload.usage) usage = payload.usage;
+  });
+  return {
+    id: id || `chatcmpl_${Date.now()}`,
+    object: "chat.completion",
+    created,
+    model: requestedModel || "grok",
+    choices: [
+      {
+        index: 0,
+        message: { role: "assistant", content: text },
+        finish_reason: finishReason,
+      },
+    ],
+    usage: {
+      prompt_tokens: usage?.prompt_tokens || 0,
+      completion_tokens: usage?.completion_tokens || 0,
+      total_tokens: usage?.total_tokens || (usage?.prompt_tokens || 0) + (usage?.completion_tokens || 0),
+    },
+  };
+}
+
+// Translate an OpenAI Responses SSE stream into Anthropic Messages SSE, for
+// Anthropic-protocol clients hitting a grok model on the responses backend.
+async function streamOpenAIResponseAsAnthropicMessages(upstream, clientRes, requestedModel, requestId) {
+  if (!upstream.ok) {
+    const text = await upstream.text();
+    clientRes.writeHead(upstream.status, {
+      "Content-Type": "application/json; charset=utf-8",
+      "Access-Control-Allow-Origin": "*",
+    });
+    clientRes.end(text);
+    return;
+  }
+
+  clientRes.writeHead(200, {
+    "Content-Type": "text/event-stream; charset=utf-8",
+    "Cache-Control": "no-cache, no-transform",
+    Connection: "keep-alive",
+    "Access-Control-Allow-Origin": "*",
+  });
+
+  const messageId = `msg_${Date.now()}`;
+  let blockStarted = false;
+  let sawText = false;
+  let usage = null;
+
+  writeAnthropicSse(clientRes, "message_start", {
+    type: "message_start",
+    message: {
+      id: messageId,
+      type: "message",
+      role: "assistant",
+      model: requestedModel || "grok",
+      content: [],
+      stop_reason: null,
+      stop_sequence: null,
+      usage: { input_tokens: 0, output_tokens: 0 },
+    },
+  });
+
+  const ensureTextBlock = () => {
+    if (blockStarted) return;
+    blockStarted = true;
+    writeAnthropicSse(clientRes, "content_block_start", {
+      type: "content_block_start",
+      index: 0,
+      content_block: { type: "text", text: "" },
+    });
+  };
+
+  await consumeSse(upstream.body, (eventName, payloadText) => {
+    const payload = parseJsonMaybe(payloadText) || {};
+    if (eventName === "response.output_text.delta" || payload.type === "response.output_text.delta") {
+      const delta = payload.delta || "";
+      if (delta) {
+        ensureTextBlock();
+        sawText = true;
+        writeAnthropicSse(clientRes, "content_block_delta", {
+          type: "content_block_delta",
+          index: 0,
+          delta: { type: "text_delta", text: delta },
+        });
+      }
+    } else if (eventName === "response.completed" || payload.type === "response.completed") {
+      usage = payload.response?.usage || usage;
+    }
+  });
+
+  if (!blockStarted) ensureTextBlock();
+  writeAnthropicSse(clientRes, "content_block_stop", { type: "content_block_stop", index: 0 });
+  writeAnthropicSse(clientRes, "message_delta", {
+    type: "message_delta",
+    delta: { stop_reason: "end_turn", stop_sequence: null },
+    usage: { output_tokens: usage?.output_tokens || 0 },
+  });
+  writeAnthropicSse(clientRes, "message_stop", { type: "message_stop" });
+  clientRes.end();
+  logInfo("grok_responses_as_anthropic_stream_complete", { request_id: requestId });
+}
+
+// If the grok upstream returned an error, surface its body and signal that
+// the caller should stop. Used before non-streaming aggregation.
+async function grokSendErrorIfNotOk(upstream, clientRes) {
+  if (upstream.ok) return false;
+  const text = await upstream.text();
+  clientRes.writeHead(upstream.status, {
+    "Content-Type": "application/json; charset=utf-8",
+    "Access-Control-Allow-Origin": "*",
+  });
+  clientRes.end(text);
+  return true;
+}
+
+// Raw SSE passthrough for the chat-completions backend when the client speaks
+// the same OpenAI chat protocol (streaming).
+async function pipeGrokSse(upstream, clientRes, requestId) {
+  if (!upstream.ok) {
+    const text = await upstream.text();
+    clientRes.writeHead(upstream.status, {
+      "Content-Type": "application/json; charset=utf-8",
+      "Access-Control-Allow-Origin": "*",
+    });
+    clientRes.end(text);
+    logInfo("grok_upstream_error", { request_id: requestId, status: upstream.status });
+    return;
+  }
+  clientRes.writeHead(upstream.status, responseHeaders(upstream.headers));
+  if (!upstream.body) {
+    clientRes.end(await upstream.text());
+    return;
+  }
+  await upstream.body.pipeTo(
+    new WritableStream({
+      write(chunk) {
+        clientRes.write(Buffer.from(chunk));
+      },
+      close() {
+        clientRes.end();
+      },
+      abort() {
+        clientRes.end();
+      },
+    }),
+  );
+  logInfo("grok_passthrough_stream_complete", { request_id: requestId });
 }
 
 function upstreamHeaders(clientReq, upstreamApiKey) {
@@ -1907,9 +2477,9 @@ function resolveModel(requestedModel) {
 }
 
 function resolveAnthropicRoute(requestedModel, client) {
-  const configured = resolveConfiguredModel(requestedModel, ["anthropic", "openai-chat"], client);
+  const configured = resolveConfiguredModel(requestedModel, ["anthropic", "openai-chat", "grok"], client);
   if (configured) {
-    if (!["anthropic", "openai-chat"].includes(configured.provider.type)) {
+    if (!["anthropic", "openai-chat", "grok"].includes(configured.provider.type)) {
       throw httpError(
         400,
         `Model ${requestedModel} is configured for provider ${configured.provider.id} (${configured.provider.type}), which cannot serve Anthropic Messages requests yet.`,
@@ -1932,6 +2502,7 @@ function resolveAnthropicRoute(requestedModel, client) {
 
 function hasConfiguredApiKey(ep) {
   if (ep.type === "official" || ep.name === "official") return true;
+  if (ep.type === "grok") return grokHasCredentials(ep);
   if (!ep.api_key) return false;
   if (ep.api_key.startsWith("env:")) {
     const envVar = ep.api_key.slice(4);
@@ -1969,7 +2540,7 @@ function resolveConfiguredModel(requestedModel, allowedTypes = [], client = null
       if (matched) {
         return {
           model: { id: text, display_name: text, upstream_model: targetModel, aliases: [] },
-          provider: { id: defaultEp.name, type: defaultEp.type, base_url: defaultEp.base_url, api_key: defaultEp.api_key, auth: "bearer" },
+          provider: { id: defaultEp.name, type: defaultEp.type, base_url: defaultEp.base_url, api_key: defaultEp.api_key, auth: "bearer", auth_path: defaultEp.auth_path, proxy: defaultEp.proxy, max_concurrency: defaultEp.max_concurrency, client_version: defaultEp.client_version, agent_id_path: defaultEp.agent_id_path },
           upstream_model: targetModel
         };
       }
@@ -1986,7 +2557,7 @@ function resolveConfiguredModel(requestedModel, allowedTypes = [], client = null
         if (ep.models?.includes(targetModel) || ep.name === text || ep.model_mapping?.[text]) {
           return {
              model: { id: text, display_name: text, upstream_model: targetModel, aliases: [] },
-             provider: { id: ep.name, type: ep.type, base_url: ep.base_url, api_key: ep.api_key, auth: "bearer" },
+             provider: { id: ep.name, type: ep.type, base_url: ep.base_url, api_key: ep.api_key, auth: "bearer", auth_path: ep.auth_path, proxy: ep.proxy, max_concurrency: ep.max_concurrency, client_version: ep.client_version, agent_id_path: ep.agent_id_path },
              upstream_model: targetModel
           };
         }
@@ -2013,7 +2584,7 @@ function resolveConfiguredModel(requestedModel, allowedTypes = [], client = null
 function isOfficialClaudeModel(model) {
   if (!model) return false;
   const text = String(model);
-  const route = resolveConfiguredModel(text, ["anthropic", "openai-chat"], "claude");
+  const route = resolveConfiguredModel(text, ["anthropic", "openai-chat", "grok"], "claude");
   if (route) return false;
   return /^claude-/i.test(text);
 }
@@ -2809,7 +3380,7 @@ function buildCodexCustomModels(referenceModel) {
 
   const endpoints = GATEWAY_CONFIG.clients?.codex?.endpoints || [];
   for (const ep of endpoints) {
-    if (!["openai-chat", "openai-responses"].includes(ep.type)) continue;
+    if (!["openai-chat", "openai-responses", "grok"].includes(ep.type)) continue;
     const epModels = [
       ...(ep.models || []),
       ...Object.keys(ep.model_mapping || {})
