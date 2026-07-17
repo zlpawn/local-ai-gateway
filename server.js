@@ -1898,14 +1898,13 @@ function openAIChatCompletionsToResponses(body, resolvedModel) {
       });
       continue;
     }
+    const role = message.role === "assistant" ? "assistant" : "user";
+    const content = openAIChatContentToResponsesContent(message.content, role);
     input.push({
-      role: message.role === "assistant" ? "assistant" : "user",
-      content: [
-        {
-          type: message.role === "assistant" ? "output_text" : "input_text",
-          text,
-        },
-      ],
+      role,
+      content: content.length
+        ? content
+        : [{ type: role === "assistant" ? "output_text" : "input_text", text: "" }],
     });
   }
 
@@ -1923,6 +1922,29 @@ function openAIChatCompletionsToResponses(body, resolvedModel) {
   if (body.stop != null) upstreamBody.stop = body.stop;
 
   return upstreamBody;
+}
+
+function openAIChatContentToResponsesContent(content, role) {
+  const textType = role === "assistant" ? "output_text" : "input_text";
+  if (typeof content === "string") {
+    return content ? [{ type: textType, text: content }] : [];
+  }
+  if (!Array.isArray(content)) return [];
+
+  const parts = [];
+  for (const part of content) {
+    if (!part || typeof part !== "object") continue;
+    if ((part.type === "text" || part.type === "input_text" || part.type === "output_text") && part.text != null) {
+      parts.push({ type: textType, text: String(part.text) });
+      continue;
+    }
+    if (role !== "user" || (part.type !== "image_url" && part.type !== "input_image")) continue;
+    const imageUrl = typeof part.image_url === "string"
+      ? part.image_url
+      : part.image_url?.url || part.url;
+    if (imageUrl) parts.push({ type: "input_image", image_url: imageUrl });
+  }
+  return parts;
 }
 
 function anthropicMessagesToOpenAIChat(body, resolvedModel) {

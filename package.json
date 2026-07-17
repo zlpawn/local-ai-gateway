@@ -41,6 +41,7 @@
     "codex:history:apply": "node scripts/codex-history-unify.mjs --apply",
     "codex:history:restore": "node scripts/codex-history-unify.mjs --restore",
     "test:adapters": "powershell -NoProfile -ExecutionPolicy Bypass -File scripts/test-adapters.ps1",
+    "test:adapters:node": "node --test scripts/protocol-adapters.test.mjs",
     "test:cli": "node --test scripts/agent-gateway.test.mjs",
     "gateway:start": "powershell -NoProfile -ExecutionPolicy Bypass -File scripts/start-gateway.ps1",
     "gateway:stop": "powershell -NoProfile -ExecutionPolicy Bypass -File scripts/stop-gateway.ps1",
