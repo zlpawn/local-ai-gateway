@@ -1,0 +1,54 @@
+{
+  "server": {
+    "host": "127.0.0.1",
+    "port": 8788
+  },
+  "clients": {
+    "code": {
+      "endpoints": [
+        {
+          "name": "grok-subscription",
+          "type": "grok",
+          "base_url": "https://cli-chat-proxy.grok.com/v1",
+          "auth_path": "~/.grok/auth.json",
+          "agent_id_path": "~/.grok/agent_id",
+          "proxy": "http://127.0.0.1:7897",
+          "max_concurrency": 1,
+          "client_version": "0.2.101",
+          "models": [
+            "grok-4.5"
+          ],
+          "model_mapping": {
+            "claude-opus-4-8": "grok-4.5",
+            "grok": "grok-4.5"
+          },
+          "is_default": false
+        }
+      ]
+    },
+    "desktop": {
+      "endpoints": [
+        {
+          "name": "grok-subscription",
+          "type": "grok",
+          "base_url": "https://cli-chat-proxy.grok.com/v1",
+          "auth_path": "~/.grok/auth.json",
+          "agent_id_path": "~/.grok/agent_id",
+          "proxy": "http://127.0.0.1:7897",
+          "max_concurrency": 1,
+          "client_version": "0.2.101",
+          "models": [
+            "grok-4.5"
+          ],
+          "model_mapping": {
+            "claude-opus-4-8": "grok-4.5"
+          },
+          "is_default": true
+        }
+      ]
+    },
+    "codex": {
+      "endpoints": []
+    }
+  }
+}
