@@ -100,6 +100,13 @@ test("Chat SSE becomes reasoning, text, and parallel Responses tool events", asy
     true,
   );
   assert.equal(
+    events
+      .filter(([event]) => event === "response.custom_tool_call_input.delta")
+      .map(([, data]) => data.delta)
+      .join(""),
+    "*** Begin Patch\n*** End Patch",
+  );
+  assert.equal(
     events.some(([event]) => event === "response.reasoning_summary_text.delta"),
     true,
   );
@@ -147,6 +154,63 @@ test("Chat SSE assembles fragmented tool names before selecting the tool kind", 
   }]);
 });
 
+test("Chat SSE buffers arguments until late tool name and id metadata arrives", async () => {
+  const encoder = new TextEncoder();
+  const frames = [
+    { choices: [{ delta: { tool_calls: [{ index: 0, function: { arguments: "{\"command\":" } }] } }] },
+    { choices: [{ delta: { tool_calls: [{
+      index: 0,
+      id: "call_late",
+      function: { name: "shell_command", arguments: "\"pwd\"}" },
+    }] } }] },
+  ];
+  const readable = new ReadableStream({
+    start(controller) {
+      for (const frame of frames) {
+        controller.enqueue(encoder.encode(`data: ${JSON.stringify(frame)}\n\n`));
+      }
+      controller.enqueue(encoder.encode("data: [DONE]\n\n"));
+      controller.close();
+    },
+  });
+  const events = [];
+  const writer = new ResponsesWriter({
+    model: "chat-model",
+    responseId: "resp_late_metadata",
+    emit: (event, data) => events.push([event, data]),
+  });
+
+  await streamChatAsResponses({
+    readable,
+    writer,
+    toolKinds: new Map([["shell_command", "function"]]),
+  });
+
+  const addedItem = events.find(
+    ([event, data]) => (
+      event === "response.output_item.added" &&
+      data.item.type === "function_call"
+    ),
+  )[1].item;
+  const doneItem = events.find(
+    ([event, data]) => (
+      event === "response.output_item.done" &&
+      data.item.type === "function_call"
+    ),
+  )[1].item;
+  assert.deepEqual(addedItem, {
+    id: "fc_call_late",
+    type: "function_call",
+    call_id: "call_late",
+    name: "shell_command",
+    arguments: "",
+  });
+  assert.equal(doneItem.id, "fc_call_late");
+  assert.equal(doneItem.call_id, "call_late");
+  assert.equal(doneItem.name, "shell_command");
+  assert.equal(doneItem.arguments, "{\"command\":\"pwd\"}");
+});
+
 test("Chat SSE fails the Responses lifecycle when the DONE marker is missing", async () => {
   const encoder = new TextEncoder();
   const readable = new ReadableStream({
@@ -170,6 +234,46 @@ test("Chat SSE fails the Responses lifecycle when the DONE marker is missing", a
     events.at(-1)[1].response.error.code,
     "upstream_stream_closed",
   );
+});
+
+test("Chat SSE emits created then completed for a valid empty output stream", async () => {
+  const encoder = new TextEncoder();
+  const readable = new ReadableStream({
+    start(controller) {
+      controller.enqueue(encoder.encode(`data: ${JSON.stringify({
+        choices: [{
+          delta: { role: "assistant" },
+          finish_reason: "stop",
+        }],
+        usage: {
+          prompt_tokens: 3,
+          completion_tokens: 0,
+          total_tokens: 3,
+        },
+      })}\n\n`));
+      controller.enqueue(encoder.encode("data: [DONE]\n\n"));
+      controller.close();
+    },
+  });
+  const events = [];
+  const writer = new ResponsesWriter({
+    model: "chat-model",
+    responseId: "resp_empty",
+    emit: (event, data) => events.push([event, data]),
+  });
+
+  await streamChatAsResponses({ readable, writer });
+
+  assert.deepEqual(events.map(([event]) => event), [
+    "response.created",
+    "response.completed",
+  ]);
+  assert.deepEqual(events[1][1].response.output, undefined);
+  assert.deepEqual(events[1][1].response.usage, {
+    input_tokens: 3,
+    output_tokens: 0,
+    total_tokens: 3,
+  });
 });
 
 test("Chat completion becomes reasoning, text, custom tool, and normalized usage", () => {
@@ -211,4 +315,30 @@ test("Chat completion becomes reasoning, text, custom tool, and normalized usage
     output_tokens: 7,
     total_tokens: 19,
   });
+});
+
+test("Chat completion accepts reasoning and analysis aliases", () => {
+  for (const [field, text] of [
+    ["reasoning", "Reasoning alias."],
+    ["analysis", "Analysis alias."],
+  ]) {
+    const response = chatCompletionToResponse({
+      model: "requested-model",
+      completion: {
+        id: `chatcmpl_${field}`,
+        choices: [{
+          message: {
+            [field]: text,
+            content: "",
+          },
+        }],
+      },
+    });
+
+    assert.deepEqual(response.output, [{
+      id: `rs_chatcmpl_${field}`,
+      type: "reasoning",
+      summary: [{ type: "summary_text", text }],
+    }]);
+  }
 });
