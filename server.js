@@ -9,6 +9,7 @@ import { URL, fileURLToPath } from "node:url";
 import https from "node:https";
 import { Readable } from "node:stream";
 import { HttpsProxyAgent } from "https-proxy-agent";
+import { buildCodexCatalog } from "./lib/codex/model-catalog.mjs";
 
 const PROJECT_ROOT = path.dirname(fileURLToPath(import.meta.url));
 
@@ -81,8 +82,14 @@ const OFFICIAL_CODEX_MODELS = OFFICIAL_CODEX_CATALOG_MODELS.map((model) => ({
   display_name: model.display_name || model.slug,
   owned_by: "openai",
 }));
-const OFFICIAL_CODEX_MODEL_IDS = new Set(OFFICIAL_CODEX_MODELS.map((model) => model.id));
-const CODEX_CUSTOM_MODELS = buildCodexCustomModels(OFFICIAL_CODEX_CATALOG_MODELS[0] || null);
+const CODEX_CATALOG = buildCodexCatalog({
+  officialModels: OFFICIAL_CODEX_CATALOG_MODELS,
+  endpoints: GATEWAY_CONFIG.clients?.codex?.endpoints || [],
+});
+const OFFICIAL_CODEX_MODEL_IDS = CODEX_CATALOG.officialIds;
+const CODEX_CUSTOM_MODELS = CODEX_CATALOG.models.filter(
+  (model) => !OFFICIAL_CODEX_MODEL_IDS.has(model.slug),
+);
 
 // --- Grok CLI subscription provider ---------------------------------------
 // Forwards standard OpenAI requests to the Grok CLI chat proxy
@@ -3549,46 +3556,6 @@ function logError(event, error, context = {}) {
 function logLine(entry) {
   const line = `${JSON.stringify({ time: new Date().toISOString(), ...entry })}\n`;
   fs.appendFile(LOG_FILE, line, () => {});
-}
-
-function buildCodexCustomModels(referenceModel) {
-  const seen = new Set();
-  const models = [];
-
-  const endpoints = GATEWAY_CONFIG.clients?.codex?.endpoints || [];
-  for (const ep of endpoints) {
-    if (!["openai-chat", "openai-responses", "grok"].includes(ep.type)) continue;
-    const epModels = [
-      ...(ep.models || []),
-      ...Object.keys(ep.model_mapping || {})
-    ];
-    for (const id of epModels) {
-      if (!id || seen.has(id)) continue;
-      seen.add(id);
-      models.push(buildCodexCustomModel(id, displayNameForClaudeModel(id) || id, referenceModel));
-    }
-  }
-
-  return models;
-}
-
-function buildCodexCustomModel(id, displayName, referenceModel) {
-  const base = referenceModel ? JSON.parse(JSON.stringify(referenceModel)) : {};
-  delete base.model_messages;
-  base.instructions_variables = {};
-
-  return {
-    ...base,
-    slug: id,
-    display_name: displayName,
-    description: `${id} via Volcengine Ark gateway.`,
-    visibility: "list",
-    supported_in_api: true,
-    priority: 1000,
-    input_modalities: ["text"],
-    owned_by: "volcengine",
-    base_instructions: "You are Codex, a coding agent. Follow the active system and developer instructions.",
-  };
 }
 
 function loadOfficialCodexCatalogModels() {
