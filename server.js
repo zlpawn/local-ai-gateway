@@ -10,7 +10,12 @@ import https from "node:https";
 import { Readable } from "node:stream";
 import { HttpsProxyAgent } from "https-proxy-agent";
 import { responsesRequestToChat } from "./lib/codex/chat-request-adapter.mjs";
+import {
+  chatCompletionToResponse,
+  streamChatAsResponses,
+} from "./lib/codex/chat-response-adapter.mjs";
 import { buildCodexCatalog } from "./lib/codex/model-catalog.mjs";
+import { ResponsesWriter } from "./lib/codex/responses-writer.mjs";
 
 const PROJECT_ROOT = path.dirname(fileURLToPath(import.meta.url));
 
@@ -601,7 +606,12 @@ async function forwardOpenAIResponses(body, clientReq, clientRes, context) {
       if (backend === "responses") {
         await pipeGrokSse(upstream, clientRes, context.requestId);
       } else {
-        await streamOpenAIChatAsOpenAIResponse(upstream, clientRes, requestedModel, context.requestId);
+        await sendChatUpstreamAsResponses({
+          upstream,
+          clientRes,
+          requestedModel,
+          toolKinds: chatRequest.toolKinds,
+        });
       }
     } else {
       if (await grokSendErrorIfNotOk(upstream, clientRes)) return;
@@ -631,9 +641,27 @@ async function forwardOpenAIResponses(body, clientReq, clientRes, context) {
     });
 
     if (body.stream) {
-      await streamOpenAIChatAsOpenAIResponse(upstream, clientRes, requestedModel, context.requestId);
+      await sendChatUpstreamAsResponses({
+        upstream,
+        clientRes,
+        requestedModel,
+        toolKinds: chatRequest.toolKinds,
+      });
     } else {
-      await sendOpenAIChatAsOpenAIResponse(upstream, clientRes, requestedModel);
+      if (!upstream.ok) {
+        await sendUpstreamError(upstream, clientRes);
+        return;
+      }
+      const completion = await upstream.json();
+      clientRes.writeHead(200, {
+        "Content-Type": "application/json; charset=utf-8",
+        "Access-Control-Allow-Origin": "*",
+      });
+      clientRes.end(JSON.stringify(chatCompletionToResponse({
+        completion,
+        model: requestedModel,
+        toolKinds: chatRequest.toolKinds,
+      })));
     }
     return;
   }
@@ -2480,22 +2508,6 @@ function openAIChatFinishReasonToAnthropic(finishReason, content = []) {
   return "end_turn";
 }
 
-async function sendOpenAIChatAsOpenAIResponse(upstream, clientRes, requestedModel) {
-  const headers = responseHeaders(upstream.headers);
-  if (!upstream.ok) {
-    clientRes.writeHead(upstream.status, headers);
-    clientRes.end(await upstream.text());
-    return;
-  }
-
-  const upstreamJson = await upstream.json();
-  clientRes.writeHead(200, {
-    "Content-Type": "application/json; charset=utf-8",
-    "Access-Control-Allow-Origin": "*",
-  });
-  clientRes.end(JSON.stringify(openAIChatCompletionToResponse(upstreamJson, requestedModel)));
-}
-
 function openAIChatCompletionToResponse(upstreamJson, requestedModel) {
   const choice = upstreamJson.choices?.[0] || {};
   const message = choice.message || {};
@@ -2817,78 +2829,31 @@ async function streamAnthropicAsOpenAIResponse(upstream, clientRes, requestedMod
   logInfo("openai_responses_stream_complete", { request_id: requestId });
 }
 
-async function streamOpenAIChatAsOpenAIResponse(upstream, clientRes, requestedModel, requestId) {
+async function sendChatUpstreamAsResponses({
+  upstream,
+  clientRes,
+  requestedModel,
+  toolKinds,
+}) {
   if (!upstream.ok) {
-    const text = await upstream.text();
-    clientRes.writeHead(upstream.status, {
-      "Content-Type": "application/json; charset=utf-8",
-      "Access-Control-Allow-Origin": "*",
-    });
-    clientRes.end(text);
+    await sendUpstreamError(upstream, clientRes);
     return;
   }
 
-  clientRes.writeHead(200, {
-    "Content-Type": "text/event-stream; charset=utf-8",
-    "Cache-Control": "no-cache, no-transform",
-    Connection: "keep-alive",
-    "Access-Control-Allow-Origin": "*",
+  clientRes.writeHead(200, responsesSseHeaders());
+  const writer = new ResponsesWriter({
+    model: requestedModel,
+    emit(event, payload) {
+      clientRes.write(`event: ${event}\n`);
+      clientRes.write(`data: ${JSON.stringify(payload)}\n\n`);
+    },
   });
-
-  const responseId = `resp_${Date.now()}`;
-  const messageId = `msg_${Date.now()}`;
-  const outputIndex = 0;
-  let itemStarted = false;
-
-  clientRes.write("event: response.created\n");
-  clientRes.write(
-    `data: ${JSON.stringify({
-      type: "response.created",
-      response: { id: responseId, model: requestedModel || "custom-model", object: "response", status: "in_progress" },
-    })}\n\n`,
-  );
-
-  const ensureItemStarted = () => {
-    if (itemStarted) return;
-    itemStarted = true;
-    clientRes.write("event: response.output_item.added\n");
-    clientRes.write(
-      `data: ${JSON.stringify({
-        type: "response.output_item.added",
-        output_index: outputIndex,
-        item: { id: messageId, type: "message", role: "assistant", content: [] },
-      })}\n\n`,
-    );
-  };
-
-  await consumeSse(upstream.body, (_eventName, payloadText) => {
-    if (payloadText === "[DONE]") return;
-    const payload = parseJsonMaybe(payloadText) || {};
-    const choice = payload.choices?.[0] || {};
-    const delta = choice.delta || {};
-
-    if (delta.content) {
-      ensureItemStarted();
-      clientRes.write("event: response.output_text.delta\n");
-      clientRes.write(
-        `data: ${JSON.stringify({
-          type: "response.output_text.delta",
-          output_index: outputIndex,
-          delta: delta.content,
-        })}\n\n`,
-      );
-    }
+  await streamChatAsResponses({
+    readable: upstream.body,
+    writer,
+    toolKinds,
   });
-
-  clientRes.write("event: response.completed\n");
-  clientRes.write(
-    `data: ${JSON.stringify({
-      type: "response.completed",
-      response: { id: responseId, object: "response", model: requestedModel || "custom-model", status: "completed" },
-    })}\n\n`,
-  );
   clientRes.end();
-  logInfo("openai_chat_as_responses_stream_complete", { request_id: requestId });
 }
 
 async function streamOpenAIResponseAsChatCompletion(upstream, clientRes, requestedModel, requestId) {
@@ -3141,6 +3106,20 @@ function responseHeaders(headers) {
     "Cache-Control": headers.get("cache-control") || "no-cache",
     "Access-Control-Allow-Origin": "*",
   };
+}
+
+function responsesSseHeaders() {
+  return {
+    "Content-Type": "text/event-stream; charset=utf-8",
+    "Cache-Control": "no-cache, no-transform",
+    Connection: "keep-alive",
+    "Access-Control-Allow-Origin": "*",
+  };
+}
+
+async function sendUpstreamError(upstream, clientRes) {
+  clientRes.writeHead(upstream.status, responseHeaders(upstream.headers));
+  clientRes.end(await upstream.text());
 }
 
 function sendJson(res, status, body) {
