@@ -15,6 +15,7 @@ import {
   streamChatAsResponses,
 } from "./lib/codex/chat-response-adapter.mjs";
 import { buildCodexCatalog } from "./lib/codex/model-catalog.mjs";
+import { bindRequestAbort } from "./lib/codex/request-abort.mjs";
 import { collectResponsesStream } from "./lib/codex/responses-collector.mjs";
 import { ResponsesWriter } from "./lib/codex/responses-writer.mjs";
 
@@ -556,6 +557,29 @@ async function forwardOpenAIChatCompletions(body, clientReq, clientRes, context)
 }
 
 async function forwardOpenAIResponses(body, clientReq, clientRes, context) {
+  const requestAbort = bindRequestAbort(clientReq, clientRes);
+  const upstreamAbort = createUpstreamAbort(requestAbort.signal);
+  try {
+    await forwardResolvedCodexResponse({
+      body,
+      clientReq,
+      clientRes,
+      context,
+      signal: upstreamAbort.signal,
+    });
+  } finally {
+    upstreamAbort.dispose();
+    requestAbort.dispose();
+  }
+}
+
+async function forwardResolvedCodexResponse({
+  body,
+  clientReq,
+  clientRes,
+  context,
+  signal,
+}) {
   const requestedModel = body.model;
   if (context.client === "codex" && isOfficialCodexModel(requestedModel)) {
     logInfo("openai_responses_request", {
@@ -568,7 +592,7 @@ async function forwardOpenAIResponses(body, clientReq, clientRes, context) {
       stream: Boolean(body.stream),
       route: "official",
     });
-    await proxyOfficialCodexResponse(body, clientReq, clientRes, context);
+    await proxyOfficialCodexResponse(body, clientReq, clientRes, context, signal);
     return;
   }
 
@@ -598,9 +622,9 @@ async function forwardOpenAIResponses(body, clientReq, clientRes, context) {
       : null;
     let upstream;
     if (backend === "responses") {
-      upstream = await fetchGrok(route.provider, "/responses", { ...body, model: resolvedModel });
+      upstream = await fetchGrok(route.provider, "/responses", { ...body, model: resolvedModel }, signal);
     } else {
-      upstream = await fetchGrok(route.provider, "/chat/completions", chatRequest.body);
+      upstream = await fetchGrok(route.provider, "/chat/completions", chatRequest.body, signal);
     }
     logInfo("grok_responses_response", { request_id: context.requestId, status: upstream.status, backend });
     if (body.stream) {
@@ -635,6 +659,8 @@ async function forwardOpenAIResponses(body, clientReq, clientRes, context) {
       "/v1/chat/completions",
       chatRequest.body,
       clientReq,
+      signal,
+      context.client !== "codex",
     );
     logInfo("openai_responses_response", {
       request_id: context.requestId,
@@ -671,8 +697,15 @@ async function forwardOpenAIResponses(body, clientReq, clientRes, context) {
   }
 
   const upstream = route?.provider
-    ? await fetchConfiguredOpenAI(route.provider, "/responses", upstreamBody, clientReq)
-    : await fetchArkOpenAI("/responses", upstreamBody, clientReq);
+    ? await fetchConfiguredOpenAI(
+        route.provider,
+        "/responses",
+        upstreamBody,
+        clientReq,
+        signal,
+        context.client !== "codex",
+      )
+    : await fetchArkOpenAI("/responses", upstreamBody, clientReq, signal);
   logInfo("openai_responses_response", {
     request_id: context.requestId,
     client: context.client,
@@ -704,7 +737,7 @@ async function forwardOpenAIResponses(body, clientReq, clientRes, context) {
   );
 }
 
-async function proxyOfficialCodexResponse(body, clientReq, clientRes, context) {
+async function proxyOfficialCodexResponse(body, clientReq, clientRes, context, signal) {
   const auth = getOfficialCodexAuth(clientReq);
   if (!auth) {
     throw httpError(
@@ -721,7 +754,7 @@ async function proxyOfficialCodexResponse(body, clientReq, clientRes, context) {
       method: "POST",
       headers: officialUpstreamHeaders(clientReq, auth),
       body: JSON.stringify(normalizeOfficialCodexBody(body, auth.backend)),
-      signal: controller.signal,
+      signal: signal || controller.signal,
     });
 
     logInfo("openai_responses_response", {
@@ -922,7 +955,7 @@ async function fetchConfiguredAnthropic(provider, body, clientReq) {
   }
 }
 
-async function fetchArkOpenAI(path, body, clientReq) {
+async function fetchArkOpenAI(path, body, clientReq, signal) {
   const upstreamApiKey = getUpstreamApiKey(clientReq);
   if (!upstreamApiKey) {
     throw httpError(401, missingApiKeyMessage("ARK_API_KEY", clientReq));
@@ -937,7 +970,7 @@ async function fetchArkOpenAI(path, body, clientReq) {
         method: "POST",
         headers: openAIUpstreamHeaders(upstreamApiKey),
         body: JSON.stringify(body),
-        signal: controller.signal,
+        signal: signal || controller.signal,
       });
     } catch (error) {
       const message = error?.name === "AbortError" ? "Timed out calling Ark" : `Failed to call Ark: ${error.message || error}`;
@@ -948,7 +981,14 @@ async function fetchArkOpenAI(path, body, clientReq) {
   }
 }
 
-async function fetchConfiguredOpenAI(provider, endpointPath, body, clientReq) {
+async function fetchConfiguredOpenAI(
+  provider,
+  endpointPath,
+  body,
+  clientReq,
+  signal,
+  allowAuthFallback = true,
+) {
   if (!provider?.base_url) {
     throw httpError(500, `Provider ${provider?.id || "unknown"} is missing base_url`);
   }
@@ -971,10 +1011,10 @@ async function fetchConfiguredOpenAI(provider, endpointPath, body, clientReq) {
         method: "POST",
         headers: providerHeaders(provider, upstreamApiKey),
         body: JSON.stringify(body),
-        signal: controller.signal,
+        signal: signal || controller.signal,
       });
 
-      if (res.status === 401 || res.status === 403) {
+      if (allowAuthFallback && (res.status === 401 || res.status === 403)) {
         const fallbackKey = getConfiguredProviderApiKey(provider);
         if (fallbackKey && fallbackKey !== upstreamApiKey) {
           logInfo("api_key_fallback", { provider: provider.id, original_status: res.status });
@@ -982,7 +1022,7 @@ async function fetchConfiguredOpenAI(provider, endpointPath, body, clientReq) {
             method: "POST",
             headers: providerHeaders(provider, fallbackKey),
             body: JSON.stringify(body),
-            signal: controller.signal,
+            signal: signal || controller.signal,
           });
         }
       }
@@ -998,6 +1038,26 @@ async function fetchConfiguredOpenAI(provider, endpointPath, body, clientReq) {
   } finally {
     clearTimeout(timeout);
   }
+}
+
+function createUpstreamAbort(parentSignal) {
+  const controller = new AbortController();
+  const abortFromParent = () => controller.abort(parentSignal.reason);
+  if (parentSignal?.aborted) {
+    abortFromParent();
+  } else {
+    parentSignal?.addEventListener("abort", abortFromParent, { once: true });
+  }
+  const timeout = setTimeout(() => {
+    controller.abort();
+  }, REQUEST_TIMEOUT_MS);
+  return {
+    signal: controller.signal,
+    dispose() {
+      clearTimeout(timeout);
+      parentSignal?.removeEventListener("abort", abortFromParent);
+    },
+  };
 }
 
 // --- Grok CLI subscription provider: credential / header / proxy / fetch ---
@@ -1157,7 +1217,12 @@ function grokProxyAgentFor(proxyUrl) {
 
 // Per-provider concurrency guard so many client tabs cannot fan out parallel
 // requests that trip the subscription's rate/risk control.
-function grokAcquire(provider) {
+function grokAcquire(provider, signal) {
+  if (signal?.aborted) {
+    const error = new Error("client aborted");
+    error.name = "AbortError";
+    return Promise.reject(error);
+  }
   const id = provider?.id || provider?.name || "grok";
   const configuredLimit = Number(provider?.max_concurrency);
   if (!Number.isFinite(configuredLimit) || configuredLimit <= 0) {
@@ -1169,13 +1234,36 @@ function grokAcquire(provider) {
     slot = { running: 0, queue: [] };
     _grokSemaphores.set(id, slot);
   }
-  return new Promise((resolve) => {
+  return new Promise((resolve, reject) => {
+    let queued = false;
+    const abort = () => {
+      if (queued) {
+        const index = slot.queue.indexOf(run);
+        if (index !== -1) slot.queue.splice(index, 1);
+      }
+      const error = new Error("client aborted");
+      error.name = "AbortError";
+      reject(error);
+    };
     const run = () => {
+      if (signal?.aborted) {
+        abort();
+        return;
+      }
+      queued = false;
+      signal?.removeEventListener("abort", abort);
       slot.running += 1;
       resolve();
     };
-    if (slot.running < limit) run();
-    else slot.queue.push(run);
+    if (signal?.aborted) {
+      abort();
+    } else if (slot.running < limit) {
+      run();
+    } else {
+      queued = true;
+      slot.queue.push(run);
+      signal?.addEventListener("abort", abort, { once: true });
+    }
   });
 }
 
@@ -1222,7 +1310,7 @@ function nodeResToFetchLike(res) {
   };
 }
 
-async function fetchGrok(provider, endpointPath, body) {
+async function fetchGrok(provider, endpointPath, body, signal) {
   const authPath = resolveHomePath(provider?.auth_path) || GROK_AUTH_PATH;
   const authInfo = readGrokToken(authPath);
   const baseUrl = trimRight(provider?.base_url || GROK_DEFAULT_BASE_URL, "/");
@@ -1239,7 +1327,7 @@ async function fetchGrok(provider, endpointPath, body) {
   const transport = new URL(url).protocol === "http:" ? http : https;
   const proxyUrl = provider?.proxy === "" ? "" : provider?.proxy ?? GROK_DEFAULT_PROXY;
   const agent = grokProxyAgentFor(proxyUrl);
-  await grokAcquire(provider);
+  await grokAcquire(provider, signal);
   let timedOut = false;
   let reqRef = null;
   let released = false;
@@ -1256,7 +1344,20 @@ async function fetchGrok(provider, endpointPath, body) {
   try {
     const res = await new Promise((resolve, reject) => {
       reqRef = transport.request(url, { method: "POST", headers, agent }, resolve);
+      const abortGrok = () => reqRef?.destroy(new Error("client aborted"));
+      const removeAbortListener = () => {
+        signal?.removeEventListener("abort", abortGrok);
+      };
+      signal?.addEventListener("abort", abortGrok, { once: true });
       reqRef.on("error", reject);
+      reqRef.once("error", removeAbortListener);
+      reqRef.once("response", (response) => {
+        response.once("close", removeAbortListener);
+      });
+      if (signal?.aborted) {
+        abortGrok();
+        return;
+      }
       reqRef.write(JSON.stringify(upstreamBody));
       reqRef.end();
     });
@@ -2852,12 +2953,20 @@ async function sendChatUpstreamAsResponses({
       clientRes.write(`data: ${JSON.stringify(payload)}\n\n`);
     },
   });
-  await streamChatAsResponses({
-    readable: upstream.body,
-    writer,
-    toolKinds,
-  });
-  clientRes.end();
+  try {
+    await streamChatAsResponses({
+      readable: upstream.body,
+      writer,
+      toolKinds,
+    });
+  } catch (error) {
+    writer.failed({
+      code: error.code || "upstream_protocol_error",
+      message: error.message || "Upstream protocol error.",
+    });
+  } finally {
+    clientRes.end();
+  }
 }
 
 async function streamOpenAIResponseAsChatCompletion(upstream, clientRes, requestedModel, requestId) {
