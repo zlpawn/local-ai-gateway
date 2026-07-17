@@ -90,3 +90,24 @@ test("request adapter rejects an unrepresentable hosted tool", () => {
     /cannot be represented by Chat Completions/,
   );
 });
+
+test("request adapter rejects an unsupported top-level input item", () => {
+  assert.throws(
+    () => responsesRequestToChat({
+      input: [{ type: "computer_call" }],
+    }, "chat-model"),
+    /cannot be represented by Chat Completions/,
+  );
+});
+
+test("request adapter rejects an unsupported message content shape", () => {
+  assert.throws(
+    () => responsesRequestToChat({
+      input: [{
+        role: "user",
+        content: { type: "input_text", text: "Hello" },
+      }],
+    }, "chat-model"),
+    /cannot be represented by Chat Completions/,
+  );
+});
