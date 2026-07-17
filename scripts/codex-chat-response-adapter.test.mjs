@@ -435,3 +435,114 @@ test("Responses collector keeps complete output, usage, and terminal status", as
     total_tokens: 5,
   });
 });
+
+test("Responses collector preserves an incomplete terminal response", async () => {
+  const readable = responsesStream([
+    ["response.incomplete", {
+      type: "response.incomplete",
+      response: {
+        id: "resp_incomplete",
+        model: "grok-upstream",
+        status: "incomplete",
+        incomplete_details: { reason: "max_output_tokens" },
+        usage: { input_tokens: 8, output_tokens: 4, total_tokens: 12 },
+      },
+    }],
+  ]);
+
+  const response = await collectResponsesStream(readable, "grok-requested");
+
+  assert.equal(response.status, "incomplete");
+  assert.deepEqual(response.incomplete_details, {
+    reason: "max_output_tokens",
+  });
+  assert.deepEqual(response.usage, {
+    input_tokens: 8,
+    output_tokens: 4,
+    total_tokens: 12,
+  });
+});
+
+test("Responses collector preserves a failed terminal response", async () => {
+  const readable = responsesStream([
+    ["response.failed", {
+      type: "response.failed",
+      response: {
+        id: "resp_failed",
+        model: "grok-upstream",
+        status: "failed",
+        error: {
+          code: "upstream_error",
+          message: "Grok failed.",
+        },
+        usage: { input_tokens: 5, output_tokens: 0, total_tokens: 5 },
+      },
+    }],
+  ]);
+
+  const response = await collectResponsesStream(readable, "grok-requested");
+
+  assert.equal(response.status, "failed");
+  assert.deepEqual(response.error, {
+    code: "upstream_error",
+    message: "Grok failed.",
+  });
+  assert.deepEqual(response.usage, {
+    input_tokens: 5,
+    output_tokens: 0,
+    total_tokens: 5,
+  });
+});
+
+test("Responses collector rejects a premature close without a terminal event", async () => {
+  const readable = responsesStream([
+    ["response.created", {
+      type: "response.created",
+      response: {
+        id: "resp_partial",
+        model: "grok-upstream",
+        status: "in_progress",
+      },
+    }],
+  ]);
+
+  await assert.rejects(
+    collectResponsesStream(readable, "grok-requested"),
+    /closed without a terminal event/,
+  );
+});
+
+test("Responses collector tolerates DONE after a completed terminal response", async () => {
+  const readable = responsesStream([
+    ["response.completed", {
+      type: "response.completed",
+      response: {
+        id: "resp_done",
+        model: "grok-upstream",
+        status: "completed",
+        usage: { input_tokens: 1, output_tokens: 1, total_tokens: 2 },
+      },
+    }],
+    [null, "[DONE]"],
+  ]);
+
+  const response = await collectResponsesStream(readable, "grok-requested");
+
+  assert.equal(response.status, "completed");
+  assert.equal(response.id, "resp_done");
+  assert.equal(response.usage.total_tokens, 2);
+});
+
+function responsesStream(frames) {
+  const encoder = new TextEncoder();
+  return new ReadableStream({
+    start(controller) {
+      for (const [event, data] of frames) {
+        const eventLine = event ? `event: ${event}\n` : "";
+        const payload = typeof data === "string" ? data : JSON.stringify(data);
+        controller.enqueue(encoder.encode(`${eventLine}data: ${payload}\n\n`));
+      }
+      controller.close();
+    },
+  });
+}
