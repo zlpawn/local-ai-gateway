@@ -5,6 +5,7 @@ import {
   chatCompletionToResponse,
   streamChatAsResponses,
 } from "../lib/codex/chat-response-adapter.mjs";
+import { collectResponsesStream } from "../lib/codex/responses-collector.mjs";
 import { ResponsesWriter } from "../lib/codex/responses-writer.mjs";
 
 test("Chat SSE becomes reasoning, text, and parallel Responses tool events", async () => {
@@ -341,4 +342,96 @@ test("Chat completion accepts reasoning and analysis aliases", () => {
       summary: [{ type: "summary_text", text }],
     }]);
   }
+});
+
+test("Responses collector keeps complete output, usage, and terminal status", async () => {
+  const encoder = new TextEncoder();
+  const frames = [
+    ["response.created", {
+      type: "response.created",
+      response: {
+        id: "resp_collect",
+        model: "grok-upstream",
+        status: "in_progress",
+      },
+    }],
+    ["response.output_item.done", {
+      type: "response.output_item.done",
+      output_index: 2,
+      item: {
+        id: "fc_1",
+        type: "function_call",
+        call_id: "call_1",
+        name: "shell_command",
+        arguments: "{\"command\":\"ls\"}",
+      },
+    }],
+    ["response.output_item.done", {
+      type: "response.output_item.done",
+      output_index: 0,
+      item: {
+        id: "rs_1",
+        type: "reasoning",
+        summary: [{ type: "summary_text", text: "Inspect first." }],
+      },
+    }],
+    ["response.output_item.done", {
+      type: "response.output_item.done",
+      output_index: 1,
+      item: {
+        id: "msg_1",
+        type: "message",
+        role: "assistant",
+        content: [{ type: "output_text", text: "I will inspect." }],
+      },
+    }],
+    ["response.output_item.done", {
+      type: "response.output_item.done",
+      output_index: 3,
+      item: {
+        id: "ctc_1",
+        type: "custom_tool_call",
+        call_id: "call_2",
+        name: "apply_patch",
+        input: "*** Begin Patch\n*** End Patch",
+      },
+    }],
+    ["response.completed", {
+      type: "response.completed",
+      response: {
+        id: "resp_collect",
+        model: "grok-upstream",
+        status: "completed",
+        usage: { input_tokens: 3, output_tokens: 2, total_tokens: 5 },
+      },
+    }],
+  ];
+  const readable = new ReadableStream({
+    start(controller) {
+      for (const [event, data] of frames) {
+        controller.enqueue(
+          encoder.encode(`event: ${event}\ndata: ${JSON.stringify(data)}\n\n`),
+        );
+      }
+      controller.close();
+    },
+  });
+
+  const response = await collectResponsesStream(readable, "grok-requested");
+
+  assert.equal(response.id, "resp_collect");
+  assert.equal(response.model, "grok-upstream");
+  assert.equal(response.status, "completed");
+  assert.deepEqual(response.output.map((item) => item.type), [
+    "reasoning",
+    "message",
+    "function_call",
+    "custom_tool_call",
+  ]);
+  assert.equal(response.output_text, "I will inspect.");
+  assert.deepEqual(response.usage, {
+    input_tokens: 3,
+    output_tokens: 2,
+    total_tokens: 5,
+  });
 });
