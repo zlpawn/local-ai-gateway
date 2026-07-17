@@ -1169,6 +1169,7 @@ async function fetchGrok(provider, endpointPath, body) {
     upstreamBody.stream_options = { ...(body?.stream_options || {}), include_usage: true };
   }
   const url = `${baseUrl}${endpointPath}`;
+  const transport = new URL(url).protocol === "http:" ? http : https;
   const proxyUrl = provider?.proxy === "" ? "" : provider?.proxy ?? GROK_DEFAULT_PROXY;
   const agent = grokProxyAgentFor(proxyUrl);
   await grokAcquire(provider);
@@ -1187,7 +1188,7 @@ async function fetchGrok(provider, endpointPath, body) {
   }, REQUEST_TIMEOUT_MS);
   try {
     const res = await new Promise((resolve, reject) => {
-      reqRef = https.request(url, { method: "POST", headers, agent }, resolve);
+      reqRef = transport.request(url, { method: "POST", headers, agent }, resolve);
       reqRef.on("error", reject);
       reqRef.write(JSON.stringify(upstreamBody));
       reqRef.end();
@@ -1307,9 +1308,11 @@ async function streamOpenAIResponseAsAnthropicMessages(upstream, clientRes, requ
   });
 
   const messageId = `msg_${Date.now()}`;
-  let blockStarted = false;
-  let sawText = false;
+  let nextBlockIndex = 0;
+  let textBlockIndex = null;
+  let sawToolUse = false;
   let usage = null;
+  const toolBlocks = new Map();
 
   writeAnthropicSse(clientRes, "message_start", {
     type: "message_start",
@@ -1326,12 +1329,56 @@ async function streamOpenAIResponseAsAnthropicMessages(upstream, clientRes, requ
   });
 
   const ensureTextBlock = () => {
-    if (blockStarted) return;
-    blockStarted = true;
+    if (textBlockIndex != null) return textBlockIndex;
+    textBlockIndex = nextBlockIndex++;
     writeAnthropicSse(clientRes, "content_block_start", {
       type: "content_block_start",
-      index: 0,
+      index: textBlockIndex,
       content_block: { type: "text", text: "" },
+    });
+    return textBlockIndex;
+  };
+
+  const startToolBlock = (outputIndex, item = {}) => {
+    if (toolBlocks.has(outputIndex)) return toolBlocks.get(outputIndex);
+    const tool = {
+      index: nextBlockIndex++,
+      id: item.call_id || item.id || randomUUID(),
+      name: item.name || "tool",
+      arguments: "",
+      closed: false,
+    };
+    toolBlocks.set(outputIndex, tool);
+    sawToolUse = true;
+    writeAnthropicSse(clientRes, "content_block_start", {
+      type: "content_block_start",
+      index: tool.index,
+      content_block: {
+        type: "tool_use",
+        id: tool.id,
+        name: tool.name,
+        input: {},
+      },
+    });
+    return tool;
+  };
+
+  const appendToolArguments = (tool, delta) => {
+    if (!delta) return;
+    tool.arguments += delta;
+    writeAnthropicSse(clientRes, "content_block_delta", {
+      type: "content_block_delta",
+      index: tool.index,
+      delta: { type: "input_json_delta", partial_json: delta },
+    });
+  };
+
+  const closeToolBlock = (tool) => {
+    if (tool.closed) return;
+    tool.closed = true;
+    writeAnthropicSse(clientRes, "content_block_stop", {
+      type: "content_block_stop",
+      index: tool.index,
     });
   };
 
@@ -1340,24 +1387,49 @@ async function streamOpenAIResponseAsAnthropicMessages(upstream, clientRes, requ
     if (eventName === "response.output_text.delta" || payload.type === "response.output_text.delta") {
       const delta = payload.delta || "";
       if (delta) {
-        ensureTextBlock();
-        sawText = true;
+        const index = ensureTextBlock();
         writeAnthropicSse(clientRes, "content_block_delta", {
           type: "content_block_delta",
-          index: 0,
+          index,
           delta: { type: "text_delta", text: delta },
         });
+      }
+    } else if (eventName === "response.output_item.added" || payload.type === "response.output_item.added") {
+      if (payload.item?.type === "function_call") {
+        startToolBlock(payload.output_index ?? 0, payload.item);
+      }
+    } else if (
+      eventName === "response.function_call_arguments.delta"
+      || payload.type === "response.function_call_arguments.delta"
+    ) {
+      const tool = startToolBlock(payload.output_index ?? 0, {
+        id: payload.item_id,
+      });
+      appendToolArguments(tool, payload.delta || "");
+    } else if (eventName === "response.output_item.done" || payload.type === "response.output_item.done") {
+      if (payload.item?.type === "function_call") {
+        const tool = startToolBlock(payload.output_index ?? 0, payload.item);
+        if (!tool.arguments && payload.item.arguments) {
+          appendToolArguments(tool, payload.item.arguments);
+        }
+        closeToolBlock(tool);
       }
     } else if (eventName === "response.completed" || payload.type === "response.completed") {
       usage = payload.response?.usage || usage;
     }
   });
 
-  if (!blockStarted) ensureTextBlock();
-  writeAnthropicSse(clientRes, "content_block_stop", { type: "content_block_stop", index: 0 });
+  if (textBlockIndex == null && toolBlocks.size === 0) ensureTextBlock();
+  if (textBlockIndex != null) {
+    writeAnthropicSse(clientRes, "content_block_stop", {
+      type: "content_block_stop",
+      index: textBlockIndex,
+    });
+  }
+  for (const tool of toolBlocks.values()) closeToolBlock(tool);
   writeAnthropicSse(clientRes, "message_delta", {
     type: "message_delta",
-    delta: { stop_reason: "end_turn", stop_sequence: null },
+    delta: { stop_reason: sawToolUse ? "tool_use" : "end_turn", stop_sequence: null },
     usage: { output_tokens: usage?.output_tokens || 0 },
   });
   writeAnthropicSse(clientRes, "message_stop", { type: "message_stop" });
@@ -1893,19 +1965,35 @@ function openAIChatCompletionsToResponses(body, resolvedModel) {
     }
     if (message.role === "tool") {
       input.push({
-        role: "user",
-        content: [{ type: "input_text", text: `Tool result ${message.tool_call_id || ""}:\n${text}` }],
+        type: "function_call_output",
+        call_id: message.tool_call_id || message.call_id || "tool",
+        output: text,
       });
       continue;
     }
     const role = message.role === "assistant" ? "assistant" : "user";
     const content = openAIChatContentToResponsesContent(message.content, role);
-    input.push({
-      role,
-      content: content.length
-        ? content
-        : [{ type: role === "assistant" ? "output_text" : "input_text", text: "" }],
-    });
+    if (content.length || role === "user") {
+      input.push({
+        role,
+        content: content.length
+          ? content
+          : [{ type: "input_text", text: "" }],
+      });
+    }
+    if (role === "assistant" && Array.isArray(message.tool_calls)) {
+      for (const toolCall of message.tool_calls) {
+        const fn = toolCall?.function || {};
+        input.push({
+          type: "function_call",
+          call_id: toolCall?.id || randomUUID(),
+          name: fn.name || "tool",
+          arguments: typeof fn.arguments === "string"
+            ? fn.arguments
+            : JSON.stringify(fn.arguments || {}),
+        });
+      }
+    }
   }
 
   const upstreamBody = {
@@ -1920,8 +2008,37 @@ function openAIChatCompletionsToResponses(body, resolvedModel) {
   if (body.temperature != null) upstreamBody.temperature = body.temperature;
   if (body.top_p != null) upstreamBody.top_p = body.top_p;
   if (body.stop != null) upstreamBody.stop = body.stop;
+  if (Array.isArray(body.tools) && body.tools.length > 0) {
+    upstreamBody.tools = body.tools.map(openAIChatToolToResponseTool).filter(Boolean);
+  }
+  if (body.tool_choice != null) {
+    upstreamBody.tool_choice = openAIChatToolChoiceToResponseToolChoice(body.tool_choice);
+  }
 
   return upstreamBody;
+}
+
+function openAIChatToolToResponseTool(tool) {
+  if (!tool || typeof tool !== "object") return null;
+  const fn = tool.function || tool;
+  if (!fn.name) return null;
+  return {
+    type: "function",
+    name: fn.name,
+    description: fn.description || "",
+    parameters: fn.parameters || { type: "object", properties: {} },
+  };
+}
+
+function openAIChatToolChoiceToResponseToolChoice(toolChoice) {
+  if (typeof toolChoice === "string") return toolChoice;
+  if (toolChoice?.type === "function") {
+    return {
+      type: "function",
+      name: toolChoice.function?.name || toolChoice.name || "tool",
+    };
+  }
+  return toolChoice;
 }
 
 function openAIChatContentToResponsesContent(content, role) {
