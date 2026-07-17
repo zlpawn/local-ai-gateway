@@ -376,6 +376,150 @@ test("Claude Desktop receives Grok Responses function calls as tool_use blocks",
   ]);
 });
 
+test("Codex receives full non-streaming Grok Responses output", async (t) => {
+  let capturedPath;
+  let capturedBody;
+  const reasoning = {
+    id: "rs_codex",
+    type: "reasoning",
+    summary: [{ type: "summary_text", text: "Inspect the workspace." }],
+  };
+  const toolCall = {
+    id: "fc_codex",
+    type: "function_call",
+    call_id: "call_codex",
+    name: "shell_command",
+    arguments: "{\"command\":\"ls\"}",
+  };
+  const usage = { input_tokens: 9, output_tokens: 4, total_tokens: 13 };
+  const mock = http.createServer((request, response) => {
+    let raw = "";
+    request.setEncoding("utf8");
+    request.on("data", (chunk) => {
+      raw += chunk;
+    });
+    request.on("end", () => {
+      capturedPath = request.url;
+      capturedBody = JSON.parse(raw);
+      response.writeHead(200, { "content-type": "text/event-stream" });
+      const events = [
+        ["response.created", {
+          type: "response.created",
+          response: {
+            id: "resp_codex",
+            model: "grok-4.5",
+            status: "in_progress",
+          },
+        }],
+        ["response.output_item.done", {
+          type: "response.output_item.done",
+          output_index: 0,
+          item: reasoning,
+        }],
+        ["response.output_item.done", {
+          type: "response.output_item.done",
+          output_index: 1,
+          item: toolCall,
+        }],
+        ["response.completed", {
+          type: "response.completed",
+          response: {
+            id: "resp_codex",
+            model: "grok-4.5",
+            status: "completed",
+            usage,
+          },
+        }],
+      ];
+      for (const [event, data] of events) {
+        response.write(`event: ${event}\ndata: ${JSON.stringify(data)}\n\n`);
+      }
+      response.end("data: [DONE]\n\n");
+    });
+  });
+  const mockPort = await listen(mock);
+  t.after(() => mock.close());
+
+  const reservation = http.createServer();
+  const gatewayPort = await listen(reservation);
+  await new Promise((resolve) => reservation.close(resolve));
+
+  const tempDir = await mkdtemp(path.join(tmpdir(), "local-ai-gateway-codex-grok-"));
+  t.after(() => rm(tempDir, { recursive: true, force: true }));
+  const authFile = path.join(tempDir, "auth.json");
+  await writeFile(authFile, JSON.stringify({
+    "https://auth.x.ai": {
+      key: "test-session-key",
+      user_id: "test-user",
+      expires_at: "2099-01-01T00:00:00.000Z",
+    },
+  }));
+  const configFile = path.join(tempDir, "gateway.config.json");
+  await writeFile(configFile, JSON.stringify({
+    server: { host: "127.0.0.1", port: gatewayPort },
+    clients: {
+      codex: {
+        endpoints: [{
+          name: "mock-codex-grok",
+          type: "grok",
+          base_url: `http://127.0.0.1:${mockPort}`,
+          auth_path: authFile,
+          proxy: "",
+          models: ["grok-4.5"],
+          model_mapping: { "grok-codex": "grok-4.5" },
+        }],
+      },
+    },
+  }));
+
+  const gateway = spawn(process.execPath, ["server.js"], {
+    cwd: ROOT,
+    env: {
+      ...process.env,
+      GATEWAY_CONFIG_FILE: configFile,
+      GATEWAY_PORT: String(gatewayPort),
+      CLAUDE_3P_SYNC_DISABLED: "1",
+    },
+    stdio: ["ignore", "pipe", "pipe"],
+  });
+  t.after(() => {
+    if (gateway.exitCode == null) gateway.kill();
+  });
+  await waitForHealth(gatewayPort, gateway);
+
+  const result = await fetch(`http://127.0.0.1:${gatewayPort}/codex/v1/responses`, {
+    method: "POST",
+    headers: {
+      authorization: "Bearer client-key",
+      "content-type": "application/json",
+    },
+    body: JSON.stringify({
+      model: "grok-codex",
+      stream: false,
+      input: "Inspect files.",
+      tools: [{
+        type: "function",
+        name: "shell_command",
+        description: "Run a shell command",
+        parameters: {
+          type: "object",
+          properties: { command: { type: "string" } },
+          required: ["command"],
+        },
+      }],
+    }),
+  });
+
+  assert.equal(result.status, 200);
+  assert.equal(capturedPath, "/responses");
+  assert.equal(capturedBody.model, "grok-4.5");
+  assert.equal(capturedBody.stream, true);
+  const response = await result.json();
+  assert.equal(response.status, "completed");
+  assert.deepEqual(response.output, [reasoning, toolCall]);
+  assert.deepEqual(response.usage, usage);
+});
+
 test("Grok requests are concurrent by default when max_concurrency is omitted", async (t) => {
   let activeRequests = 0;
   let maxActiveRequests = 0;
