@@ -91,6 +91,7 @@ test("Chat Completions images survive conversion to Responses input", async (t) 
     env: {
       ...process.env,
       GATEWAY_CONFIG_FILE: configFile,
+      GATEWAY_NO_OPEN: "1",
       GATEWAY_PORT: String(gatewayPort),
       MOCK_API_KEY: "test-key",
     },
@@ -275,6 +276,7 @@ test("Claude Desktop receives Grok Responses function calls as tool_use blocks",
     env: {
       ...process.env,
       GATEWAY_CONFIG_FILE: configFile,
+      GATEWAY_NO_OPEN: "1",
       GATEWAY_PORT: String(gatewayPort),
     },
     stdio: ["ignore", "pipe", "pipe"],
@@ -477,6 +479,7 @@ test("Codex receives full non-streaming Grok Responses output", async (t) => {
     env: {
       ...process.env,
       GATEWAY_CONFIG_FILE: configFile,
+      GATEWAY_NO_OPEN: "1",
       GATEWAY_PORT: String(gatewayPort),
       CLAUDE_3P_SYNC_DISABLED: "1",
     },
@@ -593,6 +596,7 @@ test("Grok requests are concurrent by default when max_concurrency is omitted", 
     env: {
       ...process.env,
       GATEWAY_CONFIG_FILE: configFile,
+      GATEWAY_NO_OPEN: "1",
       GATEWAY_PORT: String(gatewayPort),
       CLAUDE_3P_SYNC_DISABLED: "1",
     },
