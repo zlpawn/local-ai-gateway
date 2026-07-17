@@ -375,3 +375,109 @@ test("Claude Desktop receives Grok Responses function calls as tool_use blocks",
     },
   ]);
 });
+
+test("Grok requests are concurrent by default when max_concurrency is omitted", async (t) => {
+  let activeRequests = 0;
+  let maxActiveRequests = 0;
+  const mock = http.createServer((request, response) => {
+    request.resume();
+    request.on("end", () => {
+      activeRequests += 1;
+      maxActiveRequests = Math.max(maxActiveRequests, activeRequests);
+      setTimeout(() => {
+        response.writeHead(200, { "content-type": "text/event-stream" });
+        response.write(
+          `event: response.output_text.delta\ndata: ${JSON.stringify({
+            type: "response.output_text.delta",
+            output_index: 0,
+            content_index: 0,
+            delta: "OK",
+          })}\n\n`,
+        );
+        response.write(
+          `event: response.completed\ndata: ${JSON.stringify({
+            type: "response.completed",
+            response: {
+              id: "resp_concurrent",
+              status: "completed",
+              usage: { input_tokens: 1, output_tokens: 1, total_tokens: 2 },
+            },
+          })}\n\n`,
+        );
+        response.end();
+        activeRequests -= 1;
+      }, 150);
+    });
+  });
+  const mockPort = await listen(mock);
+  t.after(() => mock.close());
+
+  const reservation = http.createServer();
+  const gatewayPort = await listen(reservation);
+  await new Promise((resolve) => reservation.close(resolve));
+
+  const tempDir = await mkdtemp(path.join(tmpdir(), "local-ai-gateway-grok-concurrency-"));
+  t.after(() => rm(tempDir, { recursive: true, force: true }));
+  const authFile = path.join(tempDir, "auth.json");
+  await writeFile(authFile, JSON.stringify({
+    "https://auth.x.ai": {
+      key: "test-session-key",
+      user_id: "test-user",
+      expires_at: "2099-01-01T00:00:00.000Z",
+    },
+  }));
+  const configFile = path.join(tempDir, "gateway.config.json");
+  await writeFile(configFile, JSON.stringify({
+    server: { host: "127.0.0.1", port: gatewayPort },
+    clients: {
+      desktop: {
+        endpoints: [{
+          name: "mock-grok",
+          type: "grok",
+          base_url: `http://127.0.0.1:${mockPort}`,
+          auth_path: authFile,
+          proxy: "",
+          models: ["grok-4.5"],
+          model_mapping: { "claude-opus-4-7": "grok-4.5" },
+        }],
+      },
+    },
+  }));
+
+  const gateway = spawn(process.execPath, ["server.js"], {
+    cwd: ROOT,
+    env: {
+      ...process.env,
+      GATEWAY_CONFIG_FILE: configFile,
+      GATEWAY_PORT: String(gatewayPort),
+      CLAUDE_3P_SYNC_DISABLED: "1",
+    },
+    stdio: ["ignore", "pipe", "pipe"],
+  });
+  t.after(() => {
+    if (gateway.exitCode == null) gateway.kill();
+  });
+  await waitForHealth(gatewayPort, gateway);
+
+  const requestBody = JSON.stringify({
+    model: "claude-opus-4-7",
+    max_tokens: 16,
+    stream: true,
+    messages: [{ role: "user", content: "Reply OK." }],
+  });
+  const makeRequest = () => fetch(`http://127.0.0.1:${gatewayPort}/desktop/v1/messages`, {
+    method: "POST",
+    headers: {
+      authorization: "Bearer client-key",
+      "anthropic-version": "2023-06-01",
+      "content-type": "application/json",
+    },
+    body: requestBody,
+  }).then(async (response) => {
+    assert.equal(response.status, 200);
+    await response.text();
+  });
+
+  await Promise.all([makeRequest(), makeRequest()]);
+  assert.equal(maxActiveRequests, 2);
+});
