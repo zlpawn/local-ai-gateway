@@ -9,6 +9,7 @@ import { URL, fileURLToPath } from "node:url";
 import https from "node:https";
 import { Readable } from "node:stream";
 import { HttpsProxyAgent } from "https-proxy-agent";
+import { responsesRequestToChat } from "./lib/codex/chat-request-adapter.mjs";
 import { buildCodexCatalog } from "./lib/codex/model-catalog.mjs";
 
 const PROJECT_ROOT = path.dirname(fileURLToPath(import.meta.url));
@@ -567,13 +568,10 @@ async function forwardOpenAIResponses(body, clientReq, clientRes, context) {
 
   const route = resolveConfiguredModel(requestedModel, ["openai-chat", "openai-responses", "grok"], context.client);
   const resolvedModel = route?.upstream_model || resolveModel(requestedModel);
-  const upstreamBody =
-    route?.provider?.type === "openai-chat"
-      ? openAIResponsesToChatCompletions(body, resolvedModel)
-      : {
-          ...body,
-          model: resolvedModel,
-        };
+  const upstreamBody = {
+    ...body,
+    model: resolvedModel,
+  };
 
   logInfo("openai_responses_request", {
     request_id: context.requestId,
@@ -589,12 +587,14 @@ async function forwardOpenAIResponses(body, clientReq, clientRes, context) {
 
   if (route?.provider?.type === "grok") {
     const backend = grokBackendFor(resolvedModel);
+    const chatRequest = backend === "chat"
+      ? responsesRequestToChat(body, resolvedModel)
+      : null;
     let upstream;
     if (backend === "responses") {
       upstream = await fetchGrok(route.provider, "/responses", { ...body, model: resolvedModel });
     } else {
-      const chatBody = openAIResponsesToChatCompletions(body, resolvedModel);
-      upstream = await fetchGrok(route.provider, "/chat/completions", chatBody);
+      upstream = await fetchGrok(route.provider, "/chat/completions", chatRequest.body);
     }
     logInfo("grok_responses_response", { request_id: context.requestId, status: upstream.status, backend });
     if (body.stream) {
@@ -614,21 +614,22 @@ async function forwardOpenAIResponses(body, clientReq, clientRes, context) {
     return;
   }
 
-  const upstream =
-    route?.provider?.type === "openai-chat"
-      ? await fetchConfiguredOpenAI(route.provider, "/v1/chat/completions", upstreamBody, clientReq)
-      : route?.provider
-        ? await fetchConfiguredOpenAI(route.provider, "/responses", upstreamBody, clientReq)
-        : await fetchArkOpenAI("/responses", upstreamBody, clientReq);
-  logInfo("openai_responses_response", {
-    request_id: context.requestId,
-    client: context.client,
-    status: upstream.status,
-    provider: route?.provider?.id || null,
-    translated_to: route?.provider?.type === "openai-chat" ? "chat_completions" : null,
-  });
-
   if (route?.provider?.type === "openai-chat") {
+    const chatRequest = responsesRequestToChat(body, resolvedModel);
+    const upstream = await fetchConfiguredOpenAI(
+      route.provider,
+      "/v1/chat/completions",
+      chatRequest.body,
+      clientReq,
+    );
+    logInfo("openai_responses_response", {
+      request_id: context.requestId,
+      client: context.client,
+      status: upstream.status,
+      provider: route.provider.id || null,
+      translated_to: "chat_completions",
+    });
+
     if (body.stream) {
       await streamOpenAIChatAsOpenAIResponse(upstream, clientRes, requestedModel, context.requestId);
     } else {
@@ -636,6 +637,17 @@ async function forwardOpenAIResponses(body, clientReq, clientRes, context) {
     }
     return;
   }
+
+  const upstream = route?.provider
+    ? await fetchConfiguredOpenAI(route.provider, "/responses", upstreamBody, clientReq)
+    : await fetchArkOpenAI("/responses", upstreamBody, clientReq);
+  logInfo("openai_responses_response", {
+    request_id: context.requestId,
+    client: context.client,
+    status: upstream.status,
+    provider: route?.provider?.id || null,
+    translated_to: null,
+  });
 
   if (!upstream.body) {
     clientRes.writeHead(upstream.status, responseHeaders(upstream.headers));
@@ -1935,46 +1947,6 @@ function openAIResponsesToAnthropic(body, resolvedModel) {
   return upstreamBody;
 }
 
-function openAIResponsesToChatCompletions(body, resolvedModel) {
-  const messages = [];
-
-  if (body.instructions) {
-    messages.push({ role: "system", content: String(body.instructions) });
-  }
-
-  if (Array.isArray(body.messages)) {
-    for (const message of body.messages) {
-      const converted = openAIResponseInputToChatMessage(message);
-      if (converted) messages.push(converted);
-    }
-  } else if (Array.isArray(body.input)) {
-    for (const item of body.input) {
-      const converted = openAIResponseInputToChatMessage(item);
-      if (converted) messages.push(converted);
-    }
-  } else if (typeof body.input === "string") {
-    messages.push({ role: "user", content: body.input });
-  }
-
-  const upstreamBody = {
-    model: resolvedModel,
-    messages: messages.length ? messages : [{ role: "user", content: "" }],
-    stream: Boolean(body.stream),
-  };
-
-  if (body.max_output_tokens != null) upstreamBody.max_tokens = body.max_output_tokens;
-  else if (body.max_tokens != null) upstreamBody.max_tokens = body.max_tokens;
-  if (body.temperature != null) upstreamBody.temperature = body.temperature;
-  if (body.top_p != null) upstreamBody.top_p = body.top_p;
-  if (body.stop != null) upstreamBody.stop = body.stop;
-  if (Array.isArray(body.tools) && body.tools.length > 0) {
-    upstreamBody.tools = body.tools.map(responseToolToChatTool).filter(Boolean);
-  }
-  if (body.tool_choice != null) upstreamBody.tool_choice = body.tool_choice;
-
-  return upstreamBody;
-}
-
 function openAIChatCompletionsToResponses(body, resolvedModel) {
   const input = [];
   const instructions = [];
@@ -2231,87 +2203,6 @@ function anthropicToolChoiceToOpenAIChat(toolChoice) {
     };
   }
   return undefined;
-}
-
-function openAIResponseInputToChatMessage(item) {
-  if (typeof item === "string") return { role: "user", content: item };
-  if (!item || typeof item !== "object") return null;
-
-  if (item.type === "function_call") {
-    return {
-      role: "assistant",
-      content: null,
-      tool_calls: [
-        {
-          id: item.call_id || item.id || randomUUID(),
-          type: "function",
-          function: {
-            name: item.name || "tool",
-            arguments: typeof item.arguments === "string" ? item.arguments : JSON.stringify(item.arguments || {}),
-          },
-        },
-      ],
-    };
-  }
-
-  if (item.type === "function_call_output") {
-    return {
-      role: "tool",
-      tool_call_id: item.call_id || item.id || "tool",
-      content: typeof item.output === "string" ? item.output : JSON.stringify(item.output || ""),
-    };
-  }
-
-  const role = item.role === "assistant" || item.role === "system" || item.role === "tool" ? item.role : "user";
-  if (role === "tool") {
-    return {
-      role: "tool",
-      tool_call_id: item.tool_call_id || item.call_id || "tool",
-      content: responseInputContentToText(item.content),
-    };
-  }
-
-  return {
-    role,
-    content: responseInputContentToOpenAIChatContent(item.content),
-  };
-}
-
-function responseInputContentToOpenAIChatContent(content) {
-  if (typeof content === "string") return content;
-  if (!Array.isArray(content)) return "";
-
-  const parts = [];
-  for (const part of content) {
-    if (!part) continue;
-    if ((part.type === "input_text" || part.type === "output_text" || part.type === "text") && part.text != null) {
-      parts.push({ type: "text", text: String(part.text) });
-      continue;
-    }
-    if ((part.type === "input_image" || part.type === "image_url") && (part.image_url || part.url)) {
-      parts.push({ type: "image_url", image_url: { url: part.image_url || part.url } });
-    }
-  }
-
-  if (parts.length === 0) return responseInputContentToText(content);
-  if (parts.every((part) => part.type === "text")) return parts.map((part) => part.text).join("");
-  return parts;
-}
-
-function responseToolToChatTool(tool) {
-  if (!tool || typeof tool !== "object") return null;
-  if (tool.type === "function" && tool.function) return tool;
-  if (tool.type === "function") {
-    return {
-      type: "function",
-      function: {
-        name: tool.name || "tool",
-        description: tool.description || "",
-        parameters: tool.parameters || tool.input_schema || { type: "object", properties: {} },
-      },
-    };
-  }
-  return tool.function ? { type: "function", function: tool.function } : null;
 }
 
 function openAIMessageToAnthropic(message) {
