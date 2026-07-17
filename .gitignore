@@ -35,3 +35,4 @@ Thumbs.db
 
 # Local inspection scratch space
 _inspect_repo/
+.worktrees/
