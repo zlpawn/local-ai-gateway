@@ -15,6 +15,7 @@ import {
   streamChatAsResponses,
 } from "./lib/codex/chat-response-adapter.mjs";
 import { buildCodexCatalog } from "./lib/codex/model-catalog.mjs";
+import { collectResponsesStream } from "./lib/codex/responses-collector.mjs";
 import { ResponsesWriter } from "./lib/codex/responses-writer.mjs";
 
 const PROJECT_ROOT = path.dirname(fileURLToPath(import.meta.url));
@@ -615,11 +616,14 @@ async function forwardOpenAIResponses(body, clientReq, clientRes, context) {
       }
     } else {
       if (await grokSendErrorIfNotOk(upstream, clientRes)) return;
-      const completion = backend === "responses"
-        ? await collectResponsesSseAsChatCompletion(upstream, requestedModel)
-        : await collectChatSseAsChatCompletion(upstream, requestedModel);
+      const response = backend === "responses"
+        ? await collectResponsesStream(upstream.body, requestedModel)
+        : openAIChatCompletionToResponse(
+            await collectChatSseAsChatCompletion(upstream, requestedModel),
+            requestedModel,
+          );
       clientRes.writeHead(200, { "Content-Type": "application/json; charset=utf-8", "Access-Control-Allow-Origin": "*" });
-      clientRes.end(JSON.stringify(openAIChatCompletionToResponse(completion, requestedModel)));
+      clientRes.end(JSON.stringify(response));
     }
     return;
   }
