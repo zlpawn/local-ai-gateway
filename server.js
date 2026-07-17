@@ -8,8 +8,7 @@ import { randomUUID } from "node:crypto";
 import { URL, fileURLToPath } from "node:url";
 import https from "node:https";
 import { Readable } from "node:stream";
-import HttpsProxyAgentPkg from "https-proxy-agent";
-const { HttpsProxyAgent } = HttpsProxyAgentPkg;
+import { HttpsProxyAgent } from "https-proxy-agent";
 
 const PROJECT_ROOT = path.dirname(fileURLToPath(import.meta.url));
 
@@ -110,7 +109,7 @@ let GROK_MODEL_CATALOG = loadGrokModelCatalog();
 const _grokProxyAgents = new Map();
 const _grokSemaphores = new Map();
 let _grokClientVersionCache;
-let _grokAgentIdCache;
+const _grokAgentIdCache = new Map();
 
 if (CODEX_WRITE_MODEL_CATALOG) {
   writeCodexModelCatalog();
@@ -987,15 +986,27 @@ function grokClientVersion() {
   return _grokClientVersionCache;
 }
 
-function grokAgentId() {
-  if (_grokAgentIdCache !== undefined) return _grokAgentIdCache;
+function grokAgentId(agentIdPath = GROK_AGENT_ID_PATH) {
+  const resolvedPath = resolveHomePath(agentIdPath) || GROK_AGENT_ID_PATH;
+  if (_grokAgentIdCache.has(resolvedPath)) return _grokAgentIdCache.get(resolvedPath);
   try {
-    const id = fs.readFileSync(GROK_AGENT_ID_PATH, "utf8").trim();
-    _grokAgentIdCache = id || randomUUID();
+    const id = fs.readFileSync(resolvedPath, "utf8").trim();
+    if (id) {
+      _grokAgentIdCache.set(resolvedPath, id);
+      return id;
+    }
   } catch {
-    _grokAgentIdCache = randomUUID();
+    // Generate a stable id below.
   }
-  return _grokAgentIdCache;
+  const id = randomUUID();
+  try {
+    fs.mkdirSync(path.dirname(resolvedPath), { recursive: true });
+    fs.writeFileSync(resolvedPath, `${id}\n`, { mode: 0o600 });
+  } catch {
+    // Keep the id stable for this process even if the file cannot be written.
+  }
+  _grokAgentIdCache.set(resolvedPath, id);
+  return id;
 }
 
 function grokPlatformOs() {
@@ -1064,7 +1075,7 @@ function grokHeaders(provider, model, authInfo) {
     "x-grok-conv-id": randomUUID(),
     "x-grok-req-id": randomUUID(),
     "x-grok-session-id": randomUUID(),
-    "x-grok-agent-id": grokAgentId(),
+    "x-grok-agent-id": grokAgentId(provider?.agent_id_path),
     "x-grok-client-version": version,
     "x-grok-client-identifier": "grok-cli",
     "x-grok-user-id": authInfo.user_id || "",
@@ -1084,7 +1095,7 @@ function grokProxyAgentFor(proxyUrl) {
 // Per-provider concurrency guard so many client tabs cannot fan out parallel
 // requests that trip the subscription's rate/risk control.
 function grokAcquire(provider) {
-  const id = provider?.name || "grok";
+  const id = provider?.id || provider?.name || "grok";
   const limit = Math.max(1, Number(provider?.max_concurrency) || 1);
   let slot = _grokSemaphores.get(id);
   if (!slot) {
@@ -1102,7 +1113,7 @@ function grokAcquire(provider) {
 }
 
 function grokRelease(provider) {
-  const id = provider?.name || "grok";
+  const id = provider?.id || provider?.name || "grok";
   const slot = _grokSemaphores.get(id);
   if (!slot) return;
   slot.running = Math.max(0, slot.running - 1);
@@ -1154,12 +1165,22 @@ async function fetchGrok(provider, endpointPath, body) {
   // upstream and aggregate back into a single JSON when the client asked for
   // non-streaming.
   const upstreamBody = { ...body, stream: true };
+  if (endpointPath === "/chat/completions") {
+    upstreamBody.stream_options = { ...(body?.stream_options || {}), include_usage: true };
+  }
   const url = `${baseUrl}${endpointPath}`;
   const proxyUrl = provider?.proxy === "" ? "" : provider?.proxy ?? GROK_DEFAULT_PROXY;
   const agent = grokProxyAgentFor(proxyUrl);
   await grokAcquire(provider);
   let timedOut = false;
   let reqRef = null;
+  let released = false;
+  const finish = () => {
+    if (released) return;
+    released = true;
+    clearTimeout(timer);
+    grokRelease(provider);
+  };
   const timer = setTimeout(() => {
     timedOut = true;
     if (reqRef) reqRef.destroy(new Error("grok request timed out"));
@@ -1171,15 +1192,16 @@ async function fetchGrok(provider, endpointPath, body) {
       reqRef.write(JSON.stringify(upstreamBody));
       reqRef.end();
     });
+    res.once("end", finish);
+    res.once("close", finish);
+    res.once("error", finish);
     return nodeResToFetchLike(res);
   } catch (error) {
+    finish();
     const message = timedOut
       ? "Timed out calling Grok proxy"
       : `Failed to call Grok proxy: ${error?.message || error}`;
     throw httpError(502, message);
-  } finally {
-    clearTimeout(timer);
-    grokRelease(provider);
   }
 }
 
