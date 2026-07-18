@@ -9,6 +9,7 @@ restore-codex-custom-provider.ps1
 
 # Runtime state
 gateway.pid
+gateway.*.pid
 gateway.log
 gateway.stdout.log
 gateway.stderr.log
@@ -35,4 +36,5 @@ Thumbs.db
 
 # Local inspection scratch space
 _inspect_repo/
+.understand-anything/
 .worktrees/

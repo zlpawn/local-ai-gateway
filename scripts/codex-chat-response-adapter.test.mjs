@@ -344,6 +344,37 @@ test("Chat completion accepts reasoning and analysis aliases", () => {
   }
 });
 
+test("Chat completion falls back when custom tool arguments are malformed", () => {
+  const response = chatCompletionToResponse({
+    model: "requested-model",
+    toolKinds: new Map([["apply_patch", "custom"]]),
+    completion: {
+      id: "chatcmpl_bad_custom",
+      choices: [{
+        message: {
+          role: "assistant",
+          content: "",
+          tool_calls: [{
+            id: "call_bad",
+            function: {
+              name: "apply_patch",
+              arguments: "{not-json",
+            },
+          }],
+        },
+      }],
+    },
+  });
+
+  assert.deepEqual(response.output, [{
+    id: "fc_call_bad",
+    type: "function_call",
+    call_id: "call_bad",
+    name: "apply_patch",
+    arguments: "{not-json",
+  }]);
+});
+
 test("Responses collector keeps complete output, usage, and terminal status", async () => {
   const encoder = new TextEncoder();
   const frames = [

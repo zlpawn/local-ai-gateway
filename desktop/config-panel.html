@@ -917,17 +917,22 @@ open -a "Claude"</pre>
                         <h2>Codex 代理</h2>
                         <p>为兼容 OpenAI 接口的独立 Codex 客户端提供下游代理支持。</p>
                     </div>
-                    <button class="btn" onclick="addEndpoint('codex')">
-                        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="12" y1="5" x2="12" y2="19"></line><line x1="5" y1="12" x2="19" y2="12"></line></svg>添加节点</button>
+                    <div style="display:flex; gap:8px; align-items:center;">
+                        <button class="btn" id="codex-history-unify-btn" onclick="migrateCodexHistory()" title="把旧会话的 model_provider 迁移到 custom，以便在当前网关配置下重新显示历史">
+                            迁移历史会话
+                        </button>
+                        <button class="btn" onclick="addEndpoint('codex')">
+                            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="12" y1="5" x2="12" y2="19"></line><line x1="5" y1="12" x2="19" y2="12"></line></svg>添加节点</button>
+                    </div>
                 </div>
 
                 <div class="usage-guide">
                     <h3>🚀 如何连接此网关？</h3>
-                    <p>对于独立的 Codex 桌面端或命令行，网关会自动在 <code>~/.codex/</code> 生成 <code>gateway-model-catalog.json</code> 模型目录文件。你只需要将以下配置片段粘贴到你的 <code>~/.codex/config.toml</code> 文件中（确保放在第一个 <code>[section]</code> 之前）：</p>
+                    <p>对于独立的 Codex 桌面端或命令行：保存本页配置后，网关会自动生成模型目录文件 <code class="cfg-catalog-path">~/.codex/gateway-model-catalog.json</code>（官方模型 + 下方 Codex 节点里的第三方模型）。把下面片段贴到 <code>~/.codex/config.toml</code>，并确保放在第一个 <code>[section]</code> 之前：</p>
                     <div class="code-snippet" style="margin-top: 10px;">
                         <pre style="margin: 0; color: inherit; font-family: inherit; font-size: inherit; background: transparent; padding: 0; overflow-x: auto;">
 model_provider = "custom"
-model_catalog_json = "<span class="cfg-home-dir">~</span>/.codex/gateway-model-catalog.json"
+model_catalog_json = "<span class="cfg-catalog-path">~/.codex/gateway-model-catalog.json</span>"
 openai_base_url = "http://<span class="cfg-host">127.0.0.1</span>:<span class="cfg-port">8787</span>/codex/v1"
 
 [model_providers.custom]
@@ -937,6 +942,8 @@ wire_api = "responses"
 requires_openai_auth = true
 experimental_bearer_token = "dummy"</pre>
                     </div>
+                    <p style="font-size: 12px; margin-top: 8px; margin-bottom: 0; color: var(--text-secondary);">说明：改 Codex 节点/模型后点保存即可刷新目录文件，不必手动跑 <code>npm run codex:catalog</code>。若 Desktop 已打开，保存后重启或重载 Codex 才能看到新模型。</p>
+                    <p style="font-size: 12px; margin-top: 8px; margin-bottom: 0; color: var(--text-secondary);">切换到 <code>model_provider = "custom"</code> 后，旧会话可能暂时不显示。可点右上角「迁移历史会话」：先预览数量，确认后再写入；会自动备份 <code>~/.codex</code>，不影响登录态和插件。</p>
                 </div>
 
                 <div class="endpoints-grid" id="codex-endpoints"></div>
@@ -951,6 +958,7 @@ experimental_bearer_token = "dummy"</pre>
             server: { host: "127.0.0.1", port: 8787 },
             clients: { code: { endpoints: [] }, desktop: { endpoints: [] }, codex: { endpoints: [] } }
         };
+        let codexModelCatalogPath = "~/.codex/gateway-model-catalog.json";
 
         // Craft-style navigation: null = card list, {client,index} = detail editor
         let selectedEndpoint = null;
@@ -1014,6 +1022,11 @@ experimental_bearer_token = "dummy"</pre>
                                 codex: data.clients.codex || { endpoints: [] }
                             }
                         };
+                    }
+                    if (data?.codex_model_catalog?.path_posix) {
+                        codexModelCatalogPath = data.codex_model_catalog.path_posix;
+                    } else if (data?.codex_model_catalog?.path) {
+                        codexModelCatalogPath = String(data.codex_model_catalog.path).replaceAll('\\', '/');
                     }
                 }
             } catch (e) {
@@ -1246,6 +1259,9 @@ experimental_bearer_token = "dummy"</pre>
             const port = config.server?.port || 8787;
             document.querySelectorAll('.cfg-host').forEach(el => el.textContent = host === '0.0.0.0' ? '127.0.0.1' : host);
             document.querySelectorAll('.cfg-port').forEach(el => el.textContent = port);
+            document.querySelectorAll('.cfg-catalog-path').forEach(el => {
+                el.textContent = codexModelCatalogPath || '~/.codex/gateway-model-catalog.json';
+            });
 
             // Keep selection valid after delete/reorder
             if (selectedEndpoint) {
@@ -1490,8 +1506,16 @@ experimental_bearer_token = "dummy"</pre>
 
                 if (res.ok) {
                     const payload = await res.json().catch(() => ({}));
+                    if (payload.codex_model_catalog?.path_posix) {
+                        codexModelCatalogPath = payload.codex_model_catalog.path_posix;
+                    } else if (payload.codex_model_catalog?.path) {
+                        codexModelCatalogPath = String(payload.codex_model_catalog.path).replaceAll('\\', '/');
+                    }
+                    render();
                     if (payload.claude3pSync?.updated) {
                         showToast('配置已生效，并已同步 Claude 第三方模型列表', 'success');
+                    } else if (payload.codex_model_catalog?.exists) {
+                        showToast('配置已生效，Codex 模型目录已更新', 'success');
                     } else {
                         showToast('配置已生效，服务已重新加载', 'success');
                     }
@@ -1504,6 +1528,90 @@ experimental_bearer_token = "dummy"</pre>
             } finally {
                 btn.innerHTML = originalContent;
                 btn.disabled = false;
+            }
+        }
+
+        window.migrateCodexHistory = async function() {
+            const btn = document.getElementById('codex-history-unify-btn');
+            if (!btn) return;
+            const original = btn.innerHTML;
+            btn.disabled = true;
+            btn.innerHTML = '预览中...';
+
+            try {
+                const previewRes = await fetch('/v1/codex/history/unify', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ dry_run: true, target_provider: 'custom' }),
+                });
+                const preview = await previewRes.json().catch(() => ({}));
+                if (!previewRes.ok || preview.success === false) {
+                    const msg = preview?.error?.message || '预览失败';
+                    if (preview?.error?.type === 'codex_running') {
+                        showToast('请先完全退出 Codex Desktop，再迁移历史', 'error');
+                    } else {
+                        showToast(msg, 'error');
+                    }
+                    return;
+                }
+
+                const count = Number(preview.affectedThreads || 0);
+                const counts = preview.providerCounts || {};
+                const detail = Object.entries(counts)
+                    .map(([k, v]) => `${k}: ${v}`)
+                    .join(', ') || '无';
+
+                if (count === 0) {
+                    showToast('没有需要迁移的历史会话', 'success');
+                    return;
+                }
+
+                const ok = confirm(
+                    `将把 ${count} 条历史会话迁移到 model_provider="custom"。\n\n` +
+                    `来源分布：${detail}\n\n` +
+                    `只会改会话标签，不改登录态/插件/配置。\n` +
+                    `会自动备份到 ~/.codex/history-unify-backups/。\n\n` +
+                    `请先完全退出 Codex Desktop，然后点确定继续。`
+                );
+                if (!ok) {
+                    showToast('已取消迁移', 'success');
+                    return;
+                }
+
+                btn.innerHTML = '迁移中...';
+                const applyRes = await fetch('/v1/codex/history/unify', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        dry_run: false,
+                        apply: true,
+                        target_provider: 'custom',
+                    }),
+                });
+                const applied = await applyRes.json().catch(() => ({}));
+                if (!applyRes.ok || applied.success === false) {
+                    if (applied?.error?.type === 'codex_running') {
+                        showToast('Codex 仍在运行，请完全退出后再试', 'error');
+                    } else {
+                        showToast(applied?.error?.message || '迁移失败', 'error');
+                    }
+                    return;
+                }
+
+                const backup = applied.backupRoot
+                    ? String(applied.backupRoot).replaceAll('\\', '/')
+                    : '';
+                showToast(
+                    `已迁移 ${applied.affectedThreads || count} 条会话` +
+                    (backup ? `，备份：${backup}` : '') +
+                    '。请重新打开 Codex Desktop。',
+                    'success',
+                );
+            } catch (e) {
+                showToast('迁移请求失败：' + (e?.message || e), 'error');
+            } finally {
+                btn.disabled = false;
+                btn.innerHTML = original;
             }
         }
 

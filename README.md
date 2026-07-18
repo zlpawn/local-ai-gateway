@@ -309,19 +309,54 @@ http://127.0.0.1:8787/codex/health
 These Codex routes are forwarded through configured OpenAI-compatible providers,
 with model mapping handled locally by this gateway.
 
-For a lower-risk Codex Desktop experiment, generate the merged model catalog
-inside this project instead of writing directly to `~/.codex`:
+Supported Codex provider matrix:
+
+| Codex upstream | Text | Image | Reasoning | Tools |
+| --- | --- | --- | --- | --- |
+| Official subscription | Native | Native | Native | Native |
+| OpenAI Responses | Native | Capability-based | Native | Native |
+| OpenAI Chat | Adapted | Capability-based | Adapted summary | Adapted |
+| Grok Responses | Native | Capability-based | Native | Native |
+| Grok Chat | Adapted | Capability-based | Adapted summary | Adapted |
+
+`GET /codex/v1/models` merges official models with configured third-party IDs.
+Official discovery starts from the local Codex bundled catalog, then optionally
+refreshes that bundled list and adds any extra `gpt-*` / `o*` IDs from
+`https://api.openai.com/v1/models` when local Codex auth is available. Live
+fetch failures fall back to bundled data and never change request routing.
+Disable live refresh with `CODEX_MODELS_LIVE_DISABLED=1`.
+
+Generate or refresh the Desktop model catalog:
 
 ```powershell
+npm run codex:catalog
 npm run codex:catalog:verify
 ```
 
-The command writes `.codex/gateway-model-catalog.json`, verifies
-that `codex debug models -c ...` can see the custom models, and prints an
-optional `config.toml` snippet for manual desktop testing. It does not edit
+Both the gateway (on start/save) and `npm run codex:catalog` write the same
+default file:
+
+```text
+~/.codex/gateway-model-catalog.json
+```
+
+Override with `CODEX_MODEL_CATALOG_PATH` if you need a project-local file.
+`codex:catalog:verify` checks that `codex debug models -c ...` can see the
+custom models and prints an optional `config.toml` snippet. It does not edit
 Codex's user config by itself. If you test the snippet manually, insert it
 before the first `[section]` so `model_provider` and `model_catalog_json` remain
 top-level TOML keys.
+
+### Codex isolated verification
+
+Run `npm run test:codex:e2e` before editing `~/.codex/config.toml`.
+The harness uses a temporary Codex home, temporary fixture, local mock provider,
+and a temporary gateway port.
+
+After it passes, back up `~/.codex/config.toml`, add the generated local-gateway
+provider snippet, and verify one official subscription model before selecting a
+third-party model. Roll back by restoring the backup and restarting Codex
+Desktop; `~/.codex/auth.json` is not modified.
 
 ## OpenAI-Compatible Client Config
 
