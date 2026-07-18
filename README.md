@@ -2,6 +2,33 @@
 
 Local lightweight routing gateway for AI clients and custom model providers.
 
+## Configuration and secrets
+
+`gateway.config.json` contains only public routing configuration. Every
+`clients.<client>.endpoints[]` entry has a stable, read-only ID such as
+`ep_550e8400-e29b-41d4-a716-446655440000`.
+
+Credentials are stored separately in ignored `gateway.secrets.json`:
+
+```json
+{
+  "api_keys": {
+    "ep_550e8400-e29b-41d4-a716-446655440000": "env:ARK_API_KEY",
+    "ep_7c8b91e1-43cd-4dc7-bd13-7ca32a511cee": "sk-local-secret"
+  }
+}
+```
+
+On first start, legacy `providers`, `models`, `official_models`, missing
+endpoint IDs, and endpoint `api_key` fields are migrated automatically. The
+original config is backed up as `gateway.config.json.<timestamp>.bak`.
+
+Each client can have one `is_default` fallback endpoint. `expose_models` is
+independent: when one or more endpoints opt in, only their models are listed;
+when none opt in, every endpoint is listed. Public model IDs (the values in
+`models` and keys in `model_mapping`) must be unique within a client. Duplicate
+IDs are rejected with endpoint-name-based candidate names.
+
 ```text
 Claude Desktop / Claude Code
   -> http://127.0.0.1:8787/v1/messages

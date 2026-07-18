@@ -4,6 +4,7 @@ import {
   loadOfficialCodexIds,
   validateCodexEndpoints,
 } from "../lib/codex/config-validation.mjs";
+import { validateGatewayConfig } from "../lib/config/gateway-config-store.mjs";
 
 const VALID_PROVIDER_TYPES = new Set(["anthropic", "openai-chat", "openai-responses", "grok"]);
 const VALID_AUTH_SCHEMES = new Set(["bearer", "x-api-key", "none", ""]);
@@ -25,10 +26,10 @@ try {
   finish();
 }
 
-if (isObject(config.clients)) {
-  validateClientConfig(config.clients);
-} else {
-  validateProviderModelConfig(config);
+if (!isObject(config.clients)) errors.push("clients must be an object.");
+else validateClientConfig(config.clients);
+for (const field of ["providers", "models", "official_models"]) {
+  if (field in config) errors.push(`${field} is a legacy field and must be removed.`);
 }
 
 if (config.server) {
@@ -50,6 +51,10 @@ const codexValidation = validateCodexEndpoints({
 });
 errors.push(...codexValidation.errors);
 warnings.push(...codexValidation.warnings);
+const gatewayIssues = validateGatewayConfig(config, {
+  officialCodexIds: loadOfficialCodexIds({ warnings }),
+});
+errors.push(...gatewayIssues.map((issue) => issue.message));
 
 finish();
 
@@ -92,87 +97,15 @@ function validateEndpoint(label, endpoint) {
   if (endpoint.auth && !VALID_AUTH_SCHEMES.has(String(endpoint.auth).toLowerCase())) {
     errors.push(`${label} has unsupported auth '${endpoint.auth}'.`);
   }
-  if (endpoint.api_key && !String(endpoint.api_key).startsWith("env:")) {
-    warnings.push(`${label} contains inline api_key. Keep gateway.config.json ignored or use env:NAME.`);
+  if ("api_key" in endpoint || "api_key_env" in endpoint) {
+    errors.push(`${label} contains an API key field; store credentials in gateway.secrets.json.`);
   }
+  if (!endpoint.id || typeof endpoint.id !== "string") errors.push(`${label} must set string id.`);
   if (endpoint.models != null && !Array.isArray(endpoint.models)) {
     errors.push(`${label} models must be an array.`);
   }
   if (endpoint.model_mapping != null && !isObject(endpoint.model_mapping)) {
     errors.push(`${label} model_mapping must be an object.`);
-  }
-}
-
-function validateProviderModelConfig(config) {
-  const providers = config.providers || {};
-  if (!isObject(providers) || Object.keys(providers).length === 0) {
-    errors.push("providers must be a non-empty object.");
-  }
-
-  for (const [id, provider] of Object.entries(providers)) {
-    if (!id.trim()) errors.push("provider id cannot be empty.");
-    if (!isObject(provider)) {
-      errors.push(`provider '${id}' must be an object.`);
-      continue;
-    }
-
-    const type = provider.type || "openai-chat";
-    if (!VALID_PROVIDER_TYPES.has(type)) {
-      errors.push(`provider '${id}' has unsupported type '${type}'.`);
-    }
-    validateBaseUrl(`provider '${id}'`, provider.base_url);
-
-    const auth = (provider.auth || "bearer").toLowerCase();
-    if (!VALID_AUTH_SCHEMES.has(auth)) {
-      errors.push(`provider '${id}' has unsupported auth '${provider.auth}'.`);
-    }
-    if (provider.api_key) {
-      warnings.push(`provider '${id}' contains inline api_key. Prefer api_key_env for open source configs.`);
-    }
-    if (provider.headers && !isObject(provider.headers)) {
-      errors.push(`provider '${id}' headers must be an object.`);
-    }
-  }
-
-  const modelEntries = Array.isArray(config.models)
-    ? config.models
-    : Object.entries(config.models || {}).map(([id, model]) => ({ id, ...model }));
-
-  if (modelEntries.length === 0) {
-    warnings.push("models is empty. /v1/models will only expose official models.");
-  }
-
-  const seenModels = new Set();
-  const seenAliases = new Map();
-  for (const model of modelEntries) {
-    if (!isObject(model)) {
-      errors.push("each model entry must be an object.");
-      continue;
-    }
-    if (!model.id || typeof model.id !== "string") {
-      errors.push("each model entry must set string id.");
-      continue;
-    }
-    if (seenModels.has(model.id)) errors.push(`duplicate model id '${model.id}'.`);
-    seenModels.add(model.id);
-
-    if (!model.provider || !providers[model.provider]) {
-      errors.push(`model '${model.id}' references unknown provider '${model.provider || ""}'.`);
-    }
-    if (!model.upstream_model && !model.model) {
-      errors.push(`model '${model.id}' must set upstream_model or model.`);
-    }
-    if (model.aliases != null && !Array.isArray(model.aliases)) {
-      errors.push(`model '${model.id}' aliases must be an array.`);
-    }
-    for (const alias of model.aliases || []) {
-      if (!alias) continue;
-      const existing = seenAliases.get(alias);
-      if (existing && existing !== model.id) {
-        errors.push(`alias '${alias}' is used by both '${existing}' and '${model.id}'.`);
-      }
-      seenAliases.set(alias, model.id);
-    }
   }
 }
 

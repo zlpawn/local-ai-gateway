@@ -12,6 +12,9 @@ process.chdir(root);
 loadDotEnv(path.join(root, ".env"));
 
 const configPath = path.resolve(process.env.GATEWAY_CONFIG_FILE || "gateway.config.json");
+const secretsPath = path.resolve(
+  process.env.GATEWAY_SECRETS_FILE || path.join(path.dirname(configPath), "gateway.secrets.json"),
+);
 const validation = spawnSync(process.execPath, ["scripts/validate-config.mjs", configPath], {
   cwd: root,
   encoding: "utf8",
@@ -43,35 +46,20 @@ if (validation.stderr.trim()) console.log(indent(validation.stderr.trim()));
 console.log(`Result: ${validation.status === 0 ? "ok" : "failed"}`);
 
 if (config) {
-  section("Providers");
-  const providers = Object.entries(config.providers || {});
-  if (providers.length === 0) {
-    console.log("No providers configured.");
-  } else {
-    for (const [id, provider] of providers) {
-      const keySource = provider.api_key
-        ? "inline api_key"
-        : provider.api_key_env
-          ? envPresent(provider.api_key_env)
-            ? `${provider.api_key_env}=set`
-            : `${provider.api_key_env}=missing, client header can still supply`
-          : "client-supplied key";
-      console.log(`- ${id}: type=${provider.type || "openai-chat"}, auth=${provider.auth || "bearer"}, key=${keySource}`);
-      console.log(`  ${provider.base_url || "(missing base_url)"}`);
-    }
-  }
-
-  section("Models");
-  const models = normalizeModelEntries(config.models);
-  if (models.length === 0) {
-    console.log("No custom models configured.");
-  } else {
-    for (const model of models) {
-      const aliases = Array.isArray(model.aliases) && model.aliases.length ? ` aliases=${model.aliases.join(",")}` : "";
-      const provider = (config.providers || {})[model.provider] || {};
-      const type = provider.type || "openai-chat";
-      const capabilities = protocolCapabilities(type).join("/");
-      console.log(`- ${model.id} -> ${model.upstream_model || model.model || model.id} via ${model.provider} (${type}; ${capabilities})${aliases}`);
+  const secrets = fs.existsSync(secretsPath)
+    ? JSON.parse(fs.readFileSync(secretsPath, "utf8"))
+    : { api_keys: {} };
+  section("Endpoints");
+  for (const [clientName, client] of Object.entries(config.clients || {})) {
+    for (const endpoint of client.endpoints || []) {
+      const secret = secrets.api_keys?.[endpoint.id];
+      const keyState = secret
+        ? secret.startsWith("env:")
+          ? `${secret.slice(4)}=${envPresent(secret.slice(4)) ? "set" : "missing"}`
+          : "stored"
+        : "missing";
+      console.log(`- ${clientName}/${endpoint.name}: id=${endpoint.id}, type=${endpoint.type}, key=${keyState}`);
+      console.log(`  ${endpoint.base_url || "(missing base_url)"}`);
     }
   }
 }
@@ -109,24 +97,6 @@ function indent(text) {
 
 function envPresent(name) {
   return Boolean(process.env[name]);
-}
-
-function normalizeModelEntries(models) {
-  if (Array.isArray(models)) return models;
-  return Object.entries(models || {}).map(([id, model]) => ({ id, ...model }));
-}
-
-function protocolCapabilities(providerType) {
-  if (providerType === "anthropic") {
-    return ["messages", "chat*", "responses*"];
-  }
-  if (providerType === "openai-chat") {
-    return ["messages*", "chat", "responses*"];
-  }
-  if (providerType === "openai-responses") {
-    return ["chat*", "responses"];
-  }
-  return ["unknown"];
 }
 
 function loadDotEnv(filePath) {

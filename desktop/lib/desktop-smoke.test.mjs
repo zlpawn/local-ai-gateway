@@ -62,6 +62,19 @@ test("config panel exposes Codex tools, reasoning, and image capabilities", asyn
   assert.match(html, /wire_api = "responses"/);
 });
 
+test("config panel supports stable endpoint ids, secret status, exposure, and conflict suggestions", async () => {
+  const html = await readFile(path.join(ROOT, "desktop", "config-panel.html"), "utf8");
+  assert.match(html, /crypto\.randomUUID\(\)/);
+  assert.match(html, /readonly[^>]*endpoint-id|endpoint-id[^>]*readonly/);
+  assert.match(html, /has_api_key/);
+  assert.match(html, /expose_models/);
+  assert.match(html, /duplicate_public_model/);
+  assert.match(html, /suggestion/);
+  assert.match(html, /delete endpoint\.api_key/);
+  assert.match(html, /createTemplateEndpoint/);
+  assert.doesNotMatch(html, /codex:\s*\{\s*endpoints:\s*\[JSON\.parse/);
+});
+
 test("Codex capability updates preserve unrelated fields and do not copy secrets", async () => {
   const sentinel = "sk-task7-ui-must-not-copy";
   const config = {

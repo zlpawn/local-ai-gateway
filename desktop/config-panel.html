@@ -972,13 +972,16 @@ experimental_bearer_token = "dummy"</pre>
 
         function loadDefaultTemplate() {
             if (!confirm('这会覆盖你当前的所有配置，确定要恢复默认模板吗？')) return;
-            const templateEndpoint = {
+            const createTemplateEndpoint = () => ({
+                id: `ep_${crypto.randomUUID()}`,
                 name: "volcengine-anthropic",
                 type: "anthropic",
                 base_url: "https://ark.cn-beijing.volces.com/api/plan/v1",
                 api_key: "env:ARK_API_KEY",
-                models: ["glm-5.2", "minimax-m3", "deepseek-v4-pro"],
                 model_mapping: {
+                    "glm-5.2": "glm-5.2",
+                    "minimax-m3": "minimax-m3",
+                    "deepseek-v4-pro": "deepseek-v4-pro",
                     "claude-opus-4-8": "glm-5.2",
                     "claude-fable": "glm-5.2",
                     "fable": "glm-5.2",
@@ -988,19 +991,23 @@ experimental_bearer_token = "dummy"</pre>
                     "claude-opus-4-7": "minimax-m3",
                     "claude-opus": "minimax-m3",
                     "opus": "minimax-m3",
-                    "minimax-m3": "minimax-m3",
                     "claude-sonnet-4-5": "deepseek-v4-pro",
                     "claude-sonnet": "deepseek-v4-pro",
-                    "sonnet": "deepseek-v4-pro",
-                    "deepseek-v4-pro": "deepseek-v4-pro"
+                    "sonnet": "deepseek-v4-pro"
                 }
+            });
+            const codeEndpoint = createTemplateEndpoint();
+            const desktopEndpoint = {
+                ...createTemplateEndpoint(),
+                is_default: true,
+                expose_models: true
             };
             config = {
                 server: { host: "127.0.0.1", port: 8787 },
                 clients: {
-                    code: { endpoints: [JSON.parse(JSON.stringify(templateEndpoint))] },
-                    desktop: { endpoints: [JSON.parse(JSON.stringify(templateEndpoint))] },
-                    codex: { endpoints: [JSON.parse(JSON.stringify(templateEndpoint))] }
+                    code: { endpoints: [codeEndpoint] },
+                    desktop: { endpoints: [desktopEndpoint] },
+                    codex: { endpoints: [] }
                 }
             };
             render();
@@ -1156,6 +1163,10 @@ experimental_bearer_token = "dummy"</pre>
                     </div>
                     <div class="card" id="ep-${client}-${index}">
                         <div class="form-grid">
+                            <div class="form-group full">
+                                <label>节点 ID（密钥索引，只读）</label>
+                                <input class="mono endpoint-id" type="text" value="${escapeHtml(ep.id || '')}" readonly>
+                            </div>
                             <div class="form-group">
                                 <label>名称</label>
                                 <input type="text" id="input-name-${client}-${index}" value="${escapeHtml(ep.name || '')}" placeholder="例如：OpenRouter" onchange="updateEndpoint('${client}', ${index}, 'name', this.value)">
@@ -1171,9 +1182,9 @@ experimental_bearer_token = "dummy"</pre>
                                 <input class="mono" type="text" value="${escapeHtml(ep.base_url || '')}" placeholder="https://api.openai.com/v1" onchange="updateEndpoint('${client}', ${index}, 'base_url', this.value)">
                             </div>
                             <div class="form-group full">
-                                <label>密钥 (API Key)</label>
+                                <label>密钥 (API Key) ${ep.has_api_key ? '· 已配置' : '· 未配置'}</label>
                                 <div class="password-input-wrapper">
-                                    <input class="mono" type="password" id="api-key-${client}-${index}" value="${escapeHtml(ep.api_key || '')}" placeholder="sk-..." onchange="updateEndpoint('${client}', ${index}, 'api_key', this.value)">
+                                    <input class="mono" type="password" id="api-key-${client}-${index}" value="" placeholder="${ep.has_api_key ? '留空表示保留现有密钥' : '输入密钥或 env:变量名'}" onchange="updateEndpoint('${client}', ${index}, 'api_key', this.value)">
                                     <button type="button" class="password-toggle-btn" onclick="togglePasswordVisibility('api-key-${client}-${index}')" title="显示/隐藏密钥">
                                         <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
                                             <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"></path>
@@ -1181,6 +1192,13 @@ experimental_bearer_token = "dummy"</pre>
                                         </svg>
                                     </button>
                                 </div>
+                            </div>
+                            <div class="form-group full">
+                                <label style="display:flex;align-items:center;gap:8px;cursor:pointer">
+                                    <input type="checkbox" ${ep.expose_models ? 'checked' : ''} onchange="updateEndpoint('${client}', ${index}, 'expose_models', this.checked)">
+                                    在桌面模型列表中展示此节点模型
+                                </label>
+                                <div class="detail-subtitle">若没有任何节点勾选，则默认展示所有节点模型。</div>
                             </div>
                             ${client === 'codex' ? `
                             <div class="form-group full">
@@ -1352,6 +1370,7 @@ experimental_bearer_token = "dummy"</pre>
         window.addEndpoint = function(client) {
             config.clients[client].endpoints = config.clients[client].endpoints || [];
             config.clients[client].endpoints.unshift({
+                id: `ep_${crypto.randomUUID()}`,
                 name: "新服务商",
                 type: "anthropic",
                 base_url: "",
@@ -1506,6 +1525,13 @@ experimental_bearer_token = "dummy"</pre>
 
                 if (res.ok) {
                     const payload = await res.json().catch(() => ({}));
+                    for (const client of Object.values(config.clients || {})) {
+                        for (const endpoint of client.endpoints || []) {
+                            if (endpoint.api_key) endpoint.has_api_key = true;
+                            delete endpoint.api_key;
+                            delete endpoint.api_key_env;
+                        }
+                    }
                     if (payload.codex_model_catalog?.path_posix) {
                         codexModelCatalogPath = payload.codex_model_catalog.path_posix;
                     } else if (payload.codex_model_catalog?.path) {
@@ -1520,8 +1546,21 @@ experimental_bearer_token = "dummy"</pre>
                         showToast('配置已生效，服务已重新加载', 'success');
                     }
                 } else {
-                    const err = await res.text();
-                    showToast(err || '保存配置失败', 'error');
+                    const payload = await res.json().catch(() => null);
+                    const conflicts = payload?.error?.issues?.filter(issue =>
+                        issue.code === 'duplicate_public_model'
+                    ) || [];
+                    if (conflicts.length) {
+                        const message = conflicts.map(issue => {
+                            const suggestions = issue.occurrences
+                                .map(item => `${item.endpoint_name}: ${item.suggestion}`)
+                                .join('；');
+                            return `模型 ${issue.model_id} 重复，候选名称：${suggestions}`;
+                        }).join('\n');
+                        showToast(message, 'error');
+                    } else {
+                        showToast(payload?.error?.message || '保存配置失败', 'error');
+                    }
                 }
             } catch (e) {
                 showToast('保存时网络出错', 'error');
