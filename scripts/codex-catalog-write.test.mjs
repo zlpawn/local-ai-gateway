@@ -49,12 +49,14 @@ test("saving config rewrites the Codex model catalog file", async (t) => {
   t.after(() => rm(tempDir, { recursive: true, force: true }));
 
   const configPath = path.join(tempDir, "gateway.config.json");
+  const secretsPath = path.join(tempDir, "gateway.secrets.json");
   const catalogPath = path.join(tempDir, "gateway-model-catalog.json");
   await writeFile(configPath, JSON.stringify({
     server: { host: "127.0.0.1", port: gatewayPort },
     clients: {
       codex: {
         endpoints: [{
+          id: "ep_chat",
           name: "chat",
           type: "openai-chat",
           base_url: "https://example.invalid/chat/completions",
@@ -70,6 +72,7 @@ test("saving config rewrites the Codex model catalog file", async (t) => {
     env: {
       ...process.env,
       GATEWAY_CONFIG_FILE: configPath,
+      GATEWAY_SECRETS_FILE: secretsPath,
       GATEWAY_PORT: String(gatewayPort),
       GATEWAY_NO_OPEN: "1",
       CLAUDE_3P_SYNC_DISABLED: "1",
@@ -102,6 +105,7 @@ test("saving config rewrites the Codex model catalog file", async (t) => {
       clients: {
         codex: {
           endpoints: [{
+            id: "ep_chat",
             name: "chat",
             type: "openai-chat",
             base_url: "https://example.invalid/chat/completions",
@@ -131,12 +135,78 @@ test("saving config rewrites the Codex model catalog file", async (t) => {
     false,
   );
 
+  const savedConfig = JSON.parse(await readFile(configPath, "utf8"));
+  assert.equal(savedConfig.clients.codex.endpoints[0].api_key, undefined);
+  const savedSecrets = JSON.parse(await readFile(secretsPath, "utf8"));
+  assert.equal(savedSecrets.api_keys.ep_chat, "env:TEST_KEY");
+
   const configApi = await fetch(`http://127.0.0.1:${gatewayPort}/v1/config`);
   assert.equal(configApi.status, 200);
   const configPayload = await configApi.json();
+  assert.equal(configPayload.clients.codex.endpoints[0].api_key, undefined);
+  assert.equal(configPayload.clients.codex.endpoints[0].has_api_key, true);
   assert.equal(configPayload.codex_model_catalog?.exists, true);
   assert.match(
     String(configPayload.codex_model_catalog?.path_posix || ""),
     /gateway-model-catalog\.json$/,
+  );
+});
+
+test("saving duplicate public model ids returns conflict suggestions", async (t) => {
+  const reservation = http.createServer();
+  const gatewayPort = await listen(reservation);
+  await closeServer(reservation);
+  const tempDir = await mkdtemp(path.join(tmpdir(), "gateway-conflict-save-"));
+  t.after(() => rm(tempDir, { recursive: true, force: true }));
+  const configPath = path.join(tempDir, "gateway.config.json");
+  await writeFile(configPath, JSON.stringify({
+    server: { host: "127.0.0.1", port: gatewayPort },
+    clients: { desktop: { endpoints: [] }, codex: { endpoints: [] } },
+  }));
+  const gateway = spawn(process.execPath, ["server.js"], {
+    cwd: ROOT,
+    env: {
+      ...process.env,
+      GATEWAY_CONFIG_FILE: configPath,
+      GATEWAY_SECRETS_FILE: path.join(tempDir, "gateway.secrets.json"),
+      GATEWAY_PORT: String(gatewayPort),
+      GATEWAY_NO_OPEN: "1",
+      CLAUDE_3P_SYNC_DISABLED: "1",
+      CODEX_WRITE_MODEL_CATALOG_DISABLED: "1",
+      CODEX_MODELS_LIVE_DISABLED: "1",
+    },
+    stdio: ["ignore", "pipe", "pipe"],
+  });
+  t.after(async () => {
+    if (gateway.exitCode == null) {
+      const exited = once(gateway, "exit");
+      gateway.kill();
+      await exited;
+    }
+  });
+  await waitForHealth(gatewayPort, gateway);
+
+  const response = await fetch(`http://127.0.0.1:${gatewayPort}/v1/config/save`, {
+    method: "POST",
+    headers: { "content-type": "application/json" },
+    body: JSON.stringify({
+      server: { host: "127.0.0.1", port: gatewayPort },
+      clients: {
+        desktop: {
+          endpoints: [
+            { id: "ep_ark", name: "Volcengine", models: ["glm-5.2"] },
+            { id: "ep_husky", name: "Husky API", models: ["glm-5.2"] },
+          ],
+        },
+      },
+    }),
+  });
+  assert.equal(response.status, 400);
+  const payload = await response.json();
+  const issue = payload.error.issues.find((item) => item.code === "duplicate_public_model");
+  assert.equal(issue.model_id, "glm-5.2");
+  assert.deepEqual(
+    issue.occurrences.map((item) => item.suggestion),
+    ["glm-5.2-volcengine", "glm-5.2-husky-api"],
   );
 });

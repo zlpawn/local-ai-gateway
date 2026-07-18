@@ -64,6 +64,39 @@ test("catalog merges Responses, Chat, and Grok models under independent IDs", ()
   assert.equal(result.customIds.has("grok-4.5"), true);
 });
 
+test("catalog uses exposed endpoints, or every endpoint when none opt in", () => {
+  const hidden = {
+    name: "hidden",
+    type: "openai-chat",
+    models: ["hidden-model"],
+  };
+  const exposed = {
+    name: "exposed",
+    type: "openai-chat",
+    expose_models: true,
+    models: ["exposed-model"],
+  };
+
+  const selected = buildCodexCatalog({
+    officialModels,
+    endpoints: [hidden, exposed],
+  });
+  assert.deepEqual(selected.models.map((model) => model.slug), [
+    "gpt-5.5",
+    "exposed-model",
+  ]);
+
+  const fallback = buildCodexCatalog({
+    officialModels,
+    endpoints: [hidden, { ...exposed, expose_models: false }],
+  });
+  assert.deepEqual(fallback.models.map((model) => model.slug), [
+    "gpt-5.5",
+    "hidden-model",
+    "exposed-model",
+  ]);
+});
+
 test("catalog rejects a configured model that shadows an official ID", () => {
   assert.throws(
     () => buildCodexCatalog({

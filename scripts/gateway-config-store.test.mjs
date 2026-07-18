@@ -11,6 +11,7 @@ import {
   saveGatewayState,
   selectExposedEndpoints,
   validateGatewayConfig,
+  buildClaudeInferenceModels,
 } from "../lib/config/gateway-config-store.mjs";
 
 test("load migrates legacy fields, adds stable ids, extracts keys, and creates a backup", () => {
@@ -105,6 +106,61 @@ test("save moves endpoint keys to secrets and does not rewrite unchanged files",
   }
 });
 
+test("save rejects missing endpoint ids and removes secrets for deleted endpoints", () => {
+  const root = mkdtempSync(path.join(os.tmpdir(), "gateway-config-save-id-"));
+  try {
+    const configPath = path.join(root, "gateway.config.json");
+    const secretsPath = path.join(root, "gateway.secrets.json");
+    writeFileSync(secretsPath, JSON.stringify({
+      api_keys: {
+        ep_kept: "env:KEPT_KEY",
+        ep_deleted: "sk-delete-me",
+      },
+    }));
+
+    assert.throws(
+      () => saveGatewayState({
+        configPath,
+        secretsPath,
+        config: {
+          clients: {
+            desktop: {
+              endpoints: [{ name: "Missing ID", api_key: "sk-secret" }],
+            },
+          },
+        },
+      }),
+      (error) =>
+        error instanceof GatewayConfigError &&
+        error.issues.some((issue) => issue.code === "missing_endpoint_id"),
+    );
+
+    const result = saveGatewayState({
+      configPath,
+      secretsPath,
+      config: {
+        clients: {
+          desktop: {
+            endpoints: [{ id: "ep_kept", name: "Kept" }],
+          },
+        },
+      },
+    });
+    assert.deepEqual(result.secrets, { api_keys: { ep_kept: "env:KEPT_KEY" } });
+    assert.deepEqual(JSON.parse(readFileSync(secretsPath, "utf8")), result.secrets);
+
+    const empty = saveGatewayState({
+      configPath,
+      secretsPath,
+      config: { clients: { desktop: { endpoints: [] } } },
+    });
+    assert.deepEqual(empty.secrets, { api_keys: {} });
+    assert.deepEqual(JSON.parse(readFileSync(secretsPath, "utf8")), empty.secrets);
+  } finally {
+    rmSync(root, { recursive: true, force: true });
+  }
+});
+
 test("credential lookup resolves literal and environment-backed endpoint secrets", () => {
   const secrets = {
     api_keys: {
@@ -192,4 +248,47 @@ test("validation rejects Codex custom models that collide with official ids", ()
   }, { officialCodexIds: new Set(["gpt-5.6"]) });
 
   assert.ok(issues.some((issue) => issue.code === "official_model_collision"));
+});
+
+test("load permits legacy model conflicts so users can resolve them through the UI", () => {
+  const root = mkdtempSync(path.join(os.tmpdir(), "gateway-conflict-load-"));
+  try {
+    const configPath = path.join(root, "gateway.config.json");
+    writeFileSync(configPath, JSON.stringify({
+      clients: {
+        desktop: {
+          endpoints: [{
+            name: "Legacy",
+            models: ["shared"],
+            model_mapping: { shared: "upstream" },
+            api_key_env: "TEST_KEY",
+          }],
+        },
+      },
+    }));
+    const state = loadGatewayState({
+      configPath,
+      secretsPath: path.join(root, "gateway.secrets.json"),
+      idFactory: () => "ep_legacy",
+    });
+    assert.equal(state.config.clients.desktop.endpoints[0].id, "ep_legacy");
+    assert.equal(state.secrets.api_keys.ep_legacy, "env:TEST_KEY");
+  } finally {
+    rmSync(root, { recursive: true, force: true });
+  }
+});
+
+test("Claude model aggregation preserves distinct public names mapped to one upstream", () => {
+  const models = buildClaudeInferenceModels([
+    {
+      model_mapping: {
+        "claude-sonnet-husky": "claude-sonnet-4-6",
+        "claude-sonnet-backup": "claude-sonnet-4-6",
+      },
+    },
+  ]);
+  assert.deepEqual(models.map((model) => model.name), [
+    "claude-sonnet-husky",
+    "claude-sonnet-backup",
+  ]);
 });

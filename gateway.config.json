@@ -3,94 +3,18 @@
     "host": "127.0.0.1",
     "port": 8787
   },
-  "providers": {
-    "volcengine-anthropic": {
-      "type": "anthropic",
-      "base_url": "https://ark.cn-beijing.volces.com/api/plan/v1",
-      "api_key_env": "ARK_API_KEY",
-      "auth": "bearer"
-    },
-    "volcengine-openai": {
-      "type": "openai-responses",
-      "base_url": "https://ark.cn-beijing.volces.com/api/plan/v3",
-      "api_key_env": "ARK_API_KEY",
-      "auth": "bearer"
-    }
-  },
-  "models": [
-    {
-      "id": "claude-opus-4-8",
-      "display_name": "GLM 5.2 via Volcengine",
-      "provider": "volcengine-anthropic",
-      "upstream_model": "glm-5.2",
-      "aliases": [
-        "claude-fable",
-        "fable"
-      ]
-    },
-    {
-      "id": "claude-haiku-4-0",
-      "display_name": "GLM 5.2 via Volcengine",
-      "provider": "volcengine-anthropic",
-      "upstream_model": "glm-5.2",
-      "aliases": [
-        "claude-haiku",
-        "haiku"
-      ]
-    },
-    {
-      "id": "claude-opus-4-7",
-      "display_name": "Minimax M3 via Volcengine",
-      "provider": "volcengine-anthropic",
-      "upstream_model": "minimax-m3",
-      "aliases": [
-        "claude-opus",
-        "opus",
-        "minimax-m3"
-      ]
-    },
-    {
-      "id": "claude-sonnet-4-5",
-      "display_name": "DeepSeek V4 Pro via Volcengine",
-      "provider": "volcengine-anthropic",
-      "upstream_model": "deepseek-v4-pro",
-      "aliases": [
-        "claude-sonnet",
-        "sonnet",
-        "deepseek-v4-pro"
-      ]
-    },
-    {
-      "id": "glm-5.2",
-      "display_name": "GLM 5.2 via Volcengine",
-      "provider": "volcengine-openai",
-      "upstream_model": "glm-5.2",
-      "aliases": [
-        "glm"
-      ]
-    }
-  ],
-  "official_models": {
-    "anthropic": [
-      "claude-fable-5",
-      "claude-sonnet-4-6",
-      "claude-haiku-4-5-20251001"
-    ]
-  },
   "clients": {
     "code": {
       "endpoints": [
         {
+          "id": "ep_02fb56cb-07c3-4f51-bea1-45e37cfe2644",
           "name": "volcengine-anthropic",
           "type": "anthropic",
           "base_url": "https://ark.cn-beijing.volces.com/api/plan/v1",
-          "api_key": "env:ARK_API_KEY",
-          "models": [
-            "glm-5.2",
-            "minimax-m3",
-            "deepseek-v4-pro"
-          ],
           "model_mapping": {
+            "glm-5.2": "glm-5.2",
+            "minimax-m3": "minimax-m3",
+            "deepseek-v4-pro": "deepseek-v4-pro",
             "claude-opus-4-8": "glm-5.2",
             "claude-fable": "glm-5.2",
             "fable": "glm-5.2",
@@ -100,11 +24,9 @@
             "claude-opus-4-7": "minimax-m3",
             "claude-opus": "minimax-m3",
             "opus": "minimax-m3",
-            "minimax-m3": "minimax-m3",
             "claude-sonnet-4-5": "deepseek-v4-pro",
             "claude-sonnet": "deepseek-v4-pro",
-            "sonnet": "deepseek-v4-pro",
-            "deepseek-v4-pro": "deepseek-v4-pro"
+            "sonnet": "deepseek-v4-pro"
           }
         }
       ]
@@ -112,50 +34,24 @@
     "desktop": {
       "endpoints": [
         {
+          "id": "ep_a6009dc5-12b9-41e9-8fd4-972a97eb7ac1",
           "name": "volcengine-anthropic",
           "type": "anthropic",
           "base_url": "https://ark.cn-beijing.volces.com/api/plan/v1",
-          "api_key": "env:ARK_API_KEY",
-          "models": [
-            "glm-5.2",
-            "minimax-m3",
-            "deepseek-v4-pro"
-          ],
+          "expose_models": true,
           "model_mapping": {
-            "claude-opus-4-8": "glm-5.2",
-            "claude-fable": "glm-5.2",
-            "fable": "glm-5.2",
-            "claude-haiku-4-0": "glm-5.2",
-            "claude-haiku": "glm-5.2",
-            "haiku": "glm-5.2",
-            "claude-opus-4-7": "minimax-m3",
-            "claude-opus": "minimax-m3",
-            "opus": "minimax-m3",
-            "minimax-m3": "minimax-m3",
-            "claude-sonnet-4-5": "deepseek-v4-pro",
-            "claude-sonnet": "deepseek-v4-pro",
-            "sonnet": "deepseek-v4-pro",
-            "deepseek-v4-pro": "deepseek-v4-pro"
-          },
-          "is_default": false
+            "glm-5.2-volcengine-anthropic": "glm-5.2",
+            "minimax-m3-volcengine-anthropic": "minimax-m3",
+            "deepseek-v4-pro-volcengine-anthropic": "deepseek-v4-pro"
+          }
         },
         {
-          "name": "https://huskyapi.com",
+          "id": "ep_cb74f2bc-2fdb-4333-ab7d-b7aeda55ed93",
+          "name": "husky-api",
           "type": "openai-chat",
           "base_url": "https://huskyapi.com/v1/chat/completions",
-          "api_key": "sk-tHREjgxnTI2KWHH6KDZjPBgTPtgwBxnx4bPToKR5wZId4a71",
-          "models": [
-            "claude-opus-4-8",
-            "claude-opus-4-7",
-            "claude-opus",
-            "opus",
-            "claude-sonnet-4-5",
-            "claude-sonnet",
-            "sonnet",
-            "claude-haiku-4-0",
-            "claude-haiku",
-            "haiku"
-          ],
+          "is_default": true,
+          "expose_models": true,
           "model_mapping": {
             "claude-opus-4-8": "claude-opus-4-8",
             "claude-opus-4-7": "claude-opus-4-7",
@@ -167,41 +63,12 @@
             "claude-haiku-4-0": "claude-haiku-4-5-20251001",
             "claude-haiku": "claude-haiku-4-5-20251001",
             "haiku": "claude-haiku-4-5-20251001"
-          },
-          "is_default": true
+          }
         }
       ]
     },
     "codex": {
-      "endpoints": [
-        {
-          "name": "volcengine-anthropic",
-          "type": "anthropic",
-          "base_url": "https://ark.cn-beijing.volces.com/api/plan/v1",
-          "api_key": "env:ARK_API_KEY",
-          "models": [
-            "glm-5.2",
-            "minimax-m3",
-            "deepseek-v4-pro"
-          ],
-          "model_mapping": {
-            "claude-opus-4-8": "glm-5.2",
-            "claude-fable": "glm-5.2",
-            "fable": "glm-5.2",
-            "claude-haiku-4-0": "glm-5.2",
-            "claude-haiku": "glm-5.2",
-            "haiku": "glm-5.2",
-            "claude-opus-4-7": "minimax-m3",
-            "claude-opus": "minimax-m3",
-            "opus": "minimax-m3",
-            "minimax-m3": "minimax-m3",
-            "claude-sonnet-4-5": "deepseek-v4-pro",
-            "claude-sonnet": "deepseek-v4-pro",
-            "sonnet": "deepseek-v4-pro",
-            "deepseek-v4-pro": "deepseek-v4-pro"
-          }
-        }
-      ]
+      "endpoints": []
     }
   }
 }

@@ -25,6 +25,14 @@ import {
 import { unifyCodexHistory } from "./lib/codex/history-unify.mjs";
 import { pipeResponsesSsePassthrough } from "./lib/codex/responses-passthrough.mjs";
 import { ResponsesWriter } from "./lib/codex/responses-writer.mjs";
+import {
+  GatewayConfigError,
+  buildClaudeInferenceModels,
+  getEndpointApiKey,
+  loadGatewayState,
+  saveGatewayState,
+  selectExposedEndpoints,
+} from "./lib/config/gateway-config-store.mjs";
 
 const PROJECT_ROOT = path.dirname(fileURLToPath(import.meta.url));
 
@@ -49,6 +57,10 @@ const ARK_CODEX_BASE_URL = trimRight(
   "/",
 );
 const GATEWAY_CONFIG_FILE = resolveProjectPath(process.env.GATEWAY_CONFIG_FILE || "gateway.config.json");
+const GATEWAY_SECRETS_FILE = resolveProjectPath(
+  process.env.GATEWAY_SECRETS_FILE ||
+  path.join(path.dirname(GATEWAY_CONFIG_FILE), "gateway.secrets.json"),
+);
 const CLAUDE_3P_CONFIG_FILE = process.env.CLAUDE_3P_CONFIG_FILE || "";
 const CLAUDE_3P_CONFIG_LIBRARY = process.env.CLAUDE_3P_CONFIG_LIBRARY || "";
 const CLAUDE_3P_SYNC_DISABLED = isTruthy(process.env.CLAUDE_3P_SYNC_DISABLED);
@@ -63,7 +75,12 @@ const OFFICIAL_CLAUDE_MODELS = parseList(
     "claude-3-5-sonnet-20241022,claude-3-5-sonnet-latest,claude-3-5-haiku-20241022,claude-3-5-haiku-latest,claude-3-opus-20240229,claude-3-opus-latest",
 );
 const OFFICIAL_CLAUDE_MODEL_IDS = new Set(OFFICIAL_CLAUDE_MODELS);
-let GATEWAY_CONFIG = loadGatewayConfig(GATEWAY_CONFIG_FILE);
+let GATEWAY_STATE = loadGatewayState({
+  configPath: GATEWAY_CONFIG_FILE,
+  secretsPath: GATEWAY_SECRETS_FILE,
+});
+let GATEWAY_CONFIG = GATEWAY_STATE.config;
+let GATEWAY_SECRETS = GATEWAY_STATE.secrets;
 const LISTEN_HOST = ENV_HOST || GATEWAY_CONFIG.server?.host || "127.0.0.1";
 const LISTEN_PORT = ENV_PORT || Number(GATEWAY_CONFIG.server?.port) || 8787;
 const _allEndpoints = [
@@ -269,16 +286,25 @@ async function route(req, res) {
     if (!checkLocalAuth(req, res)) return;
     try {
       const newConfig = JSON.parse(await readText(req));
-      let currentConfig = {};
-      if (fs.existsSync(GATEWAY_CONFIG_FILE)) {
-         currentConfig = JSON.parse(fs.readFileSync(GATEWAY_CONFIG_FILE, "utf8"));
-      }
-      const mergedConfig = { ...currentConfig, server: newConfig.server, clients: newConfig.clients };
-      fs.writeFileSync(GATEWAY_CONFIG_FILE, JSON.stringify(mergedConfig, null, 2));
-      const claude3pSync = syncClaudeThirdPartyInferenceConfig(mergedConfig);
-      reloadGatewayConfig();
+      const result = saveGatewayState({
+        configPath: GATEWAY_CONFIG_FILE,
+        secretsPath: GATEWAY_SECRETS_FILE,
+        config: { server: newConfig.server, clients: newConfig.clients },
+        officialCodexIds: OFFICIAL_CODEX_MODEL_IDS,
+      });
+      GATEWAY_CONFIG = result.config;
+      GATEWAY_SECRETS = result.secrets;
+      const claude3pSync = syncClaudeThirdPartyInferenceConfig(GATEWAY_CONFIG);
+      reloadGatewayConfig({ reloadFiles: false });
+      logInfo("gateway_config_saved", {
+        config_changed: result.configChanged,
+        secrets_changed: result.secretsChanged,
+        user_agent: req.headers["user-agent"] || null,
+      });
       sendJson(res, 200, {
         success: true,
+        config_changed: result.configChanged,
+        secrets_changed: result.secretsChanged,
         claude3pSync,
         codex_model_catalog: {
           path: CODEX_MODEL_CATALOG_PATH,
@@ -287,8 +313,18 @@ async function route(req, res) {
           write_enabled: CODEX_WRITE_MODEL_CATALOG,
         },
       });
-    } catch(e) {
-      sendJson(res, 500, { error: e.message });
+    } catch (error) {
+      if (error instanceof GatewayConfigError) {
+        sendJson(res, 400, {
+          error: {
+            type: error.code,
+            message: "Gateway configuration is invalid.",
+            issues: error.issues,
+          },
+        });
+      } else {
+        sendJson(res, 500, { error: error.message });
+      }
     }
     return;
   }
@@ -2090,6 +2126,9 @@ function getOfficialAnthropicAuth(req) {
 
 function getConfiguredProviderApiKey(provider) {
   if (!provider) return "";
+  if (provider.id && GATEWAY_SECRETS?.api_keys?.[provider.id]) {
+    return getEndpointApiKey(provider, GATEWAY_SECRETS);
+  }
   if (provider.api_key) {
     if (provider.api_key.startsWith("env:")) {
       const envName = provider.api_key.slice(4);
@@ -2198,7 +2237,15 @@ function modelDiscovery(client = 'claude') {
     });
   }
 
-  for (const id of EXPOSED_MODELS) {
+  const clientName = client === "claude" ? "desktop" : client;
+  const clientEndpoints = selectExposedEndpoints(
+    GATEWAY_CONFIG.clients?.[clientName]?.endpoints || [],
+  );
+  const visibleIds = [...new Set(clientEndpoints.flatMap((endpoint) => [
+    ...(endpoint.models || []),
+    ...Object.keys(endpoint.model_mapping || {}),
+  ]))];
+  for (const id of visibleIds) {
     if (!id || merged.has(id)) continue;
     const route = resolveConfiguredModel(id, [], client);
     merged.set(id, {
@@ -2217,8 +2264,17 @@ function modelDiscovery(client = 'claude') {
 }
 
 function publicGatewayConfig() {
+  const clients = structuredClone(GATEWAY_CONFIG.clients || {});
+  for (const client of Object.values(clients)) {
+    for (const endpoint of client.endpoints || []) {
+      endpoint.has_api_key = Boolean(GATEWAY_SECRETS?.api_keys?.[endpoint.id]);
+      delete endpoint.api_key;
+      delete endpoint.api_key_env;
+    }
+  }
   return {
     ...GATEWAY_CONFIG,
+    clients,
     config_file: fs.existsSync(GATEWAY_CONFIG_FILE) ? GATEWAY_CONFIG_FILE : null,
     codex_model_catalog: {
       path: CODEX_MODEL_CATALOG_PATH,
@@ -3173,6 +3229,7 @@ function resolveAnthropicRoute(requestedModel, client) {
 function hasConfiguredApiKey(ep) {
   if (ep.type === "official" || ep.name === "official") return true;
   if (ep.type === "grok") return grokHasCredentials(ep);
+  if (getEndpointApiKey(ep, GATEWAY_SECRETS)) return true;
   if (!ep.api_key) return false;
   if (ep.api_key.startsWith("env:")) {
     const envVar = ep.api_key.slice(4);
@@ -3210,7 +3267,7 @@ function resolveConfiguredModel(requestedModel, allowedTypes = [], client = null
       if (matched) {
         return {
           model: { id: text, display_name: text, upstream_model: targetModel, aliases: [] },
-          provider: { id: defaultEp.name, type: defaultEp.type, base_url: defaultEp.base_url, api_key: defaultEp.api_key, auth: "bearer", auth_path: defaultEp.auth_path, proxy: defaultEp.proxy, max_concurrency: defaultEp.max_concurrency, client_version: defaultEp.client_version, agent_id_path: defaultEp.agent_id_path },
+          provider: endpointProvider(defaultEp),
           upstream_model: targetModel
         };
       }
@@ -3227,7 +3284,7 @@ function resolveConfiguredModel(requestedModel, allowedTypes = [], client = null
         if (ep.models?.includes(targetModel) || ep.name === text || ep.model_mapping?.[text]) {
           return {
              model: { id: text, display_name: text, upstream_model: targetModel, aliases: [] },
-             provider: { id: ep.name, type: ep.type, base_url: ep.base_url, api_key: ep.api_key, auth: "bearer", auth_path: ep.auth_path, proxy: ep.proxy, max_concurrency: ep.max_concurrency, client_version: ep.client_version, agent_id_path: ep.agent_id_path },
+             provider: endpointProvider(ep),
              upstream_model: targetModel
           };
         }
@@ -3242,13 +3299,28 @@ function resolveConfiguredModel(requestedModel, allowedTypes = [], client = null
       }
       return {
          model: { id: text, display_name: text, upstream_model: targetModel, aliases: [] },
-         provider: { id: defaultEp.name, type: defaultEp.type, base_url: defaultEp.base_url, api_key: defaultEp.api_key, auth: "bearer" },
+         provider: endpointProvider(defaultEp),
          upstream_model: targetModel
       };
     }
   }
 
   return null;
+}
+
+function endpointProvider(endpoint) {
+  return {
+    id: endpoint.id,
+    name: endpoint.name,
+    type: endpoint.type,
+    base_url: endpoint.base_url,
+    auth: endpoint.auth || "bearer",
+    auth_path: endpoint.auth_path,
+    proxy: endpoint.proxy,
+    max_concurrency: endpoint.max_concurrency,
+    client_version: endpoint.client_version,
+    agent_id_path: endpoint.agent_id_path,
+  };
 }
 
 function isOfficialClaudeModel(model) {
@@ -4430,15 +4502,10 @@ function syncClaudeThirdPartyInferenceConfig(config) {
     }
 
     const existingConfig = JSON.parse(fs.readFileSync(target.path, "utf8"));
-    const endpoints = config.clients?.desktop?.endpoints || [];
-    const defaultEndpoint =
-      endpoints.find((endpoint) => endpoint?.is_default) ||
-      endpoints[0] ||
-      null;
-
-    const inferenceModels = defaultEndpoint
-      ? buildClaudeThirdPartyInferenceModels(
-          defaultEndpoint,
+    const endpoints = selectExposedEndpoints(config.clients?.desktop?.endpoints || []);
+    const inferenceModels = endpoints.length
+      ? buildClaudeInferenceModels(
+          endpoints,
           existingConfig.inferenceModels,
         )
       : Array.isArray(existingConfig.inferenceModels)
@@ -4465,7 +4532,7 @@ function syncClaudeThirdPartyInferenceConfig(config) {
         reason: "already-in-sync",
         path: target.path,
         models: inferenceModels.length,
-        defaultEndpoint: defaultEndpoint?.name || null,
+        endpoints: endpoints.map((endpoint) => endpoint.name || endpoint.id),
       };
     }
 
@@ -4474,14 +4541,14 @@ function syncClaudeThirdPartyInferenceConfig(config) {
       path: target.path,
       gateway_base_url: gatewayBaseUrl,
       gateway_api_key: CONFIGURED_API_KEY_SENTINEL,
-      default_endpoint: defaultEndpoint?.name || null,
+      endpoints: endpoints.map((endpoint) => endpoint.name || endpoint.id),
       models: inferenceModels.length,
     });
     return {
       updated: true,
       path: target.path,
       models: inferenceModels.length,
-      defaultEndpoint: defaultEndpoint?.name || null,
+      endpoints: endpoints.map((endpoint) => endpoint.name || endpoint.id),
       gatewayBaseUrl,
     };
   } catch (error) {
@@ -4553,44 +4620,6 @@ function defaultClaudeThirdPartyConfigLibraryPath(platform) {
   return "";
 }
 
-function buildClaudeThirdPartyInferenceModels(endpoint, existingModels = []) {
-  const previousByName = new Map(
-    (Array.isArray(existingModels) ? existingModels : [])
-      .filter((model) => model?.name)
-      .map((model) => [model.name, model]),
-  );
-  const models = [];
-  const seen = new Set();
-  const seenLabels = new Set();
-
-  const addModel = (name, upstreamModel) => {
-    if (!isClaudeThirdPartyModelName(name) || seen.has(name)) return;
-    const labelOverride = upstreamModel || name;
-    if (seenLabels.has(labelOverride)) return;
-    seen.add(name);
-    seenLabels.add(labelOverride);
-    models.push({
-      ...(previousByName.get(name) || {}),
-      name,
-      labelOverride,
-    });
-  };
-
-  for (const [name, upstreamModel] of Object.entries(endpoint.model_mapping || {})) {
-    addModel(name, upstreamModel);
-  }
-
-  for (const name of endpoint.models || []) {
-    addModel(name, name);
-  }
-
-  return models;
-}
-
-function isClaudeThirdPartyModelName(name) {
-  return /^claude-[a-z0-9]+-\d/i.test(String(name || "").trim());
-}
-
 function buildClaudeThirdPartyGatewayBaseUrl(config) {
   const serverConfig = config.server || {};
   const host = serverConfig.host && serverConfig.host !== "0.0.0.0"
@@ -4600,91 +4629,16 @@ function buildClaudeThirdPartyGatewayBaseUrl(config) {
   return `http://${host}:${port}/desktop`;
 }
 
-function loadGatewayConfig(filePath) {
-  let config = {};
-  if (filePath && fs.existsSync(filePath)) {
-    const raw = fs.readFileSync(filePath, "utf8").replace(/^\uFEFF/, "");
-    config = JSON.parse(raw);
+function reloadGatewayConfig({ reloadFiles = true } = {}) {
+  if (reloadFiles) {
+    GATEWAY_STATE = loadGatewayState({
+      configPath: GATEWAY_CONFIG_FILE,
+      secretsPath: GATEWAY_SECRETS_FILE,
+      officialCodexIds: OFFICIAL_CODEX_MODEL_IDS,
+    });
+    GATEWAY_CONFIG = GATEWAY_STATE.config;
+    GATEWAY_SECRETS = GATEWAY_STATE.secrets;
   }
-
-  if (!config.clients) {
-    const old = normalizeGatewayConfig(config);
-    config.clients = { code: { endpoints: [] }, desktop: { endpoints: [] }, codex: { endpoints: [] } };
-
-    const providersMap = {};
-    for (const m of old.models || []) {
-      const provider = old.providers[m.provider];
-      if (!provider) continue;
-
-      // Do not auto-migrate OpenAPI URLs to Claude/Codex unless the user configures them manually
-      if (provider.type === "anthropic") {
-        if (!providersMap[provider.id]) {
-          providersMap[provider.id] = {
-            name: provider.id,
-            type: provider.type,
-            base_url: provider.base_url,
-            api_key: provider.api_key || (provider.api_key_env ? `env:${provider.api_key_env}` : ""),
-            models: [],
-            model_mapping: {}
-          };
-        }
-
-        const ep = providersMap[provider.id];
-        if (!ep.models.includes(m.upstream_model)) {
-          ep.models.push(m.upstream_model);
-        }
-        ep.model_mapping[m.id] = m.upstream_model;
-        for (const alias of m.aliases || []) {
-          ep.model_mapping[alias] = m.upstream_model;
-        }
-      }
-    }
-
-    for (const ep of Object.values(providersMap)) {
-      config.clients.code.endpoints.push(JSON.parse(JSON.stringify(ep)));
-      config.clients.desktop.endpoints.push(JSON.parse(JSON.stringify(ep)));
-      config.clients.codex.endpoints.push(JSON.parse(JSON.stringify(ep)));
-    }
-  }
-
-  // Deduplicate endpoints
-  if (config.clients) {
-    if (config.clients.claude) {
-      if (!config.clients.code) config.clients.code = JSON.parse(JSON.stringify(config.clients.claude));
-      if (!config.clients.desktop) config.clients.desktop = JSON.parse(JSON.stringify(config.clients.claude));
-      delete config.clients.claude;
-    }
-    for (const clientName of Object.keys(config.clients)) {
-      const endpoints = config.clients[clientName].endpoints || [];
-      const mergedEndpoints = [];
-      const epMap = new Map();
-
-      for (const ep of endpoints) {
-        const key = `${ep.type}|${ep.base_url}|${ep.api_key}`;
-        if (epMap.has(key)) {
-          const existing = epMap.get(key);
-          if (ep.models) {
-            for (const m of ep.models) {
-              if (!existing.models.includes(m)) existing.models.push(m);
-            }
-          }
-          if (ep.model_mapping) {
-            Object.assign(existing.model_mapping, ep.model_mapping);
-          }
-        } else {
-          epMap.set(key, ep);
-          mergedEndpoints.push(ep);
-        }
-      }
-      config.clients[clientName].endpoints = mergedEndpoints;
-    }
-  }
-
-  return config;
-}
-
-function reloadGatewayConfig() {
-  GATEWAY_CONFIG = loadGatewayConfig(GATEWAY_CONFIG_FILE);
   const _endpoints = [
     ...(GATEWAY_CONFIG.clients?.code?.endpoints || []),
     ...(GATEWAY_CONFIG.clients?.desktop?.endpoints || []),
@@ -4729,57 +4683,6 @@ function reloadGatewayConfig() {
     );
     _codexModelsDiscoveryCache = null;
   }
-}
-
-function normalizeGatewayConfig(config) {
-  const providers = {};
-  for (const [id, provider] of Object.entries(config.providers || {})) {
-    if (!id || !provider) continue;
-    providers[id] = {
-      id,
-      type: provider.type || "openai-chat",
-      base_url: trimRight(provider.base_url || "", "/"),
-      api_key_env: provider.api_key_env || "",
-      api_key: provider.api_key || "",
-      auth: (provider.auth || "bearer").toLowerCase(),
-      headers: provider.headers || {},
-    };
-  }
-
-  const models = [];
-  const aliases = {};
-  const displayNames = {};
-
-  const modelEntries = Array.isArray(config.models)
-    ? config.models
-    : Object.entries(config.models || {}).map(([id, model]) => ({ id, ...model }));
-
-  for (const model of modelEntries) {
-    if (!model.id || !model.provider || !providers[model.provider]) continue;
-    const normalized = {
-      id: model.id,
-      provider: model.provider,
-      upstream_model: model.upstream_model || model.model || model.id,
-      display_name: model.display_name || model.name || model.id,
-      aliases: Array.isArray(model.aliases) ? model.aliases : [],
-      owned_by: model.owned_by || providers[model.provider].id,
-    };
-    models.push(normalized);
-    aliases[normalized.id] = normalized.upstream_model;
-    displayNames[normalized.id] = normalized.display_name;
-    for (const alias of normalized.aliases) {
-      if (alias) aliases[alias] = normalized.upstream_model;
-    }
-  }
-
-  return {
-    server: config.server || {},
-    providers,
-    models,
-    aliases,
-    displayNames,
-    officialModels: config.official_models || {},
-  };
 }
 
 function parseJsonMaybe(value) {
