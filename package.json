@@ -43,7 +43,7 @@
     "test:adapters": "powershell -NoProfile -ExecutionPolicy Bypass -File scripts/test-adapters.ps1",
     "test:adapters:node": "node --test scripts/protocol-adapters.test.mjs",
     "test:cli": "node --test scripts/agent-gateway.test.mjs",
-    "test:codex:unit": "node --test scripts/codex-model-catalog.test.mjs scripts/codex-chat-request-adapter.test.mjs scripts/codex-responses-writer.test.mjs scripts/codex-chat-response-adapter.test.mjs scripts/codex-responses-passthrough.test.mjs scripts/codex-official-models.test.mjs scripts/codex-hosted-tools-inject.test.mjs",
+    "test:codex:unit": "node --test scripts/gateway-config-store.test.mjs scripts/codex-model-catalog.test.mjs scripts/codex-chat-request-adapter.test.mjs scripts/codex-responses-writer.test.mjs scripts/codex-chat-response-adapter.test.mjs scripts/codex-responses-passthrough.test.mjs scripts/codex-official-models.test.mjs scripts/codex-hosted-tools-inject.test.mjs",
     "test:codex:catalog-write": "node --test scripts/codex-catalog-write.test.mjs",
     "test:codex:integration": "node --test scripts/codex-gateway.integration.test.mjs",
     "test:codex:e2e": "node scripts/codex-e2e.mjs",
