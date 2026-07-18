@@ -81,6 +81,129 @@ test("request adapter preserves image, function history, and custom tool metadat
   assert.equal(result.body.max_tokens, 100);
 });
 
+test("request adapter coalesces parallel function_call history into one assistant message", () => {
+  const result = responsesRequestToChat({
+    input: [
+      {
+        role: "user",
+        content: [{ type: "input_text", text: "Inspect and read." }],
+      },
+      {
+        type: "function_call",
+        call_id: "call_0",
+        name: "shell_command",
+        arguments: "{\"command\":\"ls\"}",
+      },
+      {
+        type: "function_call",
+        call_id: "call_1",
+        name: "read_file",
+        arguments: "{\"path\":\"README.md\"}",
+      },
+      {
+        type: "custom_tool_call",
+        call_id: "call_2",
+        name: "apply_patch",
+        input: "*** Begin Patch\n*** End Patch",
+      },
+      {
+        type: "function_call_output",
+        call_id: "call_0",
+        output: "README.md",
+      },
+      {
+        type: "function_call_output",
+        call_id: "call_1",
+        output: "# Title",
+      },
+      {
+        type: "custom_tool_call_output",
+        call_id: "call_2",
+        output: "ok",
+      },
+      {
+        role: "user",
+        content: [{ type: "input_text", text: "Continue." }],
+      },
+    ],
+    tools: [
+      {
+        type: "function",
+        name: "shell_command",
+        parameters: {
+          type: "object",
+          properties: { command: { type: "string" } },
+        },
+      },
+      {
+        type: "function",
+        name: "read_file",
+        parameters: {
+          type: "object",
+          properties: { path: { type: "string" } },
+        },
+      },
+      {
+        type: "custom",
+        name: "apply_patch",
+      },
+    ],
+  }, "chat-model");
+
+  const assistantMessages = result.body.messages.filter(
+    (message) => message.role === "assistant",
+  );
+  assert.equal(assistantMessages.length, 1);
+  assert.deepEqual(
+    assistantMessages[0].tool_calls.map((call) => call.id),
+    ["call_0", "call_1", "call_2"],
+  );
+  assert.equal(
+    assistantMessages[0].tool_calls[2].function.arguments,
+    "{\"input\":\"*** Begin Patch\\n*** End Patch\"}",
+  );
+  assert.deepEqual(
+    result.body.messages.filter((message) => message.role === "tool").map(
+      (message) => message.tool_call_id,
+    ),
+    ["call_0", "call_1", "call_2"],
+  );
+  assert.equal(result.body.messages.at(-1).role, "user");
+});
+
+test("request adapter attaches tool calls to a preceding assistant text message", () => {
+  const result = responsesRequestToChat({
+    input: [
+      {
+        role: "assistant",
+        content: [{ type: "output_text", text: "I will inspect files." }],
+      },
+      {
+        type: "function_call",
+        call_id: "call_a",
+        name: "shell_command",
+        arguments: "{\"command\":\"ls\"}",
+      },
+      {
+        type: "function_call",
+        call_id: "call_b",
+        name: "read_file",
+        arguments: "{\"path\":\"a.txt\"}",
+      },
+    ],
+  }, "chat-model");
+
+  assert.equal(result.body.messages.length, 1);
+  assert.equal(result.body.messages[0].role, "assistant");
+  assert.deepEqual(result.body.messages[0].content, [
+    { type: "text", text: "I will inspect files." },
+  ]);
+  assert.deepEqual(
+    result.body.messages[0].tool_calls.map((call) => call.id),
+    ["call_a", "call_b"],
+  );
+});
+
 test("request adapter rejects an unrepresentable hosted tool", () => {
   assert.throws(
     () => responsesRequestToChat({

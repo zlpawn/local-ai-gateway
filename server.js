@@ -17,6 +17,13 @@ import {
 import { buildCodexCatalog } from "./lib/codex/model-catalog.mjs";
 import { bindRequestAbort } from "./lib/codex/request-abort.mjs";
 import { collectResponsesStream } from "./lib/codex/responses-collector.mjs";
+import {
+  isOfficialCodexModelId,
+  mergeOfficialDiscoveryModels,
+  officialModelsFromOpenAIList,
+} from "./lib/codex/official-models.mjs";
+import { unifyCodexHistory } from "./lib/codex/history-unify.mjs";
+import { pipeResponsesSsePassthrough } from "./lib/codex/responses-passthrough.mjs";
 import { ResponsesWriter } from "./lib/codex/responses-writer.mjs";
 
 const PROJECT_ROOT = path.dirname(fileURLToPath(import.meta.url));
@@ -79,25 +86,33 @@ const MODEL_DISPLAY_NAMES = {
   ...GATEWAY_CONFIG.displayNames,
 };
 const LOG_FILE = resolveProjectPath(process.env.LOG_FILE || "gateway.log");
+// Auth may follow CODEX_HOME (Codex CLI convention). The Desktop catalog file
+// always defaults to the real user profile ~/.codex so config.toml snippets stay
+// stable even if a shell/session overrides CODEX_HOME for a worktree.
 const CODEX_HOME = process.env.CODEX_HOME || path.join(os.homedir(), ".codex");
 const CODEX_AUTH_PATH = path.join(CODEX_HOME, "auth.json");
+const CODEX_USER_HOME = path.join(os.homedir(), ".codex");
 const CODEX_MODEL_CATALOG_PATH =
-  process.env.CODEX_MODEL_CATALOG_PATH || path.join(CODEX_HOME, "gateway-model-catalog.json");
-const CODEX_WRITE_MODEL_CATALOG = isTruthy(process.env.CODEX_WRITE_MODEL_CATALOG);
-const OFFICIAL_CODEX_CATALOG_MODELS = loadOfficialCodexCatalogModels();
-const OFFICIAL_CODEX_MODELS = OFFICIAL_CODEX_CATALOG_MODELS.map((model) => ({
+  process.env.CODEX_MODEL_CATALOG_PATH || path.join(CODEX_USER_HOME, "gateway-model-catalog.json");
+// Default on so Desktop can point model_catalog_json at a real file after save.
+// Set CODEX_WRITE_MODEL_CATALOG_DISABLED=1 to disable disk writes.
+const CODEX_WRITE_MODEL_CATALOG = !isTruthy(process.env.CODEX_WRITE_MODEL_CATALOG_DISABLED);
+let OFFICIAL_CODEX_CATALOG_MODELS = loadOfficialCodexCatalogModels();
+let OFFICIAL_CODEX_MODELS = OFFICIAL_CODEX_CATALOG_MODELS.map((model) => ({
   id: model.slug,
   display_name: model.display_name || model.slug,
   owned_by: "openai",
 }));
-const CODEX_CATALOG = buildCodexCatalog({
+let CODEX_CATALOG = buildCodexCatalog({
   officialModels: OFFICIAL_CODEX_CATALOG_MODELS,
   endpoints: GATEWAY_CONFIG.clients?.codex?.endpoints || [],
 });
-const OFFICIAL_CODEX_MODEL_IDS = CODEX_CATALOG.officialIds;
-const CODEX_CUSTOM_MODELS = CODEX_CATALOG.models.filter(
+let OFFICIAL_CODEX_MODEL_IDS = CODEX_CATALOG.officialIds;
+let CODEX_CUSTOM_MODELS = CODEX_CATALOG.models.filter(
   (model) => !OFFICIAL_CODEX_MODEL_IDS.has(model.slug),
 );
+// Declared before writeCodexModelCatalog runs at startup to avoid TDZ.
+let _codexModelsDiscoveryCache = null;
 
 // --- Grok CLI subscription provider ---------------------------------------
 // Forwards standard OpenAI requests to the Grok CLI chat proxy
@@ -127,7 +142,11 @@ let _grokClientVersionCache;
 const _grokAgentIdCache = new Map();
 
 if (CODEX_WRITE_MODEL_CATALOG) {
-  writeCodexModelCatalog();
+  try {
+    writeCodexModelCatalog();
+  } catch (error) {
+    console.warn(`Codex model catalog write failed: ${error.message || error}`);
+  }
 }
 
 const server = http.createServer(async (req, res) => {
@@ -213,6 +232,39 @@ async function route(req, res) {
     return;
   }
 
+  if (reqPath === "/v1/codex/history/unify" && req.method === "POST") {
+    if (!checkLocalAuth(req, res)) return;
+    try {
+      const body = JSON.parse(await readText(req) || "{}");
+      const dryRun = body.dry_run !== false && body.apply !== true;
+      const result = unifyCodexHistory({
+        dryRun,
+        allowRunningCodex: Boolean(body.allow_running_codex),
+        targetProvider: body.target_provider || "custom",
+        sourceProviders: body.source_providers,
+      });
+      sendJson(res, 200, {
+        success: true,
+        ...result,
+      });
+    } catch (error) {
+      const status =
+        error?.code === "codex_running" ? 409 :
+        error?.code === "state_db_missing" ? 404 :
+        error?.code === "no_sources" ? 400 :
+        500;
+      sendJson(res, status, {
+        success: false,
+        error: {
+          type: error?.code || "history_unify_failed",
+          message: error instanceof Error ? error.message : String(error),
+          running: error?.running || undefined,
+        },
+      });
+    }
+    return;
+  }
+
   if (reqPath === "/v1/config/save" && req.method === "POST") {
     if (!checkLocalAuth(req, res)) return;
     try {
@@ -225,7 +277,16 @@ async function route(req, res) {
       fs.writeFileSync(GATEWAY_CONFIG_FILE, JSON.stringify(mergedConfig, null, 2));
       const claude3pSync = syncClaudeThirdPartyInferenceConfig(mergedConfig);
       reloadGatewayConfig();
-      sendJson(res, 200, { success: true, claude3pSync });
+      sendJson(res, 200, {
+        success: true,
+        claude3pSync,
+        codex_model_catalog: {
+          path: CODEX_MODEL_CATALOG_PATH,
+          path_posix: toPosixPath(CODEX_MODEL_CATALOG_PATH),
+          exists: fs.existsSync(CODEX_MODEL_CATALOG_PATH),
+          write_enabled: CODEX_WRITE_MODEL_CATALOG,
+        },
+      });
     } catch(e) {
       sendJson(res, 500, { error: e.message });
     }
@@ -260,7 +321,11 @@ async function route(req, res) {
       path: context.originalPath,
       user_agent: req.headers["user-agent"] || null,
     });
-    sendJson(res, 200, context.client === "codex" ? codexModelDiscovery(context.client) : modelDiscovery(context.client));
+    if (context.client === "codex") {
+      sendJson(res, 200, await codexModelDiscoveryFresh(context.client));
+    } else {
+      sendJson(res, 200, modelDiscovery(context.client));
+    }
     return;
   }
 
@@ -310,6 +375,20 @@ async function route(req, res) {
     if (!checkLocalAuth(req, res)) return;
     const body = await readJson(req);
     await forwardOpenAIResponses(body, req, res, context);
+    return;
+  }
+
+  // Codex Desktop built-in image_gen posts to the provider base URL:
+  //   POST /codex/v1/images/generations
+  //   POST /codex/v1/images/edits
+  // Forward to the matching official backend (chatgpt-codex or api.openai.com).
+  if (
+    (reqPath === "/v1/images/generations" || reqPath === "/v1/images/edits")
+    && req.method === "POST"
+  ) {
+    if (!checkLocalAuth(req, res)) return;
+    const kind = reqPath.endsWith("/edits") ? "edits" : "generations";
+    await proxyOfficialCodexImages(kind, req, res, context);
     return;
   }
 
@@ -629,7 +708,13 @@ async function forwardResolvedCodexResponse({
     logInfo("grok_responses_response", { request_id: context.requestId, status: upstream.status, backend });
     if (body.stream) {
       if (backend === "responses") {
-        await pipeGrokSse(upstream, clientRes, context.requestId);
+        // Grok forces stream:true even for non-stream clients; only the client
+        // stream path needs terminal synthesis here.
+        await pipeResponsesUpstream(upstream, clientRes, {
+          requestId: context.requestId,
+          model: requestedModel,
+          logName: "grok_passthrough_stream_complete",
+        });
       } else {
         await sendChatUpstreamAsResponses({
           upstream,
@@ -642,10 +727,11 @@ async function forwardResolvedCodexResponse({
       if (await grokSendErrorIfNotOk(upstream, clientRes)) return;
       const response = backend === "responses"
         ? await collectResponsesStream(upstream.body, requestedModel)
-        : openAIChatCompletionToResponse(
-            await collectChatSseAsChatCompletion(upstream, requestedModel),
-            requestedModel,
-          );
+        : chatCompletionToResponse({
+            completion: await collectChatSseAsChatCompletion(upstream, requestedModel),
+            model: requestedModel,
+            toolKinds: chatRequest.toolKinds,
+          });
       clientRes.writeHead(200, { "Content-Type": "application/json; charset=utf-8", "Access-Control-Allow-Origin": "*" });
       clientRes.end(JSON.stringify(response));
     }
@@ -714,12 +800,22 @@ async function forwardResolvedCodexResponse({
     translated_to: null,
   });
 
+  if (body.stream) {
+    await pipeResponsesUpstream(upstream, clientRes, {
+      requestId: context.requestId,
+      model: requestedModel,
+      logName: "openai_responses_stream_complete",
+    });
+    return;
+  }
+
+  // Non-streaming Responses stay byte-for-byte JSON/SSE passthrough without
+  // synthesizing terminal events into the body.
   if (!upstream.body) {
     clientRes.writeHead(upstream.status, responseHeaders(upstream.headers));
     clientRes.end(await upstream.text());
     return;
   }
-
   clientRes.writeHead(upstream.status, responseHeaders(upstream.headers));
   await upstream.body.pipeTo(
     new WritableStream({
@@ -737,6 +833,77 @@ async function forwardResolvedCodexResponse({
   );
 }
 
+async function proxyOfficialCodexImages(kind, clientReq, clientRes, context, signal) {
+  const auth = getOfficialCodexImageAuth(clientReq, kind);
+  if (!auth) {
+    throw httpError(
+      401,
+      "Official Codex auth not found. Sign in to Codex locally or set OPENAI_API_KEY for official model routing.",
+    );
+  }
+
+  const proxyUrl = officialCodexProxyUrl();
+  const controller = new AbortController();
+  const timeout = setTimeout(() => controller.abort(), REQUEST_TIMEOUT_MS);
+  const requestSignal = signal || controller.signal;
+  const body = await readRequestBuffer(clientReq);
+  const contentType =
+    firstHeaderValue(clientReq.headers["content-type"]) || "application/json";
+  const headers = officialUpstreamHeaders(clientReq, auth);
+  headers["Content-Type"] = contentType;
+  headers.Accept = firstHeaderValue(clientReq.headers.accept) || "application/json";
+
+  try {
+    const upstream = await fetchWithOptionalProxy(auth.url, {
+      method: "POST",
+      headers,
+      body,
+      signal: requestSignal,
+      proxyUrl,
+    });
+
+    logInfo("openai_images_response", {
+      request_id: context.requestId,
+      client: context.client,
+      status: upstream.status,
+      route: "official",
+      backend: auth.backend,
+      kind,
+      proxy: proxyUrl || null,
+      url: auth.url,
+      originator: firstHeaderValue(clientReq.headers["originator"]) || null,
+    });
+
+    const text = await upstream.text();
+    clientRes.writeHead(upstream.status, responseHeaders(upstream.headers));
+    clientRes.end(text);
+  } catch (error) {
+    const cause = error?.cause?.code || error?.code || error?.cause?.message || "";
+    const detail = [error?.message || error, cause].filter(Boolean).join(": ");
+    const message = error?.name === "AbortError"
+      ? "Timed out calling official Codex image backend"
+      : `Failed to call official Codex image backend: ${detail}${proxyUrl ? ` (proxy ${proxyUrl})` : ""}`;
+    logInfo("openai_images_upstream_fetch_failed", {
+      request_id: context.requestId,
+      backend: auth.backend,
+      kind,
+      url: auth.url,
+      proxy: proxyUrl || null,
+      error: String(error?.message || error),
+      cause: cause || null,
+    });
+    throw httpError(502, message);
+  } finally {
+    clearTimeout(timeout);
+  }
+}
+
+async function readRequestBuffer(req) {
+  const chunks = [];
+  for await (const chunk of req) chunks.push(chunk);
+  return decodeRequestBody(Buffer.concat(chunks), req.headers["content-encoding"]);
+}
+
 async function proxyOfficialCodexResponse(body, clientReq, clientRes, context, signal) {
   const auth = getOfficialCodexAuth(clientReq);
   if (!auth) {
@@ -746,50 +913,86 @@ async function proxyOfficialCodexResponse(body, clientReq, clientRes, context, s
     );
   }
 
+  // Desktop custom providers often omit hosted tools. Inject web_search on the
+  // official path, but never pair hosted image_generation with Desktop's
+  // function image_gen.imagegen (backend rejects that combination).
+  const withTools = maybeInjectOfficialHostedTools(body, clientReq);
+  const outboundBody = withTools.body;
+  const proxyUrl = officialCodexProxyUrl();
+
   const controller = new AbortController();
   const timeout = setTimeout(() => controller.abort(), REQUEST_TIMEOUT_MS);
+  const requestSignal = signal || controller.signal;
 
   try {
-    const upstream = await fetch(auth.url, {
+    const upstream = await fetchWithOptionalProxy(auth.url, {
       method: "POST",
       headers: officialUpstreamHeaders(clientReq, auth),
-      body: JSON.stringify(normalizeOfficialCodexBody(body, auth.backend)),
-      signal: signal || controller.signal,
+      body: JSON.stringify(normalizeOfficialCodexBody(outboundBody, auth.backend)),
+      signal: requestSignal,
+      proxyUrl,
     });
 
+    const toolTypes = Array.isArray(outboundBody?.tools)
+      ? outboundBody.tools.map((tool) => tool?.type || tool?.name || "unknown").slice(0, 20)
+      : [];
     logInfo("openai_responses_response", {
       request_id: context.requestId,
       client: context.client,
       status: upstream.status,
       route: "official",
       backend: auth.backend,
+      proxy: proxyUrl || null,
+      tool_count: toolTypes.length,
+      tool_types: toolTypes,
+      has_web_search_tool: toolTypes.some((type) => /web_search/i.test(String(type))),
+      has_image_generation_tool: toolTypes.some((type) => /image_generation/i.test(String(type))),
+      injected_web_search: withTools.injected,
+      injected_hosted_tools: withTools.injected_types || [],
+      stripped_hosted_tools: withTools.stripped_types || [],
+      originator: firstHeaderValue(clientReq.headers["originator"]) || null,
     });
 
-    if (!upstream.body) {
+    if (body.stream) {
+      await pipeResponsesUpstream(upstream, clientRes, {
+        requestId: context.requestId,
+        model: body.model || null,
+        logName: "openai_responses_stream_complete",
+      });
+    } else if (!upstream.body) {
       clientRes.writeHead(upstream.status, responseHeaders(upstream.headers));
       clientRes.end(await upstream.text());
-      return;
+    } else {
+      clientRes.writeHead(upstream.status, responseHeaders(upstream.headers));
+      await upstream.body.pipeTo(
+        new WritableStream({
+          write(chunk) {
+            clientRes.write(Buffer.from(chunk));
+          },
+          close() {
+            clientRes.end();
+          },
+          abort(error) {
+            console.error(error);
+            clientRes.end();
+          },
+        }),
+      );
     }
-
-    clientRes.writeHead(upstream.status, responseHeaders(upstream.headers));
-    await upstream.body.pipeTo(
-      new WritableStream({
-        write(chunk) {
-          clientRes.write(Buffer.from(chunk));
-        },
-        close() {
-          clientRes.end();
-        },
-        abort(error) {
-          console.error(error);
-          clientRes.end();
-        },
-      }),
-    );
   } catch (error) {
+    const cause = error?.cause?.code || error?.code || error?.cause?.message || "";
+    const detail = [error?.message || error, cause].filter(Boolean).join(": ");
     const message = error?.name === "AbortError"
       ? "Timed out calling official Codex backend"
-      : `Failed to call official Codex backend: ${error.message || error}`;
+      : `Failed to call official Codex backend: ${detail}${proxyUrl ? ` (proxy ${proxyUrl})` : ""}`;
+    logInfo("openai_responses_upstream_fetch_failed", {
+      request_id: context.requestId,
+      backend: auth.backend,
+      url: auth.url,
+      proxy: proxyUrl || null,
+      error: String(error?.message || error),
+      cause: cause || null,
+    });
     throw httpError(502, message);
   } finally {
     clearTimeout(timeout);
@@ -1215,6 +1418,82 @@ function grokProxyAgentFor(proxyUrl) {
   return _grokProxyAgents.get(proxyUrl);
 }
 
+// Official chatgpt.com / api.openai.com are blocked without the local Clash
+// proxy. Node's env-proxy fetch is unreliable when HTTPS_PROXY is set after
+// process start (and sometimes even with --use-env-proxy). Reuse the same
+// HttpsProxyAgent path that already works for Grok.
+function officialCodexProxyUrl() {
+  if (isTruthy(process.env.OFFICIAL_CODEX_PROXY_DISABLED)) return "";
+  return (
+    process.env.OFFICIAL_CODEX_PROXY
+    || process.env.GROK_PROXY
+    || process.env.HTTPS_PROXY
+    || process.env.HTTP_PROXY
+    || process.env.ALL_PROXY
+    || process.env.https_proxy
+    || process.env.http_proxy
+    || process.env.all_proxy
+    || "http://127.0.0.1:7897"
+  );
+}
+
+async function fetchWithOptionalProxy(url, {
+  method = "GET",
+  headers = {},
+  body = null,
+  signal = null,
+  proxyUrl = officialCodexProxyUrl(),
+} = {}) {
+  // Prefer the explicit agent path whenever a proxy is configured. Falling back
+  // to global fetch only when proxy is intentionally disabled/empty.
+  if (!proxyUrl) {
+    return fetch(url, { method, headers, body, signal });
+  }
+
+  const agent = grokProxyAgentFor(proxyUrl);
+  const transport = new URL(url).protocol === "http:" ? http : https;
+  const headerBag = { ...headers };
+  if (body != null && headerBag["Content-Length"] == null && headerBag["content-length"] == null) {
+    const payload = typeof body === "string" || Buffer.isBuffer(body)
+      ? body
+      : String(body);
+    headerBag["Content-Length"] = Buffer.byteLength(payload);
+  }
+
+  return await new Promise((resolve, reject) => {
+    const req = transport.request(url, { method, headers: headerBag, agent }, (res) => {
+      resolve(nodeResToFetchLike(res));
+    });
+
+    const onAbort = () => {
+      const error = new Error("client aborted");
+      error.name = "AbortError";
+      req.destroy(error);
+    };
+    if (signal) {
+      if (signal.aborted) {
+        onAbort();
+        return;
+      }
+      signal.addEventListener("abort", onAbort, { once: true });
+      req.once("close", () => signal.removeEventListener("abort", onAbort));
+    }
+
+    req.on("error", (error) => {
+      if (signal) signal.removeEventListener("abort", onAbort);
+      reject(error);
+    });
+    req.once("response", () => {
+      if (signal) signal.removeEventListener("abort", onAbort);
+    });
+
+    if (body != null) {
+      req.write(typeof body === "string" || Buffer.isBuffer(body) ? body : String(body));
+    }
+    req.end();
+  });
+}
+
 // Per-provider concurrency guard so many client tabs cannot fan out parallel
 // requests that trip the subscription's rate/risk control.
 function grokAcquire(provider, signal) {
@@ -1418,10 +1697,16 @@ async function collectResponsesSseAsChatCompletion(upstream, requestedModel) {
 // chat.completion JSON for non-streaming clients.
 async function collectChatSseAsChatCompletion(upstream, requestedModel) {
   let text = "";
+  let reasoning = "";
   let finishReason = "stop";
   let usage = null;
   let id = "";
   let created = Math.floor(Date.now() / 1000);
+  // Grok always forces stream:true on chat/completions and aggregates here.
+  // Mirror grok-build's chat_completions accumulator: keep tool_calls by index
+  // and preserve reasoning_content / reasoning / analysis aliases.
+  const toolCalls = new Map();
+
   await consumeSse(upstream.body, (_eventName, payloadText) => {
     if (payloadText === "[DONE]") return;
     const payload = parseJsonMaybe(payloadText) || {};
@@ -1432,9 +1717,57 @@ async function collectChatSseAsChatCompletion(upstream, requestedModel) {
     const deltaText =
       typeof delta.content === "string" ? delta.content : openAIContentToText(delta.content);
     if (deltaText) text += deltaText;
+
+    const reasoningDelta = firstNonEmptyString(
+      delta.reasoning_content,
+      delta.reasoning,
+      delta.analysis,
+    );
+    if (reasoningDelta) reasoning += reasoningDelta;
+
+    for (const toolDelta of delta.tool_calls || []) {
+      const index = Number.isInteger(toolDelta?.index) ? toolDelta.index : toolCalls.size;
+      if (!toolCalls.has(index)) {
+        toolCalls.set(index, {
+          id: "",
+          type: "function",
+          function: { name: "", arguments: "" },
+        });
+      }
+      const state = toolCalls.get(index);
+      if (toolDelta.id) state.id = toolDelta.id;
+      if (toolDelta.type) state.type = toolDelta.type;
+      if (toolDelta.function?.name) state.function.name += toolDelta.function.name;
+      if (toolDelta.function?.arguments) {
+        state.function.arguments += toolDelta.function.arguments;
+      }
+    }
+
     if (choice.finish_reason) finishReason = choice.finish_reason;
     if (payload.usage) usage = payload.usage;
   });
+
+  const message = {
+    role: "assistant",
+    content: text || null,
+  };
+  if (reasoning) message.reasoning_content = reasoning;
+
+  const assembledToolCalls = [...toolCalls.entries()]
+    .sort(([left], [right]) => left - right)
+    .map(([, call], index) => ({
+      id: call.id || `call_${index}`,
+      type: call.type || "function",
+      function: {
+        name: call.function.name || "tool",
+        arguments: call.function.arguments || "{}",
+      },
+    }));
+  if (assembledToolCalls.length) {
+    message.tool_calls = assembledToolCalls;
+    if (!finishReason || finishReason === "stop") finishReason = "tool_calls";
+  }
+
   return {
     id: id || `chatcmpl_${Date.now()}`,
     object: "chat.completion",
@@ -1443,7 +1776,7 @@ async function collectChatSseAsChatCompletion(upstream, requestedModel) {
     choices: [
       {
         index: 0,
-        message: { role: "assistant", content: text },
+        message,
         finish_reason: finishReason,
       },
     ],
@@ -1453,6 +1786,13 @@ async function collectChatSseAsChatCompletion(upstream, requestedModel) {
       total_tokens: usage?.total_tokens || (usage?.prompt_tokens || 0) + (usage?.completion_tokens || 0),
     },
   };
+}
+
+function firstNonEmptyString(...values) {
+  for (const value of values) {
+    if (typeof value === "string" && value) return value;
+  }
+  return "";
 }
 
 // Translate an OpenAI Responses SSE stream into Anthropic Messages SSE, for
@@ -1652,6 +1992,51 @@ async function pipeGrokSse(upstream, clientRes, requestId) {
   logInfo("grok_passthrough_stream_complete", { request_id: requestId });
 }
 
+// Responses SSE passthrough that synthesizes response.failed when the upstream
+// closes after headers without a terminal event.
+async function pipeResponsesUpstream(upstream, clientRes, {
+  requestId = null,
+  model = null,
+  logName = "responses_passthrough_stream_complete",
+} = {}) {
+  if (!upstream.ok) {
+    const text = await upstream.text();
+    clientRes.writeHead(upstream.status, responseHeaders(upstream.headers));
+    clientRes.end(text);
+    if (requestId) {
+      logInfo("responses_upstream_error", {
+        request_id: requestId,
+        status: upstream.status,
+      });
+    }
+    return;
+  }
+
+  if (!upstream.body) {
+    clientRes.writeHead(upstream.status, responseHeaders(upstream.headers));
+    clientRes.end(await upstream.text());
+    return;
+  }
+
+  clientRes.writeHead(upstream.status, responseHeaders(upstream.headers));
+  const result = await pipeResponsesSsePassthrough({
+    readable: upstream.body,
+    write(chunk) {
+      if (!clientRes.writableEnded) clientRes.write(chunk);
+    },
+    end() {
+      if (!clientRes.writableEnded) clientRes.end();
+    },
+    model,
+  });
+  if (requestId) {
+    logInfo(logName, {
+      request_id: requestId,
+      terminal: result.sawTerminal ? "upstream" : "synthesized_failed",
+    });
+  }
+}
+
 function upstreamHeaders(clientReq, upstreamApiKey) {
   const headers = {
     "Content-Type": "application/json",
@@ -1835,7 +2220,17 @@ function publicGatewayConfig() {
   return {
     ...GATEWAY_CONFIG,
     config_file: fs.existsSync(GATEWAY_CONFIG_FILE) ? GATEWAY_CONFIG_FILE : null,
+    codex_model_catalog: {
+      path: CODEX_MODEL_CATALOG_PATH,
+      path_posix: toPosixPath(CODEX_MODEL_CATALOG_PATH),
+      exists: fs.existsSync(CODEX_MODEL_CATALOG_PATH),
+      write_enabled: CODEX_WRITE_MODEL_CATALOG,
+    },
   };
+}
+
+function toPosixPath(filePath) {
+  return String(filePath || "").replaceAll("\\", "/");
 }
 
 function publicProviders() {
@@ -1954,17 +2349,23 @@ function resolveCapabilityForProtocol(model, protocol, client = null) {
   };
 }
 
-function codexModelDiscovery(client = 'codex') {
+const CODEX_MODELS_LIVE_ENABLED = !isTruthy(process.env.CODEX_MODELS_LIVE_DISABLED);
+const CODEX_MODELS_TTL_MS = intEnv("CODEX_MODELS_TTL_MS", 300_000);
+const CODEX_MODELS_LIVE_TIMEOUT_MS = intEnv("CODEX_MODELS_LIVE_TIMEOUT_MS", 2_500);
+
+function codexModelDiscovery(client = "codex", officialModels = OFFICIAL_CODEX_MODELS) {
   const now = Math.floor(Date.now() / 1000);
   const merged = new Map();
 
-  for (const model of OFFICIAL_CODEX_MODELS) {
-    merged.set(model.id, {
-      id: model.id,
+  for (const model of officialModels) {
+    const id = model.id || model.slug;
+    if (!id) continue;
+    merged.set(id, {
+      id,
       object: "model",
-      created: now,
+      created: Number(model.created) || now,
       owned_by: model.owned_by || "openai",
-      display_name: model.display_name || model.id,
+      display_name: model.display_name || id,
     });
   }
 
@@ -1995,6 +2396,83 @@ function codexModelDiscovery(client = 'codex') {
       owned_by: model.owned_by || "custom",
     })),
   };
+}
+
+// Best-effort refresh for Desktop model pickers. Routing still uses the startup
+// bundled set + gpt-*/o* matcher, so discovery failures never change behavior.
+async function codexModelDiscoveryFresh(client = "codex") {
+  const now = Date.now();
+  if (
+    _codexModelsDiscoveryCache
+    && now - _codexModelsDiscoveryCache.at < CODEX_MODELS_TTL_MS
+  ) {
+    return _codexModelsDiscoveryCache.payload;
+  }
+
+  let officialModels = OFFICIAL_CODEX_MODELS;
+  let officialSource = "bundled-startup";
+
+  if (CODEX_MODELS_LIVE_ENABLED) {
+    try {
+      const refreshedBundled = loadOfficialCodexCatalogModels().map((model) => ({
+        id: model.slug,
+        display_name: model.display_name || model.slug,
+        owned_by: "openai",
+      }));
+      if (refreshedBundled.length) {
+        officialModels = mergeOfficialDiscoveryModels(officialModels, refreshedBundled);
+        officialSource = "bundled-refresh";
+      }
+    } catch {
+      // Keep startup bundled list.
+    }
+
+    try {
+      const liveModels = await fetchLiveOfficialCodexModels();
+      if (liveModels.length) {
+        officialModels = mergeOfficialDiscoveryModels(officialModels, liveModels);
+        officialSource = officialSource === "bundled-refresh"
+          ? "bundled-refresh+live"
+          : "bundled-startup+live";
+      }
+    } catch {
+      // Live OpenAI catalog is optional.
+    }
+  }
+
+  const payload = {
+    ...codexModelDiscovery(client, officialModels),
+    official_source: officialSource,
+  };
+  _codexModelsDiscoveryCache = { at: now, payload };
+  return payload;
+}
+
+async function fetchLiveOfficialCodexModels() {
+  const auth = getOfficialCodexAuth(null);
+  if (!auth?.accessToken) return [];
+
+  // Prefer the public OpenAI models API. ChatGPT-subscription tokens may fail;
+  // callers always fall back to bundled catalog.
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), CODEX_MODELS_LIVE_TIMEOUT_MS);
+  try {
+    const response = await fetchWithOptionalProxy("https://api.openai.com/v1/models", {
+      method: "GET",
+      headers: {
+        Authorization: `Bearer ${auth.accessToken}`,
+        Accept: "application/json",
+      },
+      signal: controller.signal,
+    });
+    if (!response.ok) return [];
+    const payload = await response.json();
+    return officialModelsFromOpenAIList(payload);
+  } catch {
+    return [];
+  } finally {
+    clearTimeout(timer);
+  }
 }
 
 function openAIChatToAnthropic(body, resolvedModel) {
@@ -2791,7 +3269,7 @@ function displayNameForClaudeModel(id) {
 function isOfficialCodexModel(model) {
   if (!model) return false;
   if (OFFICIAL_CODEX_MODEL_IDS.has(model)) return true;
-  return /^gpt-|^o\d/i.test(String(model));
+  return isOfficialCodexModelId(model);
 }
 
 async function streamAnthropicAsOpenAIChat(upstream, clientRes, requestedModel, requestId) {
@@ -3542,6 +4020,11 @@ function logLine(entry) {
 }
 
 function loadOfficialCodexCatalogModels() {
+  // Prefer Desktop's live cache. It includes newly rolled-out official models
+  // (e.g. gpt-5.6-*) that are not yet in `codex debug models --bundled`.
+  const fromDesktopCache = loadOfficialCodexModelsFromDesktopCache();
+  if (fromDesktopCache.length) return fromDesktopCache;
+
   try {
     const output = execFileSync("codex", ["debug", "models", "--bundled"], {
       encoding: "utf8",
@@ -3550,34 +4033,79 @@ function loadOfficialCodexCatalogModels() {
     });
     const parsed = JSON.parse(output);
     const models = Array.isArray(parsed.models) ? parsed.models : [];
-
-    return models.filter((model) => isBundledOfficialCodexModel(model.slug));
+    const filtered = models.filter((model) => isBundledOfficialCodexModel(model.slug));
+    if (filtered.length) return filtered;
   } catch {
-    return [
-      {
-        slug: "gpt-5.5",
-        display_name: "GPT-5.5",
-        description: "Official Codex fallback model",
-        visibility: "list",
-        supported_in_api: true,
-        default_reasoning_level: "medium",
-        supported_reasoning_levels: [
-          { effort: "low", description: "Fast responses with lighter reasoning" },
-          { effort: "medium", description: "Balanced reasoning" },
-          { effort: "high", description: "More reasoning" },
-        ],
-        shell_type: "shell_command",
-        input_modalities: ["text"],
-      },
-    ];
+    // Fall through to the hardcoded seed model.
+  }
+
+  return [
+    {
+      slug: "gpt-5.5",
+      display_name: "GPT-5.5",
+      description: "Official Codex fallback model",
+      visibility: "list",
+      supported_in_api: true,
+      default_reasoning_level: "medium",
+      supported_reasoning_levels: [
+        { effort: "low", description: "Fast responses with lighter reasoning" },
+        { effort: "medium", description: "Balanced reasoning" },
+        { effort: "high", description: "More reasoning" },
+      ],
+      shell_type: "shell_command",
+      input_modalities: ["text"],
+    },
+  ];
+}
+
+function loadOfficialCodexModelsFromDesktopCache() {
+  const cachePath = path.join(os.homedir(), ".codex", "models_cache.json");
+  try {
+    if (!fs.existsSync(cachePath)) return [];
+    const parsed = JSON.parse(fs.readFileSync(cachePath, "utf8").replace(/^﻿/, ""));
+    const models = Array.isArray(parsed.models)
+      ? parsed.models
+      : Array.isArray(parsed?.data)
+        ? parsed.data
+        : [];
+    return models
+      .filter((model) => model && isBundledOfficialCodexModel(model.slug || model.id))
+      .map((model) => ({
+        ...model,
+        slug: model.slug || model.id,
+        display_name: model.display_name || model.slug || model.id,
+      }));
+  } catch {
+    return [];
   }
 }
 
 function isBundledOfficialCodexModel(slug) {
-  return /^gpt-|^o\d/i.test(String(slug || ""));
+  return isOfficialCodexModelId(slug);
+}
+
+function refreshOfficialCodexCatalogModels() {
+  OFFICIAL_CODEX_CATALOG_MODELS = loadOfficialCodexCatalogModels();
+  OFFICIAL_CODEX_MODELS = OFFICIAL_CODEX_CATALOG_MODELS.map((model) => ({
+    id: model.slug,
+    display_name: model.display_name || model.slug,
+    owned_by: "openai",
+  }));
 }
 
 function writeCodexModelCatalog() {
+  // Re-read Desktop cache / bundled catalog so newly rolled-out official models
+  // show up without restarting the gateway process.
+  refreshOfficialCodexCatalogModels();
+  CODEX_CATALOG = buildCodexCatalog({
+    officialModels: OFFICIAL_CODEX_CATALOG_MODELS,
+    endpoints: GATEWAY_CONFIG.clients?.codex?.endpoints || [],
+  });
+  OFFICIAL_CODEX_MODEL_IDS = CODEX_CATALOG.officialIds;
+  CODEX_CUSTOM_MODELS = CODEX_CATALOG.models.filter(
+    (model) => !OFFICIAL_CODEX_MODEL_IDS.has(model.slug),
+  );
+
   const models = [
     ...OFFICIAL_CODEX_CATALOG_MODELS,
     ...CODEX_CUSTOM_MODELS,
@@ -3585,12 +4113,17 @@ function writeCodexModelCatalog() {
 
   const catalog = {
     generated_at: new Date().toISOString(),
-    source: "volcengine-agent-plan-gateway",
+    source: "local-ai-gateway",
+    official_source: fs.existsSync(path.join(os.homedir(), ".codex", "models_cache.json"))
+      ? "desktop-models-cache"
+      : "bundled-or-fallback",
     models,
   };
 
   fs.mkdirSync(path.dirname(CODEX_MODEL_CATALOG_PATH), { recursive: true });
   fs.writeFileSync(CODEX_MODEL_CATALOG_PATH, JSON.stringify(catalog, null, 2), "utf8");
+  _codexModelsDiscoveryCache = null;
+  return CODEX_MODEL_CATALOG_PATH;
 }
 
 function getOfficialCodexAuth(clientReq) {
@@ -3637,22 +4170,193 @@ function getOfficialCodexAuth(clientReq) {
   return null;
 }
 
+function getOfficialCodexImageAuth(clientReq, kind = "generations") {
+  const auth = getOfficialCodexAuth(clientReq);
+  if (!auth) return null;
+
+  const imagePath = kind === "edits" ? "images/edits" : "images/generations";
+  if (auth.backend === "openai") {
+    return {
+      ...auth,
+      url: `https://api.openai.com/v1/${imagePath}`,
+    };
+  }
+
+  // chatgpt-codex subscription path used by Desktop's built-in image_gen.
+  return {
+    ...auth,
+    url: `https://chatgpt.com/backend-api/codex/${imagePath}`,
+  };
+}
+
 function officialUpstreamHeaders(clientReq, auth) {
+  // Prefer client identity headers when present. Forcing a synthetic CLI
+  // originator/UA can cause the chatgpt-codex backend to omit hosted tools
+  // such as web_search for Desktop sessions.
+  const clientOriginator = firstHeaderValue(clientReq.headers["originator"]);
+  const clientUserAgent = firstHeaderValue(clientReq.headers["user-agent"]);
+  const clientOpenAiBeta = firstHeaderValue(clientReq.headers["openai-beta"]);
+  const clientAccountId = firstHeaderValue(clientReq.headers["chatgpt-account-id"]);
+
   const headers = {
     "Content-Type": "application/json",
-    Accept: clientReq.headers.accept || "application/json",
+    Accept: firstHeaderValue(clientReq.headers.accept) || "text/event-stream",
     Authorization: `Bearer ${auth.accessToken}`,
-    "OpenAI-Beta": "responses=experimental",
-    "originator": "codex_cli_rs",
-    "User-Agent": "codex_cli_rs/0.0.0"
+    "OpenAI-Beta": clientOpenAiBeta || "responses=experimental",
+    originator: clientOriginator || "codex_cli_rs",
+    "User-Agent": clientUserAgent || "codex_cli_rs/0.0.0",
   };
 
-  if (auth.accountId) {
-    headers["chatgpt-account-id"] = auth.accountId;
+  const accountId = clientAccountId || auth.accountId || "";
+  if (accountId) {
+    headers["chatgpt-account-id"] = accountId;
+  }
+
+  // Preserve a few optional client headers used by newer Desktop builds.
+  for (const name of [
+    "x-codex-client-version",
+    "x-codex-session-id",
+    "x-request-id",
+    "openai-organization",
+    "openai-project",
+  ]) {
+    const value = firstHeaderValue(clientReq.headers[name]);
+    if (value) headers[name] = value;
   }
 
   return headers;
 }
+
+function firstHeaderValue(value) {
+  if (Array.isArray(value)) return value[0] || "";
+  return value ? String(value) : "";
+}
+
+// Desktop under model_provider=custom often omits hosted web_search.
+// Default-on inject restores it on the official path only.
+//
+// Never default-inject image_generation: Codex Desktop already exposes
+// function image_gen.imagegen (sometimes only as a session-side capability,
+// not always listed in body.tools). The chatgpt-codex backend rejects both:
+//   Function 'image_gen.imagegen' conflicts with a hosted tool
+// Disable all inject with CODEX_INJECT_HOSTED_TOOLS_DISABLED=1
+// (or CODEX_INJECT_WEB_SEARCH=0). Optional CODEX_INJECT_IMAGE_GENERATION=1
+// only for non-Desktop clients when no image function is present.
+function isOfficialHostedToolsInjectEnabled() {
+  if (isTruthy(process.env.CODEX_INJECT_HOSTED_TOOLS_DISABLED)) return false;
+  if (Object.prototype.hasOwnProperty.call(process.env, "CODEX_INJECT_WEB_SEARCH")) {
+    return isTruthy(process.env.CODEX_INJECT_WEB_SEARCH);
+  }
+  return true;
+}
+
+function collectToolDescriptors(tools) {
+  return (Array.isArray(tools) ? tools : []).map((tool) => {
+    const type = String(tool?.type || "").toLowerCase();
+    const name = String(
+      tool?.name || tool?.function?.name || "",
+    ).toLowerCase();
+    return { type, name, raw: tool };
+  });
+}
+
+function isCodexDesktopRequest(clientReq) {
+  const originator = firstHeaderValue(clientReq?.headers?.["originator"]).toLowerCase();
+  const userAgent = firstHeaderValue(clientReq?.headers?.["user-agent"]).toLowerCase();
+  return originator.includes("desktop") || userAgent.includes("codex desktop");
+}
+
+function isImageFunctionTool(descriptor) {
+  const blob = `${descriptor.type} ${descriptor.name}`;
+  return (
+    blob.includes("image_gen")
+    || blob.includes("imagegen")
+    || blob.includes("generate_image")
+  );
+}
+
+function isHostedImageGenerationTool(descriptor) {
+  return (
+    descriptor.type === "image_generation"
+    || descriptor.name === "image_generation"
+  );
+}
+
+function hasConflictingTool(descriptors, kind) {
+  return descriptors.some((descriptor) => {
+    const blob = `${descriptor.type} ${descriptor.name}`;
+    if (kind === "web_search") {
+      return blob.includes("web_search") || blob.includes("websearch");
+    }
+    if (kind === "image_generation") {
+      // Function image_gen.* and hosted image_generation cannot coexist.
+      return isImageFunctionTool(descriptor) || isHostedImageGenerationTool(descriptor);
+    }
+    return false;
+  });
+}
+
+function stripConflictingHostedImageGeneration(tools, descriptors) {
+  if (!descriptors.some(isImageFunctionTool)) return tools;
+  return tools.filter((tool, index) => !isHostedImageGenerationTool(descriptors[index]));
+}
+
+function maybeInjectOfficialHostedTools(body, clientReq = null) {
+  const existing = Array.isArray(body?.tools) ? body.tools : [];
+  const descriptors = collectToolDescriptors(existing);
+  // If the client already listed image_gen.*, drop any hosted image_generation
+  // it may also have included (or that a prior hop injected).
+  const sanitized = stripConflictingHostedImageGeneration(existing, descriptors);
+  const strippedImageGeneration = sanitized.length !== existing.length;
+  const nextDescriptors = strippedImageGeneration
+    ? collectToolDescriptors(sanitized)
+    : descriptors;
+
+  if (!isOfficialHostedToolsInjectEnabled()) {
+    if (!strippedImageGeneration) {
+      return { body, injected: false, injected_types: [], stripped_types: [] };
+    }
+    return {
+      body: { ...body, tools: sanitized },
+      injected: false,
+      injected_types: [],
+      stripped_types: ["image_generation"],
+    };
+  }
+
+  const toAdd = [];
+
+  if (!hasConflictingTool(nextDescriptors, "web_search")) {
+    toAdd.push({ type: "web_search" });
+  }
+
+  // Image generation is opt-in, never for Desktop, and never when image_gen.*
+  // function tools (or hosted image_generation) are already present.
+  const allowImageInject =
+    isTruthy(process.env.CODEX_INJECT_IMAGE_GENERATION)
+    && !isCodexDesktopRequest(clientReq)
+    && !hasConflictingTool(nextDescriptors, "image_generation");
+  if (allowImageInject) {
+    toAdd.push({ type: "image_generation" });
+  }
+
+  if (!toAdd.length && !strippedImageGeneration) {
+    return { body, injected: false, injected_types: [], stripped_types: [] };
+  }
+
+  return {
+    body: {
+      ...body,
+      tools: [...sanitized, ...toAdd],
+    },
+    injected: toAdd.length > 0,
+    injected_types: toAdd.map((tool) => tool.type),
+    stripped_types: strippedImageGeneration ? ["image_generation"] : [],
+  };
+}
+
+// Back-compat alias for any external callers / older patches.
+const maybeInjectOfficialWebSearchTools = maybeInjectOfficialHostedTools;
 
 function normalizeOfficialCodexBody(body, backend) {
   const normalized = { ...body };
@@ -3660,8 +4364,16 @@ function normalizeOfficialCodexBody(body, backend) {
   if (!Object.prototype.hasOwnProperty.call(normalized, "instructions")) {
     normalized.instructions = "";
   }
-  if (!Object.prototype.hasOwnProperty.call(normalized, "store")) {
+
+  // The chatgpt-codex backend requires store=false and rejects id references
+  // it did not persist. Strip inline `rs_*` reasoning items so multi-turn does
+  // not re-inject 404-bait ids. The public openai backend (api.openai.com)
+  // keeps store=true so multi-turn state is preserved.
+  if (backend === "chatgpt-codex") {
     normalized.store = false;
+    normalized.input = stripEphemeralItemReferences(normalized.input);
+  } else {
+    normalized.store = true;
   }
 
   if (typeof normalized.input === "string") {
@@ -3679,6 +4391,31 @@ function normalizeOfficialCodexBody(body, backend) {
   }
 
   return normalized;
+}
+
+// Remove only chatgpt-codex ephemeral reasoning snapshots that 404 when
+// store=false. Never drop tool calls/results or web/image hosted tool items.
+function stripEphemeralItemReferences(input) {
+  if (!Array.isArray(input)) return input;
+  return input.filter((item) => {
+    if (!item || typeof item !== "object") return true;
+    const type = String(item.type || "");
+    const id = String(item.id || "");
+
+    // Always keep executable tool history.
+    if (
+      /function_call|custom_tool|tool_result|tool_output|web_search|image_generation|mcp_tool|tool_search|patch_apply|shell/i
+        .test(type)
+    ) {
+      return true;
+    }
+
+    // Drop pure reasoning snapshots / dangling references only.
+    if (type === "reasoning") return false;
+    if (type === "item_reference") return false;
+    if (/^rs_/i.test(id) && (!type || type === "reasoning")) return false;
+    return true;
+  });
 }
 
 function syncClaudeThirdPartyInferenceConfig(config) {
@@ -3961,6 +4698,37 @@ function reloadGatewayConfig() {
   if (EXPOSED_MODELS.length === 0) {
     EXPOSED_MODELS.push(...parseList(process.env.EXPOSED_MODELS || process.env.MODEL_LIST || "claude-sonnet"));
   }
+
+  // Rebuild Codex catalog from the latest config + current Desktop model cache,
+  // then refresh the Desktop model_catalog_json file.
+  if (CODEX_WRITE_MODEL_CATALOG) {
+    try {
+      writeCodexModelCatalog();
+    } catch (error) {
+      console.warn(`Codex model catalog write failed: ${error.message || error}`);
+      refreshOfficialCodexCatalogModels();
+      CODEX_CATALOG = buildCodexCatalog({
+        officialModels: OFFICIAL_CODEX_CATALOG_MODELS,
+        endpoints: GATEWAY_CONFIG.clients?.codex?.endpoints || [],
+      });
+      OFFICIAL_CODEX_MODEL_IDS = CODEX_CATALOG.officialIds;
+      CODEX_CUSTOM_MODELS = CODEX_CATALOG.models.filter(
+        (model) => !OFFICIAL_CODEX_MODEL_IDS.has(model.slug),
+      );
+      _codexModelsDiscoveryCache = null;
+    }
+  } else {
+    refreshOfficialCodexCatalogModels();
+    CODEX_CATALOG = buildCodexCatalog({
+      officialModels: OFFICIAL_CODEX_CATALOG_MODELS,
+      endpoints: GATEWAY_CONFIG.clients?.codex?.endpoints || [],
+    });
+    OFFICIAL_CODEX_MODEL_IDS = CODEX_CATALOG.officialIds;
+    CODEX_CUSTOM_MODELS = CODEX_CATALOG.models.filter(
+      (model) => !OFFICIAL_CODEX_MODEL_IDS.has(model.slug),
+    );
+    _codexModelsDiscoveryCache = null;
+  }
 }
 
 function normalizeGatewayConfig(config) {
@@ -4054,6 +4822,7 @@ function loadDotEnv() {
 }
 
 function enableNodeEnvProxy() {
+  ensureOfficialCodexProxyEnv();
   const hasProxy =
     Boolean(process.env.HTTPS_PROXY) ||
     Boolean(process.env.HTTP_PROXY) ||
@@ -4065,6 +4834,39 @@ function enableNodeEnvProxy() {
   if (hasProxy && process.env.NODE_USE_ENV_PROXY == null) {
     process.env.NODE_USE_ENV_PROXY = "1";
   }
+}
+
+// Prefer explicit env, then the same default local Clash port used by Grok.
+function ensureOfficialCodexProxyEnv() {
+  if (isTruthy(process.env.OFFICIAL_CODEX_PROXY_DISABLED)) return;
+
+  const existing =
+    process.env.HTTPS_PROXY ||
+    process.env.HTTP_PROXY ||
+    process.env.ALL_PROXY ||
+    process.env.https_proxy ||
+    process.env.http_proxy ||
+    process.env.all_proxy ||
+    "";
+
+  if (existing) {
+    if (process.env.NODE_USE_ENV_PROXY == null) {
+      process.env.NODE_USE_ENV_PROXY = "1";
+    }
+    return;
+  }
+
+  // Use env/literal only: this runs from enableNodeEnvProxy() at module top,
+  // before const GROK_DEFAULT_PROXY is initialized (TDZ).
+  const fallback =
+    process.env.OFFICIAL_CODEX_PROXY ||
+    process.env.GROK_PROXY ||
+    "http://127.0.0.1:7897";
+
+  if (!fallback) return;
+  process.env.HTTPS_PROXY = fallback;
+  process.env.HTTP_PROXY ||= fallback;
+  process.env.NODE_USE_ENV_PROXY ||= "1";
 }
 
 

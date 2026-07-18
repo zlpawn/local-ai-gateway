@@ -1,4 +1,5 @@
 import fs from "node:fs";
+import os from "node:os";
 import path from "node:path";
 import { execFileSync } from "node:child_process";
 import { fileURLToPath } from "node:url";
@@ -6,7 +7,9 @@ import { buildCodexCatalog } from "../lib/codex/model-catalog.mjs";
 
 const PROJECT_ROOT = path.dirname(path.dirname(fileURLToPath(import.meta.url)));
 const DEFAULT_CONFIG_PATH = path.join(PROJECT_ROOT, "gateway.config.json");
-const DEFAULT_OUTPUT_PATH = path.join(PROJECT_ROOT, ".codex", "gateway-model-catalog.json");
+// Align with server.js: always default to the real user ~/.codex catalog file,
+// not process.env.CODEX_HOME (which may point at a temporary worktree).
+const DEFAULT_OUTPUT_PATH = path.join(os.homedir(), ".codex", "gateway-model-catalog.json");
 
 const args = new Set(process.argv.slice(2));
 const shouldVerify = args.has("--verify");
@@ -27,7 +30,7 @@ const customModels = builtCatalog.models.filter(
 );
 const catalog = {
   generated_at: new Date().toISOString(),
-  source: "volcengine-agent-plan-gateway",
+  source: "local-ai-gateway",
   models: builtCatalog.models,
 };
 
@@ -56,6 +59,29 @@ function readJson(filePath) {
 }
 
 function loadBundledCodexModels() {
+  // Prefer Desktop live cache so newly rolled-out official models appear.
+  const cachePath = path.join(os.homedir(), ".codex", "models_cache.json");
+  try {
+    if (fs.existsSync(cachePath)) {
+      const parsed = JSON.parse(fs.readFileSync(cachePath, "utf8").replace(/^﻿/, ""));
+      const models = Array.isArray(parsed.models)
+        ? parsed.models
+        : Array.isArray(parsed?.data)
+          ? parsed.data
+          : [];
+      const fromCache = models
+        .filter((model) => model && isOfficialCodexModel(model.slug || model.id))
+        .map((model) => ({
+          ...model,
+          slug: model.slug || model.id,
+          display_name: model.display_name || model.slug || model.id,
+        }));
+      if (fromCache.length) return fromCache;
+    }
+  } catch (error) {
+    console.warn(`Warning: failed to read Desktop models_cache.json: ${error.message}`);
+  }
+
   try {
     const output = execFileSync("codex", ["debug", "models", "--bundled"], {
       encoding: "utf8",
