@@ -1,28 +1,47 @@
 {
   "name": "@wuhezhizhong/local-ai-gateway",
-  "version": "0.0.2",
+  "version": "0.0.3",
   "description": "Local configurable gateway for Claude, Codex, and OpenAI-compatible AI providers.",
   "private": false,
   "license": "MIT",
   "author": "Local AI Gateway contributors",
   "type": "module",
-  "main": "desktop/main.mjs",
   "bin": {
-    "local-ai-gateway": "./bin/cli.js"
+    "local-ai-gateway": "bin/cli.js"
   },
   "files": [
     "bin",
-    "desktop",
+    "desktop/config-panel.html",
+    "desktop/main.mjs",
+    "desktop/lib/desktop-smoke.mjs",
+    "desktop/lib/gateway-control.mjs",
     "lib",
     "scripts",
     "server.js",
     "gateway.config.example.json",
-    "gateway.config.json",
-    "models.json",
     ".env.example",
     "README.md",
     "LICENSE"
   ],
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/zlpawn/local-ai-gateway.git"
+  },
+  "homepage": "https://github.com/zlpawn/local-ai-gateway#readme",
+  "bugs": {
+    "url": "https://github.com/zlpawn/local-ai-gateway/issues"
+  },
+  "keywords": [
+    "ai",
+    "gateway",
+    "claude",
+    "codex",
+    "anthropic",
+    "openai"
+  ],
+  "publishConfig": {
+    "access": "public"
+  },
   "scripts": {
     "init": "node scripts/init-config.mjs",
     "start": "node server.js",
@@ -42,7 +61,7 @@
     "codex:history:apply": "node scripts/codex-history-unify.mjs --apply",
     "codex:history:restore": "node scripts/codex-history-unify.mjs --restore",
     "test:adapters": "node --test tests/integration/basic-routes.test.mjs tests/integration/protocol-adapters.test.mjs",
-    "test:cli": "node --test tests/unit/gateway-service.test.mjs tests/unit/init-config.test.mjs tests/integration/gateway-cli.integration.test.mjs",
+    "test:cli": "node --test tests/unit/gateway-service.test.mjs tests/unit/init-config.test.mjs tests/unit/package-release.test.mjs tests/integration/gateway-cli.integration.test.mjs",
     "test:codex:unit": "node --test tests/unit/gateway-config-store.test.mjs tests/unit/claude-code-settings.test.mjs tests/unit/codex-model-catalog.test.mjs tests/unit/codex-chat-request-adapter.test.mjs tests/unit/codex-responses-writer.test.mjs tests/unit/codex-chat-response-adapter.test.mjs tests/unit/codex-responses-passthrough.test.mjs tests/unit/codex-official-models.test.mjs tests/unit/codex-hosted-tools-inject.test.mjs",
     "test:codex:catalog-write": "node --test tests/integration/codex-catalog-write.test.mjs",
     "test:codex:integration": "node --test tests/integration/codex-gateway.test.mjs",
@@ -51,7 +70,9 @@
     "gateway:start": "node scripts/gateway.mjs start",
     "gateway:stop": "node scripts/gateway.mjs stop",
     "gateway:status": "node scripts/gateway.mjs status",
-    "gateway:restart": "node scripts/gateway.mjs restart"
+    "gateway:restart": "node scripts/gateway.mjs restart",
+    "release:check": "npm run check && npm run test:cli && npm run test:codex:unit && npm run desktop:test && npm run test:adapters && npm run test:codex:catalog-write && npm run test:codex:integration && npm run test:codex:e2e",
+    "prepublishOnly": "npm run release:check"
   },
   "engines": {
     "node": ">=18"
