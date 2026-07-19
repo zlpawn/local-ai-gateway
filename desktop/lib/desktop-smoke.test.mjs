@@ -83,6 +83,16 @@ test("endpoint detail provides an explicit manual save action", async () => {
   assert.match(html, /saveConfig\(\{\s*button:\s*btn,\s*client,\s*scope:\s*'node'/);
 });
 
+test("endpoint detail uses a horizontal action bar and compact model exposure switch", async () => {
+  const html = await readFile(path.join(ROOT, "desktop", "config-panel.html"), "utf8");
+  assert.match(html, /\.detail-actions\s*\{[^}]*display:\s*flex[^}]*flex-wrap:\s*nowrap/s);
+  assert.match(html, /class="detail-actions"/);
+  assert.match(html, /class="switch-control"/);
+  assert.match(html, /class="switch-track"/);
+  assert.match(html, /class="switch-copy"/);
+  assert.doesNotMatch(html, /accent-color:\s*var\(--primary\)/);
+});
+
 test("Codex capability updates preserve unrelated fields and do not copy secrets", async () => {
   const sentinel = "sk-task7-ui-must-not-copy";
   const config = {
