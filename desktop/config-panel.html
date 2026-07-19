@@ -500,6 +500,59 @@
             border-color: transparent;
         }
 
+        .node-card-switch {
+            position: relative;
+            display: inline-flex;
+            align-items: center;
+            cursor: pointer;
+            padding: 4px 2px;
+        }
+
+        .node-card-switch input {
+            position: absolute;
+            width: 1px;
+            height: 1px;
+            opacity: 0;
+            pointer-events: none;
+        }
+
+        .node-card-switch-track {
+            position: relative;
+            width: 32px;
+            height: 18px;
+            border: 1px solid var(--border-color);
+            border-radius: 999px;
+            background: var(--surface-hover);
+            transition: background var(--transition-fast), border-color var(--transition-fast);
+        }
+
+        .node-card-switch-track::after {
+            content: "";
+            position: absolute;
+            top: 2px;
+            left: 2px;
+            width: 12px;
+            height: 12px;
+            border-radius: 50%;
+            background: var(--text-secondary);
+            transition: transform var(--transition-fast), background var(--transition-fast);
+        }
+
+        .node-card-switch input:checked + .node-card-switch-track {
+            background: var(--text-primary);
+            border-color: var(--text-primary);
+        }
+
+        .node-card-switch input:checked + .node-card-switch-track::after {
+            background: var(--bg-color);
+            transform: translateX(14px);
+        }
+
+        .node-card-switch input:focus-visible + .node-card-switch-track {
+            outline: 2px solid var(--text-primary);
+            outline-offset: 2px;
+        }
+
         /* Detail view */
         .detail-view {
             display: flex;
@@ -556,94 +609,6 @@
             pointer-events: none;
         }
 
-        .model-exposure-setting {
-            flex-direction: row;
-            align-items: center;
-            justify-content: space-between;
-            gap: 24px;
-            padding: 14px 16px;
-            border: 1px solid var(--border-color);
-            border-radius: var(--radius-md);
-            background: var(--input-bg);
-        }
-
-        .switch-control {
-            display: inline-flex;
-            align-items: center;
-            gap: 12px;
-            min-width: 0;
-            margin: 0;
-            cursor: pointer;
-            text-transform: none;
-            letter-spacing: normal;
-        }
-
-        .switch-control input {
-            position: absolute;
-            width: 1px;
-            height: 1px;
-            opacity: 0;
-            pointer-events: none;
-        }
-
-        .switch-track {
-            position: relative;
-            width: 38px;
-            height: 22px;
-            flex: 0 0 38px;
-            border: 1px solid var(--border-color);
-            border-radius: 999px;
-            background: var(--surface-hover);
-            transition: background var(--transition-fast), border-color var(--transition-fast);
-        }
-
-        .switch-track::after {
-            content: "";
-            position: absolute;
-            top: 3px;
-            left: 3px;
-            width: 14px;
-            height: 14px;
-            border-radius: 50%;
-            background: var(--text-secondary);
-            transition: transform var(--transition-fast), background var(--transition-fast);
-        }
-
-        .switch-control input:checked + .switch-track {
-            background: var(--text-primary);
-            border-color: var(--text-primary);
-        }
-
-        .switch-control input:checked + .switch-track::after {
-            background: var(--bg-color);
-            transform: translateX(16px);
-        }
-
-        .switch-control input:focus-visible + .switch-track {
-            outline: 2px solid var(--text-primary);
-            outline-offset: 2px;
-        }
-
-        .switch-copy {
-            display: flex;
-            flex-direction: column;
-            gap: 2px;
-            min-width: 0;
-        }
-
-        .switch-title {
-            color: var(--text-primary);
-            font-size: 13px;
-            font-weight: 600;
-        }
-
-        .switch-description {
-            color: var(--text-secondary);
-            font-size: 12px;
-            font-weight: 400;
-            line-height: 1.4;
-        }
-
         @media (max-width: 900px) {
             .detail-toolbar {
                 align-items: flex-start;
@@ -657,11 +622,6 @@
                 padding-bottom: 2px;
             }
 
-            .model-exposure-setting {
-                align-items: flex-start;
-                flex-direction: column;
-                gap: 8px;
-            }
         }
 
         .detail-title {
@@ -1235,6 +1195,11 @@ experimental_bearer_token = "dummy"</pre>
                     <div class="node-card-top">
                         <div class="node-card-title">${name}</div>
                         <div class="node-card-actions" onclick="event.stopPropagation()">
+                            <label class="node-card-switch" title="${ep.expose_models ? '从模型列表隐藏此节点' : '在模型列表展示此节点'}">
+                                <input type="checkbox" ${ep.expose_models ? 'checked' : ''}
+                                    onchange="toggleEndpointExposure(event, '${client}', ${index}, this)">
+                                <span class="node-card-switch-track" aria-hidden="true"></span>
+                            </label>
                             <button type="button" class="${defaultClass}" title="${defaultTitle}"
                                 onclick="event.stopPropagation(); setAsDefault('${client}', ${index})">
                                 <svg width="14" height="14" viewBox="0 0 24 24" fill="${ep.is_default ? 'currentColor' : 'none'}" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
@@ -1343,17 +1308,6 @@ experimental_bearer_token = "dummy"</pre>
                                         </svg>
                                     </button>
                                 </div>
-                            </div>
-                            <div class="form-group full model-exposure-setting">
-                                <label class="switch-control">
-                                    <input type="checkbox" ${ep.expose_models ? 'checked' : ''} onchange="updateEndpoint('${client}', ${index}, 'expose_models', this.checked)">
-                                    <span class="switch-track" aria-hidden="true"></span>
-                                    <span class="switch-copy">
-                                        <span class="switch-title">在桌面模型列表中展示</span>
-                                        <span class="switch-description">启用后，此节点的模型会出现在客户端模型选择器中。</span>
-                                    </span>
-                                </label>
-                                <div class="detail-subtitle">没有任何节点开启时，默认展示全部节点模型。</div>
                             </div>
                             ${client === 'codex' ? `
                             <div class="form-group full">
@@ -1671,12 +1625,32 @@ experimental_bearer_token = "dummy"</pre>
             await saveConfig({ button: btn, client, scope: 'node' });
         }
 
+        window.toggleEndpointExposure = async function(event, client, index, input) {
+            event.stopPropagation();
+            const endpoint = config.clients?.[client]?.endpoints?.[index];
+            if (!endpoint || !input) return;
+            const previous = endpoint.expose_models === true;
+            endpoint.expose_models = input.checked;
+            const saved = await saveConfig({
+                button: input,
+                client,
+                scope: 'exposure',
+            });
+            if (!saved) {
+                endpoint.expose_models = previous;
+                render();
+            }
+        }
+
         window.saveConfig = async function(options = {}) {
             const btn = options.button || document.getElementById('save-btn');
             if (!btn) return;
             const originalContent = btn.innerHTML;
+            const showButtonProgress = btn.tagName === 'BUTTON';
 
-            btn.innerHTML = `<svg class="spinner" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" style="animation: spin 1s linear infinite;"><line x1="12" y1="2" x2="12" y2="6"></line><line x1="12" y1="18" x2="12" y2="22"></line><line x1="4.93" y1="4.93" x2="7.76" y2="7.76"></line><line x1="16.24" y1="16.24" x2="19.07" y2="19.07"></line><line x1="2" y1="12" x2="6" y2="12"></line><line x1="18" y1="12" x2="22" y2="12"></line><line x1="4.93" y1="19.07" x2="7.76" y2="16.24"></line><line x1="16.24" y1="7.76" x2="19.07" y2="4.93"></line></svg> 保存中...`;
+            if (showButtonProgress) {
+                btn.innerHTML = `<svg class="spinner" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" style="animation: spin 1s linear infinite;"><line x1="12" y1="2" x2="12" y2="6"></line><line x1="12" y1="18" x2="12" y2="22"></line><line x1="4.93" y1="4.93" x2="7.76" y2="7.76"></line><line x1="16.24" y1="16.24" x2="19.07" y2="19.07"></line><line x1="2" y1="12" x2="6" y2="12"></line><line x1="18" y1="12" x2="22" y2="12"></line><line x1="4.93" y1="19.07" x2="7.76" y2="16.24"></line><line x1="16.24" y1="7.76" x2="19.07" y2="4.93"></line></svg> 保存中...`;
+            }
             btn.disabled = true;
 
             try {
@@ -1701,7 +1675,14 @@ experimental_bearer_token = "dummy"</pre>
                         codexModelCatalogPath = String(payload.codex_model_catalog.path).replaceAll('\\', '/');
                     }
                     render();
-                    if (options.scope === 'node' && options.client === 'desktop') {
+                    if (options.scope === 'exposure') {
+                        showToast(
+                            options.client === 'desktop' && payload.claude3pSync?.updated
+                                ? '模型展示设置已保存，Claude 3P 模型列表已同步'
+                                : '模型展示设置已保存',
+                            'success'
+                        );
+                    } else if (options.scope === 'node' && options.client === 'desktop') {
                         if (payload.claude3pSync?.updated) {
                             showToast('节点已保存，Claude 3P 模型列表已同步', 'success');
                         } else if (payload.claude3pSync?.reason === 'already-in-sync') {
@@ -1726,6 +1707,7 @@ experimental_bearer_token = "dummy"</pre>
                     } else {
                         showToast('配置已生效，服务已重新加载', 'success');
                     }
+                    return true;
                 } else {
                     const payload = await res.json().catch(() => null);
                     const conflicts = payload?.error?.issues?.filter(issue =>
@@ -1742,11 +1724,13 @@ experimental_bearer_token = "dummy"</pre>
                     } else {
                         showToast(payload?.error?.message || '保存配置失败', 'error');
                     }
+                    return false;
                 }
             } catch (e) {
                 showToast('保存时网络出错', 'error');
+                return false;
             } finally {
-                btn.innerHTML = originalContent;
+                if (showButtonProgress) btn.innerHTML = originalContent;
                 btn.disabled = false;
             }
         }
