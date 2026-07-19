@@ -62,6 +62,17 @@ test("config panel exposes Codex tools, reasoning, and image capabilities", asyn
   assert.match(html, /wire_api = "responses"/);
 });
 
+test("Codex capability controls and active navigation use compact product styling", async () => {
+  const html = await readFile(path.join(ROOT, "desktop", "config-panel.html"), "utf8");
+  assert.match(html, /\.nav-item\.active\s*\{[^}]*box-shadow:\s*inset 2px 0 0/s);
+  assert.match(html, /\.capability-options\s*\{[^}]*grid-template-columns:\s*repeat\(3,\s*minmax\(0,\s*1fr\)\)/s);
+  assert.match(html, /\.capability-option\s*\{[^}]*display:\s*flex[^}]*align-items:\s*center/s);
+  assert.match(html, /\.capability-checkbox\s*\{[^}]*width:\s*16px[^}]*height:\s*16px[^}]*padding:\s*0/s);
+  assert.match(html, /class="capability-option"/);
+  assert.match(html, /class="capability-checkbox"/);
+  assert.doesNotMatch(html, /class="checkbox-row"/);
+});
+
 test("config panel supports stable endpoint ids, secret status, exposure, and conflict suggestions", async () => {
   const html = await readFile(path.join(ROOT, "desktop", "config-panel.html"), "utf8");
   assert.match(html, /crypto\.randomUUID\(\)/);
@@ -69,6 +80,7 @@ test("config panel supports stable endpoint ids, secret status, exposure, and co
   assert.match(html, /has_api_key/);
   assert.match(html, /expose_models/);
   assert.match(html, /duplicate_public_model/);
+  assert.match(html, /invalid_claude_model_name/);
   assert.match(html, /suggestion/);
   assert.match(html, /delete endpoint\.api_key/);
   assert.match(html, /createTemplateEndpoint/);

@@ -47,21 +47,10 @@
             "grok-4.5"
           ],
           "model_mapping": {
-            "claude-opus-4-7-grok-subscription": "grok-4.5"
+            "claude-fable-5": "grok-4.5"
           },
           "is_default": true,
           "id": "ep_b83be2be-8d46-4765-8484-4626a8c6fd5a"
-        },
-        {
-          "name": "https://how88.top",
-          "type": "openai-chat",
-          "base_url": "https://how88.top",
-          "models": [],
-          "model_mapping": {
-            "claude-opus-4-6-max": "glm-5.2"
-          },
-          "is_default": false,
-          "id": "ep_d0407aae-c407-47c5-b812-feb1bf66effb"
         },
         {
           "name": "huoshan-codingplan",
@@ -73,9 +62,9 @@
             "deepseek-v4-pro"
           ],
           "model_mapping": {
-            "claude-opus-4-8-huoshan-codingplan": "glm-5.2",
-            "claude-opus-4-7-huoshan-codingplan": "minimax-m3",
-            "claude-sonnet-4-5-huoshan-codingplan": "deepseek-v4-pro"
+            "claude-opus-4-8": "glm-5.2",
+            "claude-opus-4-7": "minimax-m3",
+            "claude-opus-4-6": "deepseek-v4-pro"
           },
           "is_default": false,
           "id": "ep_0bb74284-d8fc-4fe7-bef4-54c32c8ee333"
@@ -85,18 +74,7 @@
           "type": "openai-chat",
           "base_url": "https://huskyapi.com/v1/chat/completions",
           "models": [],
-          "model_mapping": {
-            "claude-opus-4-8-https-huskyapi-com": "claude-opus-4-8",
-            "claude-opus-4-7-https-huskyapi-com": "claude-opus-4-7",
-            "claude-opus": "claude-opus-4-8",
-            "opus": "claude-opus-4-8",
-            "claude-sonnet-4-5-https-huskyapi-com": "claude-sonnet-4-6",
-            "claude-sonnet": "claude-sonnet-4-6",
-            "sonnet": "claude-sonnet-4-6",
-            "claude-haiku-4-0": "claude-haiku-4-5-20251001",
-            "claude-haiku": "claude-haiku-4-5-20251001",
-            "haiku": "claude-haiku-4-5-20251001"
-          },
+          "model_mapping": {},
           "is_default": false,
           "id": "ep_22985a51-100c-4a0b-9eeb-05893b7a2640"
         },
@@ -116,6 +94,24 @@
     },
     "codex": {
       "endpoints": [
+        {
+          "id": "ep_f276eab2-3ae1-4323-89e5-7a085cc36fce",
+          "name": "grok-subscription",
+          "type": "grok",
+          "base_url": "https://cli-chat-proxy.grok.com/v1",
+          "models": [
+            "grok-4.5"
+          ],
+          "model_mapping": {},
+          "capabilities": {
+            "input_modalities": [
+              "text",
+              "image"
+            ],
+            "reasoning": true,
+            "tools": true
+          }
+        },
         {
           "name": "huoshan-codingplan",
           "type": "openai-responses",

@@ -189,7 +189,7 @@ test("exposure selection uses explicit nodes, or all nodes when none are selecte
   );
 });
 
-test("validation rejects duplicate ids, defaults, and every public model collision with suggestions", () => {
+test("Desktop validation suggests Claude version names for public model collisions", () => {
   const config = {
     server: { host: "127.0.0.1", port: 8787 },
     clients: {
@@ -199,15 +199,15 @@ test("validation rejects duplicate ids, defaults, and every public model collisi
             id: "ep_same",
             name: "火山 引擎",
             is_default: true,
-            models: ["glm-5.2", "shared"],
-            model_mapping: { alias: "glm-5.2", shared: "other" },
+            models: ["glm-5.2"],
+            model_mapping: { "claude-opus-4-7": "glm-5.2" },
           },
           {
             id: "ep_same",
             name: "Husky API",
             is_default: true,
-            models: ["glm-5.2"],
-            model_mapping: { alias: "other" },
+            models: ["claude-opus-4-7"],
+            model_mapping: { "claude-opus-4-7": "claude-opus-4-7" },
           },
         ],
       },
@@ -218,10 +218,16 @@ test("validation rejects duplicate ids, defaults, and every public model collisi
   assert.ok(issues.some((issue) => issue.code === "duplicate_endpoint_id"));
   assert.ok(issues.some((issue) => issue.code === "multiple_default_endpoints"));
   const conflicts = issues.filter((issue) => issue.code === "duplicate_public_model");
-  assert.deepEqual(conflicts.map((issue) => issue.model_id).sort(), ["alias", "glm-5.2", "shared"]);
-  const glm = conflicts.find((issue) => issue.model_id === "glm-5.2");
-  assert.match(glm.occurrences[0].suggestion, /^glm-5\.2-/);
-  assert.match(glm.occurrences[1].suggestion, /^glm-5\.2-husky-api/);
+  assert.deepEqual(conflicts.map((issue) => issue.model_id), ["claude-opus-4-7"]);
+  assert.deepEqual(
+    conflicts[0].occurrences.map((occurrence) => occurrence.suggestion),
+    ["claude-opus-4-7", "claude-opus-4-6"],
+  );
+  assert.equal(
+    conflicts[0].occurrences.some((occurrence) =>
+      /husky|火山|endpoint|ep_/i.test(occurrence.suggestion)),
+    false,
+  );
 
   assert.throws(
     () => saveGatewayState({
@@ -230,6 +236,31 @@ test("validation rejects duplicate ids, defaults, and every public model collisi
       config,
     }),
     GatewayConfigError,
+  );
+});
+
+test("Desktop validation checks mapping keys but permits third-party upstream model lists", () => {
+  const issues = validateGatewayConfig({
+    clients: {
+      desktop: {
+        endpoints: [{
+          id: "ep_desktop",
+          name: "Third Party",
+          models: ["glm-5.2"],
+          model_mapping: {
+            "minimax-m3": "minimax-m3",
+            "claude-sonnet-4-6": "deepseek-v4-pro",
+          },
+        }],
+      },
+    },
+  });
+
+  const invalid = issues.filter((issue) => issue.code === "invalid_claude_model_name");
+  assert.deepEqual(invalid.map((issue) => issue.model_id), ["minimax-m3"]);
+  assert.equal(
+    invalid.every((issue) => /^claude-(?:opus|sonnet|haiku|fable)-\d+(?:-\d+)*$/.test(issue.suggestion)),
+    true,
   );
 });
 
@@ -278,17 +309,19 @@ test("load permits legacy model conflicts so users can resolve them through the 
   }
 });
 
-test("Claude model aggregation preserves distinct public names mapped to one upstream", () => {
+test("Claude model aggregation keeps only valid distinct Claude public names", () => {
   const models = buildClaudeInferenceModels([
     {
+      models: ["glm-5.2", "claude-opus-4-7"],
       model_mapping: {
-        "claude-sonnet-husky": "claude-sonnet-4-6",
-        "claude-sonnet-backup": "claude-sonnet-4-6",
+        "claude-sonnet-4-6": "deepseek-v4-pro",
+        "claude-sonnet-4-5": "deepseek-v4-pro",
+        "claude-sonnet-husky": "deepseek-v4-pro",
       },
     },
   ]);
   assert.deepEqual(models.map((model) => model.name), [
-    "claude-sonnet-husky",
-    "claude-sonnet-backup",
+    "claude-sonnet-4-6",
+    "claude-sonnet-4-5",
   ]);
 });

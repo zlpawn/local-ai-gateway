@@ -194,8 +194,18 @@ test("saving duplicate public model ids returns conflict suggestions", async (t)
       clients: {
         desktop: {
           endpoints: [
-            { id: "ep_ark", name: "Volcengine", models: ["glm-5.2"] },
-            { id: "ep_husky", name: "Husky API", models: ["glm-5.2"] },
+            {
+              id: "ep_ark",
+              name: "Volcengine",
+              models: ["glm-5.2"],
+              model_mapping: { "claude-opus-4-7": "glm-5.2" },
+            },
+            {
+              id: "ep_husky",
+              name: "Husky API",
+              models: ["minimax-m3"],
+              model_mapping: { "claude-opus-4-7": "minimax-m3" },
+            },
           ],
         },
       },
@@ -204,9 +214,9 @@ test("saving duplicate public model ids returns conflict suggestions", async (t)
   assert.equal(response.status, 400);
   const payload = await response.json();
   const issue = payload.error.issues.find((item) => item.code === "duplicate_public_model");
-  assert.equal(issue.model_id, "glm-5.2");
+  assert.equal(issue.model_id, "claude-opus-4-7");
   assert.deepEqual(
     issue.occurrences.map((item) => item.suggestion),
-    ["glm-5.2-volcengine", "glm-5.2-husky-api"],
+    ["claude-opus-4-7", "claude-opus-4-6"],
   );
 });
