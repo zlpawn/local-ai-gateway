@@ -42,6 +42,20 @@
     "desktop": {
       "endpoints": [
         {
+          "id": "ep_7093ea70-ffff-4602-8a9f-c5006fc233d8",
+          "name": "视觉兜底节点",
+          "purpose": "vision_fallback",
+          "vision_fallback_enabled": true,
+          "vision_model": "minimax-m3",
+          "type": "anthropic",
+          "base_url": "https://ark.cn-beijing.volces.com/api/coding",
+          "auth": "bearer",
+          "models": [
+            "minimax-m3"
+          ],
+          "model_mapping": {}
+        },
+        {
           "name": "grok-subscription",
           "type": "grok",
           "base_url": "https://cli-chat-proxy.grok.com/v1",
@@ -141,7 +155,7 @@
         {
           "name": "huoshan-codingplan",
           "type": "anthropic",
-          "base_url": "https://ark.cn-beijing.volces.com/api/coding/v3",
+          "base_url": "https://ark.cn-beijing.volces.com/api/coding",
           "models": [
             "glm-5.2",
             "minimax-m3",
