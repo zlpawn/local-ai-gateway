@@ -71,6 +71,40 @@ test("image detection and replacement support Anthropic, Chat, and Responses bod
   }
 });
 
+test("image replacement keeps tool results non-empty and puts the description on the latest image", () => {
+  const body = {
+    messages: [
+      {
+        role: "user",
+        content: [
+          { type: "text", text: "之前上传的图片" },
+          { type: "image", source: { type: "base64", media_type: "image/png", data: "AA==" } },
+        ],
+      },
+      {
+        role: "assistant",
+        content: [{ type: "tool_use", id: "read-1", name: "Read", input: {} }],
+      },
+      {
+        role: "user",
+        content: [{
+          type: "tool_result",
+          tool_use_id: "read-1",
+          content: [
+            { type: "image", source: { type: "base64", media_type: "image/png", data: "AQ==" } },
+          ],
+        }],
+      },
+    ],
+  };
+
+  const replaced = replaceImagesWithDescription(body, "最新图片是一张模型选择界面。");
+  assert.equal(containsImages(replaced), false);
+  assert.match(replaced.messages[0].content[1].text, /已纳入视觉兜底解析/);
+  assert.match(replaced.messages[2].content[0].content[0].text, /最新图片是一张模型选择界面/);
+  assert.equal(replaced.messages[2].content[0].content.length, 1);
+});
+
 test("only explicit image capability errors trigger reactive fallback", () => {
   assert.equal(isImageCapabilityError(400, '{"error":"image input is not supported"}'), true);
   assert.equal(isImageCapabilityError(400, '{"error":"unsupported modality: image"}'), true);
