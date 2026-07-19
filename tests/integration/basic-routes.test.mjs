@@ -21,13 +21,17 @@ test("basic protocol route matrix works through the isolated 8788 gateway", asyn
     response.setHeader("content-type", "application/json");
 
     if (request.url === "/vision/chat/completions") {
+      const serialized = JSON.stringify(body);
+      const imageDescription = /base64,AQ==/.test(serialized)
+        ? "新增图片中显示错误代码 E43。"
+        : "图片中显示错误代码 E42。";
       response.end(JSON.stringify({
         id: "chatcmpl_vision",
         object: "chat.completion",
         model: body.model,
         choices: [{
           index: 0,
-          message: { role: "assistant", content: "图片中显示错误代码 E42。" },
+          message: { role: "assistant", content: imageDescription },
           finish_reason: "stop",
         }],
       }));
@@ -254,6 +258,41 @@ test("basic protocol route matrix works through the isolated 8788 gateway", asyn
   assert.match(JSON.stringify(visionRequest.body), /data:image\/png;base64,AA==/);
   assert.doesNotMatch(JSON.stringify(textRequest.body), /image_url|base64,AA==/);
   assert.match(JSON.stringify(textRequest.body), /错误代码 E42/);
+
+  await jsonRequest("/code/v1/messages", {
+    model: "claude-text-only",
+    max_tokens: 16,
+    messages: [
+      {
+        role: "user",
+        content: [
+          { type: "text", text: "之前的图片" },
+          {
+            type: "image",
+            source: { type: "base64", media_type: "image/png", data: "AA==" },
+          },
+        ],
+      },
+      {
+        role: "user",
+        content: [
+          { type: "text", text: "再看这张" },
+          {
+            type: "image",
+            source: { type: "base64", media_type: "image/png", data: "AQ==" },
+          },
+        ],
+      },
+    ],
+  }, { "anthropic-version": "2023-06-01" });
+
+  const visionRequests = requestHistory.filter((item) => item.url === "/vision/chat/completions");
+  assert.equal(visionRequests.length, 2);
+  assert.doesNotMatch(JSON.stringify(visionRequests[1].body), /base64,AA==/);
+  assert.match(JSON.stringify(visionRequests[1].body), /base64,AQ==/);
+  const latestTextRequest = requestHistory.filter((item) => item.url === "/text/chat/completions").at(-1);
+  assert.match(JSON.stringify(latestTextRequest.body), /错误代码 E42/);
+  assert.match(JSON.stringify(latestTextRequest.body), /错误代码 E43/);
 
   const codex = await jsonRequest("/codex/v1/responses", {
     model: "mock-codex-model",
