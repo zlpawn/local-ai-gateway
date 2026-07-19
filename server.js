@@ -3719,7 +3719,11 @@ async function applyVisionFallback(body, route, clientReq, context, reason) {
   if (!fallback || fallback.endpoint.id === route?.provider?.id) return body;
   const images = collectImages(body);
   if (!images.length) return body;
-  const description = await describeImagesWithFallback(images, fallback, clientReq);
+  const {
+    description,
+    analyzedImageCount,
+    cachedImageCount,
+  } = await describeImagesWithFallback(images, fallback, clientReq);
   logInfo("vision_fallback_applied", {
     request_id: context.requestId,
     client: context.client,
@@ -3728,6 +3732,8 @@ async function applyVisionFallback(body, route, clientReq, context, reason) {
     vision_provider: fallback.endpoint.id,
     vision_model: fallback.model,
     image_count: images.length,
+    analyzed_image_count: analyzedImageCount,
+    cached_image_count: cachedImageCount,
     reason,
   });
   return replaceImagesWithDescription(body, description);
@@ -3741,7 +3747,26 @@ async function describeImagesWithFallback(images, fallback, clientReq) {
   const cacheKey = createHash("sha256")
     .update(`${fallback.endpoint.id}\0${fallback.model}\0${urls.join("\0")}`)
     .digest("hex");
-  if (VISION_DESCRIPTION_CACHE.has(cacheKey)) return VISION_DESCRIPTION_CACHE.get(cacheKey);
+  const exactCached = VISION_DESCRIPTION_CACHE.get(cacheKey);
+  if (exactCached) {
+    return {
+      description: exactCached.description,
+      analyzedImageCount: 0,
+      cachedImageCount: urls.length,
+    };
+  }
+
+  let cachedPrefix = null;
+  for (const entry of VISION_DESCRIPTION_CACHE.values()) {
+    if (
+      entry.endpointId !== fallback.endpoint.id
+      || entry.model !== fallback.model
+      || entry.urls.length >= urls.length
+      || (cachedPrefix && entry.urls.length <= cachedPrefix.urls.length)
+    ) continue;
+    if (entry.urls.every((url, index) => url === urls[index])) cachedPrefix = entry;
+  }
+  const uncachedUrls = cachedPrefix ? urls.slice(cachedPrefix.urls.length) : urls;
 
   const provider = endpointProvider(fallback.endpoint);
   const prompt = "请完整识别这些图片，提取所有文字、代码、表格、报错和界面结构，并描述与用户问题相关的关键视觉信息。只输出客观、结构化的图片解析结果，不要回答用户问题。";
@@ -3757,7 +3782,7 @@ async function describeImagesWithFallback(images, fallback, clientReq) {
         role: "user",
         content: [
           { type: "text", text: prompt },
-          ...urls.map(openAIImagePartToAnthropic).filter(Boolean),
+          ...uncachedUrls.map(openAIImagePartToAnthropic).filter(Boolean),
         ],
       }],
     }, clientReq);
@@ -3770,7 +3795,7 @@ async function describeImagesWithFallback(images, fallback, clientReq) {
         role: "user",
         content: [
           { type: "text", text: prompt },
-          ...urls.map((url) => ({ type: "image_url", image_url: { url } })),
+          ...uncachedUrls.map((url) => ({ type: "image_url", image_url: { url } })),
         ],
       }],
     }, clientReq);
@@ -3785,7 +3810,7 @@ async function describeImagesWithFallback(images, fallback, clientReq) {
         role: "user",
         content: [
           { type: "input_text", text: prompt },
-          ...urls.map((url) => ({ type: "input_image", image_url: url })),
+          ...uncachedUrls.map((url) => ({ type: "input_image", image_url: url })),
         ],
       }],
     }, clientReq);
@@ -3803,7 +3828,7 @@ async function describeImagesWithFallback(images, fallback, clientReq) {
             role: "user",
             content: [
               { type: "text", text: prompt },
-              ...urls.map((url) => ({ type: "image_url", image_url: { url } })),
+              ...uncachedUrls.map((url) => ({ type: "image_url", image_url: { url } })),
             ],
           }],
         })
@@ -3814,7 +3839,7 @@ async function describeImagesWithFallback(images, fallback, clientReq) {
             role: "user",
             content: [
               { type: "input_text", text: prompt },
-              ...urls.map((url) => ({ type: "input_image", image_url: url })),
+            ...uncachedUrls.map((url) => ({ type: "input_image", image_url: url })),
             ],
           }],
         });
@@ -3830,11 +3855,23 @@ async function describeImagesWithFallback(images, fallback, clientReq) {
     throw httpError(upstream?.status || 502, `Vision fallback failed: ${message}`);
   }
   if (!description.trim()) throw httpError(502, "Vision fallback returned no image description.");
-  VISION_DESCRIPTION_CACHE.set(cacheKey, description);
+  const combinedDescription = cachedPrefix
+    ? `${cachedPrefix.description}\n\n[新增图片解析结果]\n${description}`
+    : description;
+  VISION_DESCRIPTION_CACHE.set(cacheKey, {
+    endpointId: fallback.endpoint.id,
+    model: fallback.model,
+    urls,
+    description: combinedDescription,
+  });
   if (VISION_DESCRIPTION_CACHE.size > 100) {
     VISION_DESCRIPTION_CACHE.delete(VISION_DESCRIPTION_CACHE.keys().next().value);
   }
-  return description;
+  return {
+    description: combinedDescription,
+    analyzedImageCount: uncachedUrls.length,
+    cachedImageCount: urls.length - uncachedUrls.length,
+  };
 }
 
 function endpointProvider(endpoint) {
