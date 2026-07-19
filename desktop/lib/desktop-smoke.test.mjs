@@ -83,15 +83,21 @@ test("endpoint detail provides an explicit manual save action", async () => {
   assert.match(html, /saveConfig\(\{\s*button:\s*btn,\s*client,\s*scope:\s*'node'/);
 });
 
-test("card actions persist directly without the legacy global save button", async () => {
+test("global and card save actions preserve the active client context", async () => {
   const html = await readFile(path.join(ROOT, "desktop", "config-panel.html"), "utf8");
-  assert.doesNotMatch(html, /id="save-btn"/);
+  assert.match(html, /id="save-btn"/);
+  assert.match(html, /onclick="saveCurrentConfig\(\)"/);
+  assert.match(html, /let activeClient = 'code'/);
+  assert.match(html, /activeClient = tabId/);
+  assert.match(html, /window\.saveCurrentConfig\s*=\s*async function/);
+  assert.match(html, /saveConfig\(\{\s*button:\s*btn,\s*client:\s*activeClient,\s*scope:\s*'global'/);
   assert.match(html, /window\.removeEndpoint\s*=\s*async function/);
   assert.match(html, /saveConfig\(\{\s*client,\s*scope:\s*'delete'/);
   assert.match(html, /window\.setAsDefault\s*=\s*async function/);
   assert.match(html, /saveConfig\(\{\s*client,\s*scope:\s*'default'/);
   assert.match(html, /options\.scope === 'default'/);
-  assert.doesNotMatch(html, /payload\.codex_model_catalog\?\.exists\)\s*\{\s*showToast\('配置已生效，Codex 模型目录已更新'/s);
+  assert.match(html, /options\.scope === 'global' && options\.client === 'desktop'/);
+  assert.match(html, /options\.scope === 'global' && options\.client === 'codex'/);
 });
 
 test("endpoint cards expose a compact model visibility switch outside the detail form", async () => {
