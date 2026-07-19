@@ -1153,6 +1153,13 @@ experimental_bearer_token = "dummy"</pre>
                             </div>
                         </div>
                         <div class="card-actions">
+                            <button
+                                class="btn btn-sm btn-primary"
+                                id="save-node-${client}-${index}"
+                                onclick="saveNode('${client}', ${index})">
+                                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z"></path><polyline points="17 21 17 13 7 13 7 21"></polyline><polyline points="7 3 7 8 15 8"></polyline></svg>
+                                保存节点
+                            </button>
                             <label style="display: flex; align-items: center; gap: 6px; font-size: 13px; cursor: pointer; color: var(--text-secondary); font-weight: normal; margin: 0;">
                                 <input type="radio" name="default-${client}" ${ep.is_default ? 'checked' : ''} onchange="setAsDefault('${client}', ${index})" style="width: auto; margin: 0; padding: 0; accent-color: var(--primary);">
                                 设为默认节点
@@ -1509,11 +1516,19 @@ experimental_bearer_token = "dummy"</pre>
             }
         };
 
-        window.saveConfig = async function() {
-            const btn = document.getElementById('save-btn');
+        window.saveNode = async function(client, index) {
+            const endpoint = config.clients?.[client]?.endpoints?.[index];
+            const btn = document.getElementById(`save-node-${client}-${index}`);
+            if (!endpoint || !btn) return;
+            await saveConfig({ button: btn, client, scope: 'node' });
+        }
+
+        window.saveConfig = async function(options = {}) {
+            const btn = options.button || document.getElementById('save-btn');
+            if (!btn) return;
             const originalContent = btn.innerHTML;
 
-            btn.innerHTML = `<svg class="spinner" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" style="animation: spin 1s linear infinite;"><line x1="12" y1="2" x2="12" y2="6"></line><line x1="12" y1="18" x2="12" y2="22"></line><line x1="4.93" y1="4.93" x2="7.76" y2="7.76"></line><line x1="16.24" y1="16.24" x2="19.07" y2="19.07"></line><line x1="2" y1="12" x2="6" y2="12"></line><line x1="18" y1="12" x2="22" y2="12"></line><line x1="4.93" y1="19.07" x2="7.76" y2="16.24"></line><line x1="16.24" y1="7.76" x2="19.07" y2="4.93"></line></svg> Saving...`;
+            btn.innerHTML = `<svg class="spinner" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" style="animation: spin 1s linear infinite;"><line x1="12" y1="2" x2="12" y2="6"></line><line x1="12" y1="18" x2="12" y2="22"></line><line x1="4.93" y1="4.93" x2="7.76" y2="7.76"></line><line x1="16.24" y1="16.24" x2="19.07" y2="19.07"></line><line x1="2" y1="12" x2="6" y2="12"></line><line x1="18" y1="12" x2="22" y2="12"></line><line x1="4.93" y1="19.07" x2="7.76" y2="16.24"></line><line x1="16.24" y1="7.76" x2="19.07" y2="4.93"></line></svg> 保存中...`;
             btn.disabled = true;
 
             try {
@@ -1538,7 +1553,25 @@ experimental_bearer_token = "dummy"</pre>
                         codexModelCatalogPath = String(payload.codex_model_catalog.path).replaceAll('\\', '/');
                     }
                     render();
-                    if (payload.claude3pSync?.updated) {
+                    if (options.scope === 'node' && options.client === 'desktop') {
+                        if (payload.claude3pSync?.updated) {
+                            showToast('节点已保存，Claude 3P 模型列表已同步', 'success');
+                        } else if (payload.claude3pSync?.reason === 'already-in-sync') {
+                            showToast('节点已保存，Claude 3P 模型列表无变化', 'success');
+                        } else {
+                            const reason = payload.claude3pSync?.error || payload.claude3pSync?.reason || '未知原因';
+                            showToast(`节点已保存，但 Claude 3P 同步未完成：${reason}`, 'error');
+                        }
+                    } else if (options.scope === 'node' && options.client === 'codex') {
+                        showToast(
+                            payload.codex_model_catalog?.exists
+                                ? '节点已保存，Codex 模型目录已刷新'
+                                : '节点已保存',
+                            'success'
+                        );
+                    } else if (options.scope === 'node') {
+                        showToast('节点已保存', 'success');
+                    } else if (payload.claude3pSync?.updated) {
                         showToast('配置已生效，并已同步 Claude 第三方模型列表', 'success');
                     } else if (payload.codex_model_catalog?.exists) {
                         showToast('配置已生效，Codex 模型目录已更新', 'success');
