@@ -868,7 +868,7 @@
         .usage-guide p {
             font-size: 13px;
             color: var(--text-secondary);
-            margin: 0 0 12px 0;
+            margin: 0;
         }
         .code-snippet {
             background: var(--bg-color);
@@ -879,6 +879,85 @@
             color: var(--text-primary);
             border: 1px solid var(--border-color);
             user-select: all;
+        }
+
+        .model-slots-panel {
+            margin-bottom: 20px;
+            padding: 14px 16px 16px;
+            background: transparent;
+            border: 1px solid var(--border-color);
+            border-radius: var(--radius-md);
+        }
+
+        .model-slots-header {
+            display: flex;
+            align-items: baseline;
+            justify-content: space-between;
+            gap: 16px;
+            margin-bottom: 12px;
+        }
+
+        .model-slots-header h3 {
+            flex: 0 0 auto;
+            font-size: 13px;
+            font-weight: 600;
+            margin: 0;
+        }
+
+        .model-slots-header p {
+            min-width: 0;
+            color: var(--text-secondary);
+            font-size: 12px;
+            margin: 0;
+            overflow: hidden;
+            text-overflow: ellipsis;
+            white-space: nowrap;
+        }
+
+        .model-slots-grid {
+            display: grid;
+            grid-template-columns: repeat(4, minmax(0, 1fr));
+            gap: 10px;
+        }
+
+        .model-slot-field {
+            gap: 5px;
+            min-width: 0;
+        }
+
+        .model-slot-field label {
+            font-size: 11px;
+            letter-spacing: 0.04em;
+        }
+
+        .model-slot-field select {
+            min-width: 0;
+            height: 36px;
+            padding-top: 6px;
+            padding-bottom: 6px;
+            font-size: 13px;
+        }
+
+        @media (max-width: 1100px) {
+            .model-slots-grid {
+                grid-template-columns: repeat(2, minmax(0, 1fr));
+            }
+        }
+
+        @media (max-width: 680px) {
+            .model-slots-header {
+                align-items: flex-start;
+                flex-direction: column;
+                gap: 4px;
+            }
+
+            .model-slots-header p {
+                white-space: normal;
+            }
+
+            .model-slots-grid {
+                grid-template-columns: 1fr;
+            }
         }
 
         .password-input-wrapper {
@@ -1051,16 +1130,34 @@
                 </div>
 
                 <div class="usage-guide">
-                    <h3>🚀 如何连接此网关？</h3>
-                    <p>修改全局配置：打开并编辑你的 <code>~/.claude/settings.json</code> 文件，向 <code>"env"</code> 字段加入以下代理地址：</p>
-                    <div class="code-snippet">
-                        <pre style="margin: 0; color: inherit; font-family: inherit; font-size: inherit; background: transparent; padding: 0; overflow-x: auto;">
-{
-  "env": {
-    "ANTHROPIC_BASE_URL": "http://<span class="cfg-host">127.0.0.1</span>:<span class="cfg-port">8787</span>/code",
-    "ANTHROPIC_API_KEY": "dummy"
-  }
-}</pre>
+                    <h3>配置自动同步</h3>
+                    <p>保存 Claude Code 节点或本页配置后，网关会自动同步到 <code>~/.claude/settings.json</code>。完全退出并重新启动 Claude Code 后生效。</p>
+                </div>
+
+                <div class="model-slots-panel" id="claude-code-model-slots">
+                    <div class="model-slots-header">
+                        <h3>Claude Code 快捷模型</h3>
+                        <p id="claude-code-model-slots-help">
+                            从默认节点选择 Opus、Sonnet、Haiku 和 Fable 的固定模型。
+                        </p>
+                    </div>
+                    <div class="model-slots-grid">
+                        <div class="form-group model-slot-field">
+                            <label>Opus</label>
+                            <select id="claude-code-slot-opus" onchange="updateClaudeCodeModelSlot('opus', this.value)"></select>
+                        </div>
+                        <div class="form-group model-slot-field">
+                            <label>Sonnet</label>
+                            <select id="claude-code-slot-sonnet" onchange="updateClaudeCodeModelSlot('sonnet', this.value)"></select>
+                        </div>
+                        <div class="form-group model-slot-field">
+                            <label>Haiku</label>
+                            <select id="claude-code-slot-haiku" onchange="updateClaudeCodeModelSlot('haiku', this.value)"></select>
+                        </div>
+                        <div class="form-group model-slot-field">
+                            <label>Fable</label>
+                            <select id="claude-code-slot-fable" onchange="updateClaudeCodeModelSlot('fable', this.value)"></select>
+                        </div>
                     </div>
                 </div>
 
@@ -1079,17 +1176,8 @@
                 </div>
 
                 <div class="usage-guide">
-                    <h3>🚀 如何连接此网关？</h3>
-                    <p>Claude 官方桌面端目前不支持直接在界面配置自定义节点，需要通过**环境变量覆盖**的方式启动客户端。</p>
-                    <h4 style="margin-top: 15px; margin-bottom: 8px;">Mac 启动命令</h4>
-                    <p style="font-size: 13px; color: var(--text-secondary); margin-bottom: 8px;">在终端执行以下命令来启动加入了代理参数的桌面端：</p>
-                    <div class="code-snippet">
-                        <pre style="margin: 0; color: inherit; font-family: inherit; font-size: inherit; background: transparent; padding: 0; overflow-x: auto;">
-export ANTHROPIC_BASE_URL="http://<span class="cfg-host">127.0.0.1</span>:<span class="cfg-port">8787</span>/desktop"
-export ANTHROPIC_API_KEY="dummy"
-open -a "Claude"</pre>
-                    </div>
-                    <p style="font-size: 12px; margin-top: 8px; margin-bottom: 0; color: var(--warning);">⚠️ 注意：执行命令前，请确保后台的 Claude 客户端已彻底退出（Cmd+Q）。你可以将上述命令保存为别名或一键启动脚本。</p>
+                    <h3>配置自动同步</h3>
+                    <p>保存 Claude Desktop 节点或本页配置后，网关会自动同步到 Claude Desktop 的第三方推理配置。完全退出并重新启动 Claude Desktop 后生效。</p>
                 </div>
 
                 <div class="endpoints-grid" id="desktop-endpoints"></div>
@@ -1141,7 +1229,7 @@ experimental_bearer_token = "dummy"</pre>
     <script>
         let config = {
             server: { host: "127.0.0.1", port: 8787 },
-            clients: { code: { endpoints: [] }, desktop: { endpoints: [] }, codex: { endpoints: [] } }
+            clients: { code: { endpoints: [], model_slots: {} }, desktop: { endpoints: [] }, codex: { endpoints: [] } }
         };
         let codexModelCatalogPath = "~/.codex/gateway-model-catalog.json";
 
@@ -1192,7 +1280,15 @@ experimental_bearer_token = "dummy"</pre>
             config = {
                 server: { host: "127.0.0.1", port: 8787 },
                 clients: {
-                    code: { endpoints: [codeEndpoint] },
+                    code: {
+                        endpoints: [{ ...codeEndpoint, is_default: true }],
+                        model_slots: {
+                            opus: "minimax-m3",
+                            sonnet: "glm-5.2",
+                            haiku: "deepseek-v4-pro",
+                            fable: "deepseek-v4-pro"
+                        }
+                    },
                     desktop: { endpoints: [desktopEndpoint] },
                     codex: { endpoints: [] }
                 }
@@ -1215,7 +1311,7 @@ experimental_bearer_token = "dummy"</pre>
                             ...config,
                             ...data,
                             clients: {
-                                code: data.clients.code || { endpoints: [] },
+                                code: data.clients.code || { endpoints: [], model_slots: {} },
                                 desktop: data.clients.desktop || { endpoints: [] },
                                 codex: data.clients.codex || { endpoints: [] }
                             }
@@ -1488,6 +1584,7 @@ experimental_bearer_token = "dummy"</pre>
             document.querySelectorAll('.cfg-catalog-path').forEach(el => {
                 el.textContent = codexModelCatalogPath || '~/.codex/gateway-model-catalog.json';
             });
+            renderClaudeCodeModelSlots();
 
             // Keep selection valid after delete/reorder
             if (selectedEndpoint) {
@@ -1523,6 +1620,61 @@ experimental_bearer_token = "dummy"</pre>
                     container.innerHTML = eps.map((ep, i) => createEndpointSummaryHTML(client, i, ep)).join('');
                 }
             });
+        }
+
+        function getClaudeCodeDefaultEndpoint() {
+            const endpoints = config.clients?.code?.endpoints || [];
+            return endpoints.find(endpoint => endpoint.is_default === true)
+                || (endpoints.length === 1 ? endpoints[0] : null);
+        }
+
+        function getEndpointPublicModels(endpoint) {
+            if (!endpoint) return [];
+            return [...new Set([
+                ...(endpoint.models || []),
+                ...Object.keys(endpoint.model_mapping || {})
+            ].filter(Boolean))];
+        }
+
+        function renderClaudeCodeModelSlots() {
+            const endpoint = getClaudeCodeDefaultEndpoint();
+            const models = getEndpointPublicModels(endpoint);
+            const slots = config.clients?.code?.model_slots || {};
+            const help = document.getElementById('claude-code-model-slots-help');
+            if (help) {
+                help.textContent = endpoint
+                    ? `当前默认节点：${endpoint.name || endpoint.id}。保存配置后会同步到 ~/.claude/settings.json。`
+                    : '请先设置一个默认节点，再选择四个快捷模型。';
+            }
+            for (const slot of ['opus', 'sonnet', 'haiku', 'fable']) {
+                const select = document.getElementById(`claude-code-slot-${slot}`);
+                if (!select) continue;
+                select.disabled = !endpoint;
+                select.innerHTML = [
+                    '<option value="">不设置</option>',
+                    ...models.map(model =>
+                        `<option value="${escapeHtml(model)}" ${slots[slot] === model ? 'selected' : ''}>${escapeHtml(model)}</option>`
+                    )
+                ].join('');
+            }
+        }
+
+        window.updateClaudeCodeModelSlot = function(slot, model) {
+            config.clients.code.model_slots ||= {};
+            if (model) {
+                config.clients.code.model_slots[slot] = model;
+            } else {
+                delete config.clients.code.model_slots[slot];
+            }
+        };
+
+        function pruneClaudeCodeModelSlots() {
+            const endpoint = getClaudeCodeDefaultEndpoint();
+            const available = new Set(getEndpointPublicModels(endpoint));
+            const slots = config.clients?.code?.model_slots || {};
+            for (const slot of ['opus', 'sonnet', 'haiku', 'fable']) {
+                if (slots[slot] && !available.has(slots[slot])) delete slots[slot];
+            }
         }
 
         window.openEndpoint = function(client, index) {
@@ -1618,15 +1770,20 @@ experimental_bearer_token = "dummy"</pre>
 
         window.setAsDefault = async function(client, index) {
             const previousDefaults = config.clients[client].endpoints.map(ep => ep.is_default === true);
+            const previousSlots = client === 'code'
+                ? structuredClone(config.clients.code.model_slots || {})
+                : null;
             config.clients[client].endpoints.forEach((ep, i) => {
                 ep.is_default = (i === index);
             });
+            if (client === 'code') pruneClaudeCodeModelSlots();
             render();
             const saved = await saveConfig({ client, scope: 'default' });
             if (!saved) {
                 config.clients[client].endpoints.forEach((ep, i) => {
                     ep.is_default = previousDefaults[i];
                 });
+                if (client === 'code') config.clients.code.model_slots = previousSlots;
                 render();
             }
         }
@@ -1802,9 +1959,13 @@ experimental_bearer_token = "dummy"</pre>
             if (btn) btn.disabled = true;
 
             try {
+                pruneClaudeCodeModelSlots();
                 const res = await fetch('/v1/config/save', {
                     method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'X-Gateway-Config-Client': options.client || (options.scope === 'template' ? 'code' : activeClient)
+                    },
                     body: JSON.stringify(config)
                 });
 
@@ -1846,10 +2007,24 @@ experimental_bearer_token = "dummy"</pre>
                                 : '节点已保存',
                             'success'
                         );
+                    } else if (options.scope === 'node' && options.client === 'code') {
+                        if (payload.claudeCodeSync?.updated) {
+                            showToast('节点已保存，Claude Code 模型配置已同步', 'success');
+                        } else if (payload.claudeCodeSync?.reason === 'already-in-sync') {
+                            showToast('节点已保存，Claude Code 模型配置无变化', 'success');
+                        } else {
+                            const reason = payload.claudeCodeSync?.error || payload.claudeCodeSync?.reason || '未知原因';
+                            showToast(`节点已保存，但 Claude Code 同步未完成：${reason}`, 'error');
+                        }
                     } else if (options.scope === 'node') {
                         showToast('节点已保存', 'success');
                     } else if (options.scope === 'default') {
-                        showToast('默认节点已设置', 'success');
+                        showToast(
+                            options.client === 'code' && payload.claudeCodeSync?.updated
+                                ? '默认节点已设置，Claude Code 模型配置已同步'
+                                : '默认节点已设置',
+                            'success'
+                        );
                     } else if (options.scope === 'delete' && options.client === 'desktop' && payload.claude3pSync?.updated) {
                         showToast('节点已删除，Claude 3P 模型列表已同步', 'success');
                     } else if (options.scope === 'delete' && options.client === 'codex' && payload.codex_model_catalog?.exists) {
@@ -1858,6 +2033,14 @@ experimental_bearer_token = "dummy"</pre>
                         showToast('节点已删除', 'success');
                     } else if (options.scope === 'template') {
                         showToast('默认模板已恢复', 'success');
+                    } else if (options.scope === 'global' && options.client === 'code') {
+                        if (payload.claudeCodeSync?.updated) {
+                            showToast('配置已保存，Claude Code 模型配置已同步', 'success');
+                        } else if (payload.claudeCodeSync?.reason === 'already-in-sync') {
+                            showToast('配置已保存，Claude Code 模型配置无变化', 'success');
+                        } else {
+                            showToast('配置已保存', 'success');
+                        }
                     } else if (options.scope === 'global' && options.client === 'desktop') {
                         if (payload.claude3pSync?.updated) {
                             showToast('配置已保存，Claude 3P 模型列表已同步', 'success');

@@ -6,12 +6,13 @@ import test from "node:test";
 
 import {
   GatewayConfigError,
+  buildClaudeCodeModelRoutes,
+  buildClaudeInferenceModels,
   getEndpointApiKey,
   loadGatewayState,
   saveGatewayState,
   selectExposedEndpoints,
   validateGatewayConfig,
-  buildClaudeInferenceModels,
 } from "../lib/config/gateway-config-store.mjs";
 
 test("load migrates legacy fields, adds stable ids, extracts keys, and creates a backup", () => {
@@ -324,4 +325,56 @@ test("Claude model aggregation keeps only valid distinct Claude public names", (
     "claude-sonnet-4-6",
     "claude-sonnet-4-5",
   ]);
+});
+
+test("Claude Code model slots must reference models on the default endpoint", () => {
+  const issues = validateGatewayConfig({
+    clients: {
+      code: {
+        model_slots: {
+          opus: "minimax-m3",
+          sonnet: "missing-model",
+        },
+        endpoints: [{
+          id: "ep_code",
+          name: "code-default",
+          is_default: true,
+          models: ["minimax-m3", "glm-5.2"],
+          model_mapping: {},
+        }],
+      },
+    },
+  });
+
+  assert.deepEqual(
+    issues.filter((issue) => issue.code === "invalid_claude_code_model_slot"),
+    [{
+      code: "invalid_claude_code_model_slot",
+      client: "code",
+      slot: "sonnet",
+      model_id: "missing-model",
+      endpoint_id: "ep_code",
+      message: "Claude Code model slot 'sonnet' must reference a model exposed by the default endpoint.",
+    }],
+  );
+});
+
+test("Claude Code generated routes use mappings before same-named upstream models", () => {
+  const result = buildClaudeCodeModelRoutes([{
+    id: "ep_code",
+    name: "code-node",
+    models: ["public-model", "upstream-model"],
+    model_mapping: {
+      "public-model": "upstream-model",
+    },
+  }]);
+
+  assert.deepEqual(result.models.map((model) => model.display_name), [
+    "public-model",
+    "upstream-model",
+  ]);
+  assert.equal(
+    result.routes.get("anthropic.gateway.ep_code.public-model").upstream_model,
+    "upstream-model",
+  );
 });
