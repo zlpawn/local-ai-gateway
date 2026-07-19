@@ -944,6 +944,10 @@
                         <svg id="theme-icon-dark" style="display: none;" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"></path></svg>
                         <svg id="theme-icon-light" style="display: none;" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="5"></circle><line x1="12" y1="1" x2="12" y2="3"></line><line x1="12" y1="21" x2="12" y2="23"></line><line x1="4.22" y1="4.22" x2="5.64" y2="5.64"></line><line x1="18.36" y1="18.36" x2="19.78" y2="19.78"></line><line x1="1" y1="12" x2="3" y2="12"></line><line x1="21" y1="12" x2="23" y2="12"></line><line x1="4.22" y1="19.78" x2="5.64" y2="18.36"></line><line x1="18.36" y1="5.64" x2="19.78" y2="4.22"></line></svg>
                     </button>
+                    <button class="btn btn-primary" id="save-btn" onclick="saveCurrentConfig()" style="flex: 1;">
+                        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z"></path><polyline points="17 21 17 13 7 13 7 21"></polyline><polyline points="7 3 7 8 15 8"></polyline></svg>
+                        保存配置
+                    </button>
                 </div>
                 <button class="btn" onclick="loadDefaultTemplate()" style="width: 100%; border-color: transparent; color: var(--text-secondary); margin-top: 4px; background: var(--input-bg);">
                     <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 12a9 9 0 1 0 9-9 9.75 9.75 0 0 0-6.74 2.74L3 8"></path><polyline points="3 3 3 8 8 8"></polyline></svg>
@@ -1061,6 +1065,7 @@ experimental_bearer_token = "dummy"</pre>
 
         // Craft-style navigation: null = card list, {client,index} = detail editor
         let selectedEndpoint = null;
+        let activeClient = 'code';
 
         const ENDPOINT_TYPES = [
             { value: "anthropic", label: "Anthropic 官方" },
@@ -1439,6 +1444,7 @@ experimental_bearer_token = "dummy"</pre>
         };
 
         window.switchTab = function(tabId) {
+            activeClient = tabId;
             // Leaving a tab exits detail view
             if (selectedEndpoint && selectedEndpoint.client !== tabId) {
                 selectedEndpoint = null;
@@ -1640,6 +1646,12 @@ experimental_bearer_token = "dummy"</pre>
             await saveConfig({ button: btn, client, scope: 'node' });
         }
 
+        window.saveCurrentConfig = async function() {
+            const btn = document.getElementById('save-btn');
+            if (!btn) return;
+            await saveConfig({ button: btn, client: activeClient, scope: 'global' });
+        }
+
         window.toggleEndpointExposure = async function(event, client, index, input) {
             event.stopPropagation();
             const endpoint = config.clients?.[client]?.endpoints?.[index];
@@ -1724,6 +1736,21 @@ experimental_bearer_token = "dummy"</pre>
                         showToast('节点已删除', 'success');
                     } else if (options.scope === 'template') {
                         showToast('默认模板已恢复', 'success');
+                    } else if (options.scope === 'global' && options.client === 'desktop') {
+                        if (payload.claude3pSync?.updated) {
+                            showToast('配置已保存，Claude 3P 模型列表已同步', 'success');
+                        } else if (payload.claude3pSync?.reason === 'already-in-sync') {
+                            showToast('配置已保存，Claude 3P 模型列表无变化', 'success');
+                        } else {
+                            showToast('配置已保存', 'success');
+                        }
+                    } else if (options.scope === 'global' && options.client === 'codex') {
+                        showToast(
+                            payload.codex_model_catalog?.exists
+                                ? '配置已保存，Codex 模型目录已刷新'
+                                : '配置已保存',
+                            'success'
+                        );
                     } else {
                         showToast('配置已保存', 'success');
                     }
