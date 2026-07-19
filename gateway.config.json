@@ -115,6 +115,20 @@
     "codex": {
       "endpoints": [
         {
+          "id": "ep_e679b525-ab58-452f-912c-179efd2e8865",
+          "name": "视觉兜底节点",
+          "purpose": "vision_fallback",
+          "vision_fallback_enabled": true,
+          "vision_model": "minimax-m3",
+          "type": "openai-responses",
+          "base_url": "https://ark.cn-beijing.volces.com/api/coding/v3",
+          "auth": "bearer",
+          "models": [
+            "minimax-m3"
+          ],
+          "model_mapping": {}
+        },
+        {
           "id": "ep_b7e69222-8a62-4ab8-a2cd-a0f8ab560d3f",
           "name": "how88.top",
           "type": "anthropic",
@@ -154,8 +168,8 @@
         },
         {
           "name": "huoshan-codingplan",
-          "type": "anthropic",
-          "base_url": "https://ark.cn-beijing.volces.com/api/coding",
+          "type": "openai-responses",
+          "base_url": "https://ark.cn-beijing.volces.com/api/coding/v3",
           "models": [
             "glm-5.2",
             "minimax-m3",
