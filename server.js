@@ -27,12 +27,14 @@ import { pipeResponsesSsePassthrough } from "./lib/codex/responses-passthrough.m
 import { ResponsesWriter } from "./lib/codex/responses-writer.mjs";
 import {
   GatewayConfigError,
+  buildClaudeCodeModelRoutes,
   buildClaudeInferenceModels,
   getEndpointApiKey,
   loadGatewayState,
   saveGatewayState,
   selectExposedEndpoints,
 } from "./lib/config/gateway-config-store.mjs";
+import { syncClaudeCodeSettings } from "./lib/config/claude-code-settings.mjs";
 
 const PROJECT_ROOT = path.dirname(fileURLToPath(import.meta.url));
 
@@ -64,6 +66,8 @@ const GATEWAY_SECRETS_FILE = resolveProjectPath(
 const CLAUDE_3P_CONFIG_FILE = process.env.CLAUDE_3P_CONFIG_FILE || "";
 const CLAUDE_3P_CONFIG_LIBRARY = process.env.CLAUDE_3P_CONFIG_LIBRARY || "";
 const CLAUDE_3P_SYNC_DISABLED = isTruthy(process.env.CLAUDE_3P_SYNC_DISABLED);
+const CLAUDE_CODE_SYNC_DISABLED = isTruthy(process.env.CLAUDE_CODE_SYNC_DISABLED);
+const CLAUDE_CODE_SETTINGS_FILE = process.env.CLAUDE_CODE_SETTINGS_FILE || "";
 const ANTHROPIC_BASE_URL = trimRight(
   process.env.OFFICIAL_ANTHROPIC_BASE_URL || process.env.ANTHROPIC_UPSTREAM_BASE_URL || "https://api.anthropic.com",
   "/",
@@ -81,6 +85,9 @@ let GATEWAY_STATE = loadGatewayState({
 });
 let GATEWAY_CONFIG = GATEWAY_STATE.config;
 let GATEWAY_SECRETS = GATEWAY_STATE.secrets;
+let CLAUDE_CODE_MODEL_ROUTES = buildClaudeCodeModelRoutes(
+  GATEWAY_CONFIG.clients?.code?.endpoints || [],
+);
 const LISTEN_HOST = ENV_HOST || GATEWAY_CONFIG.server?.host || "127.0.0.1";
 const LISTEN_PORT = ENV_PORT || Number(GATEWAY_CONFIG.server?.port) || 8787;
 const _allEndpoints = [
@@ -295,6 +302,10 @@ async function route(req, res) {
       GATEWAY_CONFIG = result.config;
       GATEWAY_SECRETS = result.secrets;
       const claude3pSync = syncClaudeThirdPartyInferenceConfig(GATEWAY_CONFIG);
+      const saveClient = normalizeClientName(req.headers["x-gateway-config-client"]);
+      const claudeCodeSync = saveClient === "code"
+        ? syncClaudeCodeSettingsIfEnabled(GATEWAY_CONFIG)
+        : { updated: false, reason: "not-requested" };
       reloadGatewayConfig({ reloadFiles: false });
       logInfo("gateway_config_saved", {
         config_changed: result.configChanged,
@@ -306,6 +317,7 @@ async function route(req, res) {
         config_changed: result.configChanged,
         secrets_changed: result.secretsChanged,
         claude3pSync,
+        claudeCodeSync,
         codex_model_catalog: {
           path: CODEX_MODEL_CATALOG_PATH,
           path_posix: toPosixPath(CODEX_MODEL_CATALOG_PATH),
@@ -2313,6 +2325,18 @@ function missingProviderApiKeyMessage(provider, req) {
 
 function modelDiscovery(client = 'claude') {
   const now = Math.floor(Date.now() / 1000);
+  if (client === "code") {
+    return {
+      object: "list",
+      data: [...CLAUDE_CODE_MODEL_ROUTES.models].map((model) => ({
+        id: model.id,
+        object: "model",
+        created: now,
+        owned_by: model.owned_by,
+        display_name: model.display_name,
+      })),
+    };
+  }
   const merged = new Map();
 
   for (const id of OFFICIAL_CLAUDE_MODELS) {
@@ -3378,6 +3402,26 @@ function resolveConfiguredModel(requestedModel, allowedTypes = [], client = null
   if (!requestedModel) return null;
   const text = String(requestedModel);
   const allowed = new Set(allowedTypes);
+
+  if (client === "code") {
+    const internalRoute = CLAUDE_CODE_MODEL_ROUTES.routes.get(text);
+    if (
+      internalRoute &&
+      (allowed.size === 0 || allowed.has(internalRoute.endpoint.type)) &&
+      hasConfiguredApiKey(internalRoute.endpoint)
+    ) {
+      return {
+        model: {
+          id: text,
+          display_name: internalRoute.display_name,
+          upstream_model: internalRoute.upstream_model,
+          aliases: [],
+        },
+        provider: endpointProvider(internalRoute.endpoint),
+        upstream_model: internalRoute.upstream_model,
+      };
+    }
+  }
 
   const clientsToCheck = client ? [client] : ["code", "desktop", "claude", "codex"];
 
@@ -4909,6 +4953,20 @@ function buildClaudeThirdPartyGatewayBaseUrl(config) {
   return `http://${host}:${port}/desktop`;
 }
 
+function syncClaudeCodeSettingsIfEnabled(config) {
+  if (CLAUDE_CODE_SYNC_DISABLED) {
+    return { updated: false, reason: "disabled" };
+  }
+  return syncClaudeCodeSettings({
+    config,
+    ...(CLAUDE_CODE_SETTINGS_FILE
+      ? { settingsPath: resolveUserPath(CLAUDE_CODE_SETTINGS_FILE) }
+      : {}),
+    authToken: CONFIGURED_API_KEY_SENTINEL,
+    gatewayBaseUrl: `http://${LISTEN_HOST === "0.0.0.0" ? "127.0.0.1" : LISTEN_HOST}:${LISTEN_PORT}/code`,
+  });
+}
+
 function reloadGatewayConfig({ reloadFiles = true } = {}) {
   if (reloadFiles) {
     GATEWAY_STATE = loadGatewayState({
@@ -4919,6 +4977,9 @@ function reloadGatewayConfig({ reloadFiles = true } = {}) {
     GATEWAY_CONFIG = GATEWAY_STATE.config;
     GATEWAY_SECRETS = GATEWAY_STATE.secrets;
   }
+  CLAUDE_CODE_MODEL_ROUTES = buildClaudeCodeModelRoutes(
+    GATEWAY_CONFIG.clients?.code?.endpoints || [],
+  );
   const _endpoints = [
     ...(GATEWAY_CONFIG.clients?.code?.endpoints || []),
     ...(GATEWAY_CONFIG.clients?.desktop?.endpoints || []),

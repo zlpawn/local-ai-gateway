@@ -155,6 +155,104 @@ test("Chat Completions images survive conversion to Responses input", async (t) 
   }]);
 });
 
+test("Claude Code discovers generated gateway ids and routes them to the exact endpoint model", async (t) => {
+  let capturedBody;
+  const mock = http.createServer((request, response) => {
+    let raw = "";
+    request.setEncoding("utf8");
+    request.on("data", (chunk) => {
+      raw += chunk;
+    });
+    request.on("end", () => {
+      capturedBody = JSON.parse(raw);
+      response.writeHead(200, { "content-type": "application/json" });
+      response.end(JSON.stringify({
+        id: "msg_mock",
+        type: "message",
+        role: "assistant",
+        model: capturedBody.model,
+        content: [{ type: "text", text: "OK" }],
+        stop_reason: "end_turn",
+        stop_sequence: null,
+        usage: { input_tokens: 3, output_tokens: 1 },
+      }));
+    });
+  });
+  const mockPort = await listen(mock);
+  t.after(() => mock.close());
+
+  const reservation = http.createServer();
+  const gatewayPort = await listen(reservation);
+  await new Promise((resolve) => reservation.close(resolve));
+
+  const tempDir = await mkdtemp(path.join(tmpdir(), "local-ai-gateway-code-routing-"));
+  t.after(() => rm(tempDir, { recursive: true, force: true }));
+  const configFile = path.join(tempDir, "gateway.config.json");
+  await writeFile(configFile, JSON.stringify({
+    server: { host: "127.0.0.1", port: gatewayPort },
+    clients: {
+      code: {
+        endpoints: [{
+          id: "ep_exact",
+          name: "huoshan-codingplan",
+          type: "anthropic",
+          base_url: `http://127.0.0.1:${mockPort}`,
+          api_key: "env:MOCK_API_KEY",
+          models: ["minimax-m3"],
+          model_mapping: {},
+        }],
+      },
+      desktop: { endpoints: [] },
+      codex: { endpoints: [] },
+    },
+  }));
+
+  const gateway = spawn(process.execPath, ["server.js"], {
+    cwd: ROOT,
+    env: {
+      ...process.env,
+      GATEWAY_CONFIG_FILE: configFile,
+      GATEWAY_NO_OPEN: "1",
+      GATEWAY_PORT: String(gatewayPort),
+      CLAUDE_3P_SYNC_DISABLED: "1",
+      CLAUDE_CODE_SYNC_DISABLED: "1",
+      MOCK_API_KEY: "test-key",
+    },
+    stdio: ["ignore", "pipe", "pipe"],
+  });
+  t.after(() => {
+    if (gateway.exitCode == null) gateway.kill();
+  });
+  await waitForHealth(gatewayPort, gateway);
+
+  const discovery = await fetch(`http://127.0.0.1:${gatewayPort}/code/v1/models`);
+  assert.equal(discovery.status, 200);
+  const payload = await discovery.json();
+  assert.deepEqual(payload.data, [{
+    id: "anthropic.gateway.ep_exact.minimax-m3",
+    object: "model",
+    created: payload.data[0]?.created,
+    owned_by: "ep_exact",
+    display_name: "minimax-m3",
+  }]);
+
+  const result = await fetch(`http://127.0.0.1:${gatewayPort}/code/v1/messages`, {
+    method: "POST",
+    headers: {
+      authorization: "Bearer all",
+      "content-type": "application/json",
+    },
+    body: JSON.stringify({
+      model: "anthropic.gateway.ep_exact.minimax-m3",
+      max_tokens: 16,
+      messages: [{ role: "user", content: "Reply OK." }],
+    }),
+  });
+
+  assert.equal(result.status, 200);
+  assert.equal(capturedBody.model, "minimax-m3");
+});
+
 test("Claude Desktop receives Grok Responses function calls as tool_use blocks", async (t) => {
   const capturedBodies = [];
   const mock = http.createServer((request, response) => {

@@ -124,6 +124,35 @@ test("global and card save actions preserve the active client context", async ()
   assert.match(html, /options\.scope === 'global' && options\.client === 'codex'/);
 });
 
+test("Claude Code config exposes four default-endpoint model slot selectors", async () => {
+  const html = await readFile(path.join(ROOT, "desktop", "config-panel.html"), "utf8");
+  assert.match(html, /Claude Code 快捷模型/);
+  assert.match(html, /\.model-slots-panel\s*\{/);
+  assert.match(html, /\.model-slots-grid\s*\{[^}]*grid-template-columns:\s*repeat\(4,\s*minmax\(0,\s*1fr\)\)/s);
+  assert.match(html, /@media\s*\(max-width:\s*1100px\)[^{]*\{[\s\S]*?\.model-slots-grid\s*\{[^}]*grid-template-columns:\s*repeat\(2,\s*minmax\(0,\s*1fr\)\)/);
+  assert.match(html, /model_slots/);
+  assert.match(html, /opus/);
+  assert.match(html, /sonnet/);
+  assert.match(html, /haiku/);
+  assert.match(html, /fable/);
+  assert.match(html, /claudeCodeSync/);
+  assert.match(html, /X-Gateway-Config-Client/);
+});
+
+test("Claude Code and Desktop guides describe automatic sync and restart only", async () => {
+  const html = await readFile(path.join(ROOT, "desktop", "config-panel.html"), "utf8");
+  const codeSection = html.match(/<section id="section-code"[\s\S]*?<\/section>/)?.[0] || "";
+  const desktopSection = html.match(/<section id="section-desktop"[\s\S]*?<\/section>/)?.[0] || "";
+
+  assert.match(codeSection, /自动同步到/);
+  assert.match(codeSection, /完全退出并重新启动 Claude Code/);
+  assert.doesNotMatch(codeSection, /ANTHROPIC_BASE_URL|ANTHROPIC_API_KEY|修改全局配置/);
+
+  assert.match(desktopSection, /自动同步到/);
+  assert.match(desktopSection, /完全退出并重新启动 Claude Desktop/);
+  assert.doesNotMatch(desktopSection, /export ANTHROPIC_BASE_URL|open -a "Claude"|环境变量覆盖/);
+});
+
 test("endpoint cards expose a compact model visibility switch outside the detail form", async () => {
   const html = await readFile(path.join(ROOT, "desktop", "config-panel.html"), "utf8");
   assert.match(html, /\.detail-actions\s*\{[^}]*display:\s*flex[^}]*flex-wrap:\s*nowrap/s);
