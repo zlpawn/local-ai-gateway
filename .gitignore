@@ -1,6 +1,5 @@
 # Local secrets and user config
 .env
-gateway.config.json
 gateway.secrets.json
 models.json
 .codex/
