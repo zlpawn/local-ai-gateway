@@ -4,7 +4,7 @@ import os from "node:os";
 import path from "node:path";
 import zlib from "node:zlib";
 import { execFileSync, exec } from "node:child_process";
-import { randomUUID } from "node:crypto";
+import { createHash, randomUUID } from "node:crypto";
 import { URL, fileURLToPath } from "node:url";
 import https from "node:https";
 import { Readable } from "node:stream";
@@ -35,6 +35,15 @@ import {
   selectExposedEndpoints,
 } from "./lib/config/gateway-config-store.mjs";
 import { syncClaudeCodeSettings } from "./lib/config/claude-code-settings.mjs";
+import {
+  collectImages,
+  containsImages,
+  imagePartToUrl,
+  isImageCapabilityError,
+  replaceImagesWithDescription,
+  selectVisionFallback,
+  shouldPreprocessImages,
+} from "./lib/vision-fallback.mjs";
 
 const PROJECT_ROOT = path.dirname(fileURLToPath(import.meta.url));
 
@@ -95,7 +104,7 @@ const _allEndpoints = [
   ...(GATEWAY_CONFIG.clients?.desktop?.endpoints || []),
   ...(GATEWAY_CONFIG.clients?.claude?.endpoints || []),
   ...(GATEWAY_CONFIG.clients?.codex?.endpoints || [])
-];
+].filter((endpoint) => endpoint?.purpose !== "vision_fallback");
 let EXPOSED_MODELS = [...new Set(_allEndpoints.flatMap(ep => [
   ...(ep.models || []),
   ...Object.keys(ep.model_mapping || {})
@@ -137,6 +146,7 @@ let CODEX_CUSTOM_MODELS = CODEX_CATALOG.models.filter(
 );
 // Declared before writeCodexModelCatalog runs at startup to avoid TDZ.
 let _codexModelsDiscoveryCache = null;
+const VISION_DESCRIPTION_CACHE = new Map();
 
 // --- Grok CLI subscription provider ---------------------------------------
 // Forwards standard OpenAI requests to the Grok CLI chat proxy
@@ -508,6 +518,7 @@ async function route(req, res) {
 async function forwardAnthropicMessages(body, clientReq, clientRes, context) {
   const requestedModel = body.model;
   const route = resolveAnthropicRoute(requestedModel, context.client);
+  body = await maybePreprocessImages(body, route, clientReq, context);
   const upstreamBody =
     route.provider?.type === "openai-chat"
       ? anthropicMessagesToOpenAIChat(body, route.model)
@@ -532,7 +543,22 @@ async function forwardAnthropicMessages(body, clientReq, clientRes, context) {
     if (backend === "responses") {
       const chatBody = anthropicMessagesToOpenAIChat(body, route.model);
       const responsesBody = openAIChatCompletionsToResponses(chatBody, route.model);
-      const upstream = await fetchGrok(route.provider, "/responses", responsesBody);
+      let upstream = await fetchGrok(route.provider, "/responses", responsesBody);
+      upstream = await maybeRetryAfterImageError({
+        upstream,
+        originalBody: body,
+        route,
+        clientReq,
+        context,
+        fetchAgain: (retryBody) => fetchGrok(
+          route.provider,
+          "/responses",
+          openAIChatCompletionsToResponses(
+            anthropicMessagesToOpenAIChat(retryBody, route.model),
+            route.model,
+          ),
+        ),
+      });
       logInfo("grok_messages_response", { request_id: context.requestId, status: upstream.status, backend });
       if (body.stream) {
         await streamOpenAIResponseAsAnthropicMessages(upstream, clientRes, requestedModel, context.requestId);
@@ -544,7 +570,19 @@ async function forwardAnthropicMessages(body, clientReq, clientRes, context) {
       }
     } else {
       const chatBody = anthropicMessagesToOpenAIChat(body, route.model);
-      const upstream = await fetchGrok(route.provider, "/chat/completions", chatBody);
+      let upstream = await fetchGrok(route.provider, "/chat/completions", chatBody);
+      upstream = await maybeRetryAfterImageError({
+        upstream,
+        originalBody: body,
+        route,
+        clientReq,
+        context,
+        fetchAgain: (retryBody) => fetchGrok(
+          route.provider,
+          "/chat/completions",
+          anthropicMessagesToOpenAIChat(retryBody, route.model),
+        ),
+      });
       logInfo("grok_messages_response", { request_id: context.requestId, status: upstream.status, backend });
       if (body.stream) {
         await streamOpenAIChatAsAnthropicMessages(upstream, clientRes, requestedModel, context.requestId);
@@ -558,7 +596,7 @@ async function forwardAnthropicMessages(body, clientReq, clientRes, context) {
     return;
   }
 
-  const upstream =
+  let upstream =
     route.provider?.type === "openai-chat"
       ? await fetchConfiguredOpenAI(route.provider, "/v1/chat/completions", upstreamBody, clientReq)
       : route.provider
@@ -566,6 +604,23 @@ async function forwardAnthropicMessages(body, clientReq, clientRes, context) {
         : route.kind === "official"
           ? await fetchOfficialAnthropic(upstreamBody, clientReq)
           : await fetchArkAnthropic(upstreamBody, clientReq);
+  if (route.provider) {
+    upstream = await maybeRetryAfterImageError({
+      upstream,
+      originalBody: body,
+      route,
+      clientReq,
+      context,
+      fetchAgain: async (retryBody) => {
+        const converted = route.provider.type === "openai-chat"
+          ? anthropicMessagesToOpenAIChat(retryBody, route.model)
+          : { ...retryBody, model: route.model };
+        return route.provider.type === "openai-chat"
+          ? fetchConfiguredOpenAI(route.provider, "/v1/chat/completions", converted, clientReq)
+          : fetchConfiguredAnthropic(route.provider, converted, clientReq);
+      },
+    });
+  }
   logInfo("messages_response", {
     request_id: context.requestId,
     client: context.client,
@@ -616,6 +671,7 @@ async function forwardOpenAIChatCompletions(body, clientReq, clientRes, context)
 
   const route = resolveConfiguredModel(requestedModel, ["anthropic", "openai-chat", "openai-responses", "grok"], context.client);
   const resolvedModel = route?.upstream_model || resolveModel(requestedModel);
+  body = await maybePreprocessImages(body, route, clientReq, context);
   const upstreamBody =
     route?.provider?.type === "anthropic"
       ? openAIChatToAnthropic(body, resolvedModel)
@@ -641,7 +697,19 @@ async function forwardOpenAIChatCompletions(body, clientReq, clientRes, context)
     const backend = grokBackendFor(resolvedModel);
     if (backend === "responses") {
       const responsesBody = openAIChatCompletionsToResponses(body, resolvedModel);
-      const upstream = await fetchGrok(route.provider, "/responses", responsesBody);
+      let upstream = await fetchGrok(route.provider, "/responses", responsesBody);
+      upstream = await maybeRetryAfterImageError({
+        upstream,
+        originalBody: body,
+        route,
+        clientReq,
+        context,
+        fetchAgain: (retryBody) => fetchGrok(
+          route.provider,
+          "/responses",
+          openAIChatCompletionsToResponses(retryBody, resolvedModel),
+        ),
+      });
       logInfo("grok_chat_response", { request_id: context.requestId, status: upstream.status, backend });
       if (body.stream) {
         await streamOpenAIResponseAsChatCompletion(upstream, clientRes, requestedModel, context.requestId);
@@ -652,7 +720,19 @@ async function forwardOpenAIChatCompletions(body, clientReq, clientRes, context)
         clientRes.end(JSON.stringify(completion));
       }
     } else {
-      const upstream = await fetchGrok(route.provider, "/chat/completions", { ...body, model: resolvedModel });
+      let upstream = await fetchGrok(route.provider, "/chat/completions", { ...body, model: resolvedModel });
+      upstream = await maybeRetryAfterImageError({
+        upstream,
+        originalBody: body,
+        route,
+        clientReq,
+        context,
+        fetchAgain: (retryBody) => fetchGrok(
+          route.provider,
+          "/chat/completions",
+          { ...retryBody, model: resolvedModel },
+        ),
+      });
       logInfo("grok_chat_response", { request_id: context.requestId, status: upstream.status, backend });
       if (body.stream) {
         await pipeGrokSse(upstream, clientRes, context.requestId);
@@ -666,14 +746,35 @@ async function forwardOpenAIChatCompletions(body, clientReq, clientRes, context)
     return;
   }
 
-  const upstream =
+  let upstream =
     route?.provider?.type === "anthropic"
       ? await fetchConfiguredAnthropic(route.provider, upstreamBody, clientReq)
       : route?.provider?.type === "openai-responses"
         ? await fetchConfiguredOpenAI(route.provider, "/responses", upstreamBody, clientReq)
         : route?.provider
           ? await fetchConfiguredOpenAI(route.provider, "/v1/chat/completions", upstreamBody, clientReq)
-          : await fetchArkOpenAI("/chat/completions", upstreamBody, clientReq);
+      : await fetchArkOpenAI("/chat/completions", upstreamBody, clientReq);
+  if (route?.provider) {
+    upstream = await maybeRetryAfterImageError({
+      upstream,
+      originalBody: body,
+      route,
+      clientReq,
+      context,
+      fetchAgain: async (retryBody) => {
+        const converted = route.provider.type === "anthropic"
+          ? openAIChatToAnthropic(retryBody, resolvedModel)
+          : route.provider.type === "openai-responses"
+            ? openAIChatCompletionsToResponses(retryBody, resolvedModel)
+            : { ...retryBody, model: resolvedModel };
+        return route.provider.type === "anthropic"
+          ? fetchConfiguredAnthropic(route.provider, converted, clientReq)
+          : route.provider.type === "openai-responses"
+            ? fetchConfiguredOpenAI(route.provider, "/responses", converted, clientReq)
+            : fetchConfiguredOpenAI(route.provider, "/v1/chat/completions", converted, clientReq);
+      },
+    });
+  }
   logInfo("openai_chat_response", {
     request_id: context.requestId,
     client: context.client,
@@ -773,6 +874,7 @@ async function forwardResolvedCodexResponse({
     context.client,
   );
   const resolvedModel = route?.upstream_model || resolveModel(requestedModel);
+  body = await maybePreprocessImages(body, route, clientReq, context);
   const responseToolKinds = collectResponseToolKinds(body.tools);
   const upstreamBody = route?.provider?.type === "anthropic"
     ? openAIResponsesToAnthropic(body, resolvedModel)
@@ -804,6 +906,29 @@ async function forwardResolvedCodexResponse({
     } else {
       upstream = await fetchGrok(route.provider, "/chat/completions", chatRequest.body, signal);
     }
+    upstream = await maybeRetryAfterImageError({
+      upstream,
+      originalBody: body,
+      route,
+      clientReq,
+      context,
+      fetchAgain: (retryBody) => {
+        if (backend === "responses") {
+          return fetchGrok(
+            route.provider,
+            "/responses",
+            { ...retryBody, model: resolvedModel },
+            signal,
+          );
+        }
+        return fetchGrok(
+          route.provider,
+          "/chat/completions",
+          responsesRequestToChat(retryBody, resolvedModel).body,
+          signal,
+        );
+      },
+    });
     logInfo("grok_responses_response", { request_id: context.requestId, status: upstream.status, backend });
     if (body.stream) {
       if (backend === "responses") {
@@ -839,7 +964,7 @@ async function forwardResolvedCodexResponse({
 
   if (route?.provider?.type === "openai-chat") {
     const chatRequest = responsesRequestToChat(body, resolvedModel);
-    const upstream = await fetchConfiguredOpenAI(
+    let upstream = await fetchConfiguredOpenAI(
       route.provider,
       "/v1/chat/completions",
       chatRequest.body,
@@ -847,6 +972,24 @@ async function forwardResolvedCodexResponse({
       signal,
       context.client !== "codex",
     );
+    upstream = await maybeRetryAfterImageError({
+      upstream,
+      originalBody: body,
+      route,
+      clientReq,
+      context,
+      fetchAgain: async (retryBody) => {
+        const retryRequest = responsesRequestToChat(retryBody, resolvedModel);
+        return fetchConfiguredOpenAI(
+          route.provider,
+          "/v1/chat/completions",
+          retryRequest.body,
+          clientReq,
+          signal,
+          context.client !== "codex",
+        );
+      },
+    });
     logInfo("openai_responses_response", {
       request_id: context.requestId,
       client: context.client,
@@ -882,11 +1025,23 @@ async function forwardResolvedCodexResponse({
   }
 
   if (route?.provider?.type === "anthropic") {
-    const upstream = await fetchConfiguredAnthropic(
+    let upstream = await fetchConfiguredAnthropic(
       route.provider,
       upstreamBody,
       clientReq,
     );
+    upstream = await maybeRetryAfterImageError({
+      upstream,
+      originalBody: body,
+      route,
+      clientReq,
+      context,
+      fetchAgain: (retryBody) => fetchConfiguredAnthropic(
+        route.provider,
+        openAIResponsesToAnthropic(retryBody, resolvedModel),
+        clientReq,
+      ),
+    });
     logInfo("openai_responses_response", {
       request_id: context.requestId,
       client: context.client,
@@ -922,7 +1077,7 @@ async function forwardResolvedCodexResponse({
     return;
   }
 
-  const upstream = route?.provider
+  let upstream = route?.provider
     ? await fetchConfiguredOpenAI(
         route.provider,
         "/responses",
@@ -930,8 +1085,25 @@ async function forwardResolvedCodexResponse({
         clientReq,
         signal,
         context.client !== "codex",
-      )
+    )
     : await fetchArkOpenAI("/responses", upstreamBody, clientReq, signal);
+  if (route?.provider) {
+    upstream = await maybeRetryAfterImageError({
+      upstream,
+      originalBody: body,
+      route,
+      clientReq,
+      context,
+      fetchAgain: (retryBody) => fetchConfiguredOpenAI(
+        route.provider,
+        "/responses",
+        { ...retryBody, model: resolvedModel },
+        clientReq,
+        signal,
+        context.client !== "codex",
+      ),
+    });
+  }
   logInfo("openai_responses_response", {
     request_id: context.requestId,
     client: context.client,
@@ -3378,6 +3550,7 @@ function resolveAnthropicRoute(requestedModel, client) {
       kind: configured.provider.id,
       model: configured.upstream_model,
       provider: configured.provider,
+      endpoint: configured.endpoint,
       config: configured.model,
     };
   }
@@ -3421,6 +3594,7 @@ function resolveConfiguredModel(requestedModel, allowedTypes = [], client = null
           aliases: [],
         },
         provider: endpointProvider(internalRoute.endpoint),
+        endpoint: internalRoute.endpoint,
         upstream_model: internalRoute.upstream_model,
       };
     }
@@ -3430,7 +3604,9 @@ function resolveConfiguredModel(requestedModel, allowedTypes = [], client = null
 
   for (const c of clientsToCheck) {
     const allEndpoints = GATEWAY_CONFIG.clients?.[c]?.endpoints || [];
-    const endpoints = allEndpoints.filter(ep => hasConfiguredApiKey(ep));
+    const endpoints = allEndpoints.filter(ep =>
+      ep.purpose !== "vision_fallback" && hasConfiguredApiKey(ep)
+    );
     
     // Find the default endpoint first
     const defaultEp = endpoints.find(ep => ep.is_default && (allowed.size === 0 || allowed.has(ep.type)));
@@ -3451,6 +3627,7 @@ function resolveConfiguredModel(requestedModel, allowedTypes = [], client = null
         return {
           model: { id: text, display_name: text, upstream_model: targetModel, aliases: [] },
           provider: endpointProvider(defaultEp),
+          endpoint: defaultEp,
           upstream_model: targetModel
         };
       }
@@ -3468,6 +3645,7 @@ function resolveConfiguredModel(requestedModel, allowedTypes = [], client = null
           return {
              model: { id: text, display_name: text, upstream_model: targetModel, aliases: [] },
              provider: endpointProvider(ep),
+             endpoint: ep,
              upstream_model: targetModel
           };
         }
@@ -3483,12 +3661,180 @@ function resolveConfiguredModel(requestedModel, allowedTypes = [], client = null
       return {
          model: { id: text, display_name: text, upstream_model: targetModel, aliases: [] },
          provider: endpointProvider(defaultEp),
+         endpoint: defaultEp,
          upstream_model: targetModel
       };
     }
   }
 
   return null;
+}
+
+async function maybePreprocessImages(body, route, clientReq, context) {
+  if (!containsImages(body) || !route?.provider) return body;
+  if (!shouldPreprocessImages({
+    endpoint: route.endpoint || route.config,
+    upstreamModel: route.upstream_model || route.model,
+  })) return body;
+  return applyVisionFallback(body, route, clientReq, context, "configured");
+}
+
+async function maybeRetryAfterImageError({
+  upstream,
+  originalBody,
+  route,
+  clientReq,
+  context,
+  fetchAgain,
+}) {
+  if (upstream.ok || !containsImages(originalBody)) return upstream;
+  let preservedUpstream = upstream;
+  let errorText;
+  if (typeof upstream.clone === "function") {
+    errorText = await upstream.clone().text();
+  } else {
+    errorText = await upstream.text();
+    preservedUpstream = new Response(errorText, {
+      status: upstream.status,
+      headers: {
+        "content-type": upstream.headers?.get?.("content-type") || "application/json; charset=utf-8",
+      },
+    });
+  }
+  if (!isImageCapabilityError(upstream.status, errorText)) return preservedUpstream;
+  const retryBody = await applyVisionFallback(
+    originalBody,
+    route,
+    clientReq,
+    context,
+    "upstream_error",
+  );
+  if (retryBody === originalBody) return upstream;
+  return fetchAgain(retryBody);
+}
+
+async function applyVisionFallback(body, route, clientReq, context, reason) {
+  const endpoints = GATEWAY_CONFIG.clients?.[context.client]?.endpoints || [];
+  const fallback = selectVisionFallback(endpoints);
+  if (!fallback || fallback.endpoint.id === route?.provider?.id) return body;
+  const images = collectImages(body);
+  if (!images.length) return body;
+  const description = await describeImagesWithFallback(images, fallback, clientReq);
+  logInfo("vision_fallback_applied", {
+    request_id: context.requestId,
+    client: context.client,
+    target_provider: route?.provider?.id || null,
+    target_model: route?.upstream_model || route?.model || null,
+    vision_provider: fallback.endpoint.id,
+    vision_model: fallback.model,
+    image_count: images.length,
+    reason,
+  });
+  return replaceImagesWithDescription(body, description);
+}
+
+async function describeImagesWithFallback(images, fallback, clientReq) {
+  const urls = images.map(imagePartToUrl).filter(Boolean);
+  if (!urls.length) {
+    throw httpError(400, "The request contains images that the vision fallback cannot read.");
+  }
+  const cacheKey = createHash("sha256")
+    .update(`${fallback.endpoint.id}\0${fallback.model}\0${urls.join("\0")}`)
+    .digest("hex");
+  if (VISION_DESCRIPTION_CACHE.has(cacheKey)) return VISION_DESCRIPTION_CACHE.get(cacheKey);
+
+  const provider = endpointProvider(fallback.endpoint);
+  const prompt = "请完整识别这些图片，提取所有文字、代码、表格、报错和界面结构，并描述与用户问题相关的关键视觉信息。只输出客观、结构化的图片解析结果，不要回答用户问题。";
+  let upstream;
+  let description = "";
+
+  if (provider.type === "anthropic") {
+    upstream = await fetchConfiguredAnthropic(provider, {
+      model: fallback.model,
+      max_tokens: 4096,
+      stream: false,
+      messages: [{
+        role: "user",
+        content: [
+          { type: "text", text: prompt },
+          ...urls.map(openAIImagePartToAnthropic).filter(Boolean),
+        ],
+      }],
+    }, clientReq);
+    if (upstream.ok) description = anthropicContentToText((await upstream.json()).content);
+  } else if (provider.type === "openai-chat") {
+    upstream = await fetchConfiguredOpenAI(provider, "/v1/chat/completions", {
+      model: fallback.model,
+      stream: false,
+      messages: [{
+        role: "user",
+        content: [
+          { type: "text", text: prompt },
+          ...urls.map((url) => ({ type: "image_url", image_url: { url } })),
+        ],
+      }],
+    }, clientReq);
+    if (upstream.ok) {
+      description = openAIChatMessageText((await upstream.json()).choices?.[0]?.message);
+    }
+  } else if (provider.type === "openai-responses") {
+    upstream = await fetchConfiguredOpenAI(provider, "/responses", {
+      model: fallback.model,
+      stream: false,
+      input: [{
+        role: "user",
+        content: [
+          { type: "input_text", text: prompt },
+          ...urls.map((url) => ({ type: "input_image", image_url: url })),
+        ],
+      }],
+    }, clientReq);
+    if (upstream.ok) {
+      const payload = await upstream.json();
+      description = payload.output_text || openAIResponseOutputToText(payload.output);
+    }
+  } else if (provider.type === "grok") {
+    const backend = grokBackendFor(fallback.model);
+    upstream = backend === "chat"
+      ? await fetchGrok(provider, "/chat/completions", {
+          model: fallback.model,
+          stream: false,
+          messages: [{
+            role: "user",
+            content: [
+              { type: "text", text: prompt },
+              ...urls.map((url) => ({ type: "image_url", image_url: { url } })),
+            ],
+          }],
+        })
+      : await fetchGrok(provider, "/responses", {
+          model: fallback.model,
+          stream: false,
+          input: [{
+            role: "user",
+            content: [
+              { type: "input_text", text: prompt },
+              ...urls.map((url) => ({ type: "input_image", image_url: url })),
+            ],
+          }],
+        });
+    if (upstream.ok) {
+      description = backend === "chat"
+        ? (await collectChatSseAsChatCompletion(upstream, fallback.model)).choices?.[0]?.message?.content || ""
+        : (await collectResponsesSseAsChatCompletion(upstream, fallback.model)).choices?.[0]?.message?.content || "";
+    }
+  }
+
+  if (!upstream?.ok) {
+    const message = upstream ? await upstream.text() : "Unsupported vision fallback provider type";
+    throw httpError(upstream?.status || 502, `Vision fallback failed: ${message}`);
+  }
+  if (!description.trim()) throw httpError(502, "Vision fallback returned no image description.");
+  VISION_DESCRIPTION_CACHE.set(cacheKey, description);
+  if (VISION_DESCRIPTION_CACHE.size > 100) {
+    VISION_DESCRIPTION_CACHE.delete(VISION_DESCRIPTION_CACHE.keys().next().value);
+  }
+  return description;
 }
 
 function endpointProvider(endpoint) {
@@ -4253,8 +4599,11 @@ function openAIImagePartToAnthropic(url) {
   }
 
   return {
-    type: "text",
-    text: url,
+    type: "image",
+    source: {
+      type: "url",
+      url,
+    },
   };
 }
 
@@ -4988,7 +5337,7 @@ function reloadGatewayConfig({ reloadFiles = true } = {}) {
     ...(GATEWAY_CONFIG.clients?.desktop?.endpoints || []),
     ...(GATEWAY_CONFIG.clients?.claude?.endpoints || []),
     ...(GATEWAY_CONFIG.clients?.codex?.endpoints || [])
-  ];
+  ].filter((endpoint) => endpoint?.purpose !== "vision_fallback");
   EXPOSED_MODELS = [...new Set(_endpoints.flatMap(ep => [
     ...(ep.models || []),
     ...Object.keys(ep.model_mapping || {})

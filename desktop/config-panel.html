@@ -1125,8 +1125,11 @@
                         <h2>Claude Code 代理</h2>
                         <p>为 Claude Code CLI 工具提供下游代理支持。</p>
                     </div>
-                    <button class="btn" onclick="addEndpoint('code')">
-                        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="12" y1="5" x2="12" y2="19"></line><line x1="5" y1="12" x2="19" y2="12"></line></svg>添加节点</button>
+                    <div style="display:flex; gap:8px;">
+                        <button class="btn" onclick="addVisionFallbackEndpoint('code')">添加视觉兜底</button>
+                        <button class="btn" onclick="addEndpoint('code')">
+                            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="12" y1="5" x2="12" y2="19"></line><line x1="5" y1="12" x2="19" y2="12"></line></svg>添加节点</button>
+                    </div>
                 </div>
 
                 <div class="usage-guide">
@@ -1171,8 +1174,11 @@
                         <h2>Claude Desktop 代理</h2>
                         <p>为 Claude Desktop 桌面客户端提供下游代理支持。</p>
                     </div>
-                    <button class="btn" onclick="addEndpoint('desktop')">
-                        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="12" y1="5" x2="12" y2="19"></line><line x1="5" y1="12" x2="19" y2="12"></line></svg>添加节点</button>
+                    <div style="display:flex; gap:8px;">
+                        <button class="btn" onclick="addVisionFallbackEndpoint('desktop')">添加视觉兜底</button>
+                        <button class="btn" onclick="addEndpoint('desktop')">
+                            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="12" y1="5" x2="12" y2="19"></line><line x1="5" y1="12" x2="19" y2="12"></line></svg>添加节点</button>
+                    </div>
                 </div>
 
                 <div class="usage-guide">
@@ -1194,6 +1200,7 @@
                         <button class="btn" id="codex-history-unify-btn" onclick="migrateCodexHistory()" title="把旧会话的 model_provider 迁移到 custom，以便在当前网关配置下重新显示历史">
                             迁移历史会话
                         </button>
+                        <button class="btn" onclick="addVisionFallbackEndpoint('codex')">添加视觉兜底</button>
                         <button class="btn" onclick="addEndpoint('codex')">
                             <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="12" y1="5" x2="12" y2="19"></line><line x1="5" y1="12" x2="19" y2="12"></line></svg>添加节点</button>
                     </div>
@@ -1358,6 +1365,7 @@ experimental_bearer_token = "dummy"</pre>
         }
 
         function createEndpointSummaryHTML(client, index, ep) {
+            const isVisionFallback = ep.purpose === 'vision_fallback';
             const name = escapeHtml(ep.name || `节点 ${index + 1}`);
             const type = escapeHtml(typeLabel(ep.type));
             const url = escapeHtml(shortUrl(ep.base_url));
@@ -1379,17 +1387,17 @@ experimental_bearer_token = "dummy"</pre>
                     <div class="node-card-top">
                         <div class="node-card-title">${name}</div>
                         <div class="node-card-actions" onclick="event.stopPropagation()">
-                            <label class="node-card-switch" title="${ep.expose_models ? '从模型列表隐藏此节点' : '在模型列表展示此节点'}">
+                            ${isVisionFallback ? '' : `<label class="node-card-switch" title="${ep.expose_models ? '从模型列表隐藏此节点' : '在模型列表展示此节点'}">
                                 <input type="checkbox" ${ep.expose_models ? 'checked' : ''}
                                     onchange="toggleEndpointExposure(event, '${client}', ${index}, this)">
                                 <span class="node-card-switch-track" aria-hidden="true"></span>
-                            </label>
-                            <button type="button" class="${defaultClass}" title="${defaultTitle}"
+                            </label>`}
+                            ${isVisionFallback ? '' : `<button type="button" class="${defaultClass}" title="${defaultTitle}"
                                 onclick="event.stopPropagation(); setAsDefault('${client}', ${index})">
                                 <svg width="14" height="14" viewBox="0 0 24 24" fill="${ep.is_default ? 'currentColor' : 'none'}" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
                                     <polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"></polygon>
                                 </svg>
-                            </button>
+                            </button>`}
                             <button type="button" class="node-card-action danger" title="删除节点"
                                 onclick="event.stopPropagation(); removeEndpoint('${client}', ${index})">
                                 <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
@@ -1402,6 +1410,7 @@ experimental_bearer_token = "dummy"</pre>
                     <div class="node-card-meta">
                         <div class="node-card-row">
                             <span class="badge">${type}</span>
+                            ${isVisionFallback ? '<span class="badge badge-default">视觉兜底</span>' : ''}
                             ${ep.is_default ? '<span class="badge badge-default">默认</span>' : ''}
                         </div>
                         <div class="node-card-row">
@@ -1421,6 +1430,7 @@ experimental_bearer_token = "dummy"</pre>
         }
 
         function createEndpointDetailHTML(client, index, ep) {
+            const isVisionFallback = ep.purpose === 'vision_fallback';
             const availableTypes = (client === 'code' || client === 'desktop')
                 ? ENDPOINT_TYPES.filter(t => ['anthropic', 'openai-chat', 'grok'].includes(t.value))
                 : ENDPOINT_TYPES.filter(t => ['anthropic', 'openai-responses', 'openai-chat', 'grok'].includes(t.value));
@@ -1452,11 +1462,11 @@ experimental_bearer_token = "dummy"</pre>
                                 <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z"></path><polyline points="17 21 17 13 7 13 7 21"></polyline><polyline points="7 3 7 8 15 8"></polyline></svg>
                                 保存节点
                             </button>
-                            <label class="btn btn-sm detail-default-action ${ep.is_default ? 'is-active' : ''}">
+                            ${isVisionFallback ? '' : `<label class="btn btn-sm detail-default-action ${ep.is_default ? 'is-active' : ''}">
                                 <input class="detail-default-input" type="radio" name="default-${client}" ${ep.is_default ? 'checked' : ''} onchange="setAsDefault('${client}', ${index})">
                                 <svg width="14" height="14" viewBox="0 0 24 24" fill="${ep.is_default ? 'currentColor' : 'none'}" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"></polygon></svg>
                                 ${ep.is_default ? '默认节点' : '设为默认'}
-                            </label>
+                            </label>`}
                             <button class="btn btn-sm btn-danger" onclick="removeEndpoint('${client}', ${index})">
                                 <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="3 6 5 6 21 6"></polyline><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path></svg>删除</button>
                         </div>
@@ -1501,7 +1511,7 @@ experimental_bearer_token = "dummy"</pre>
                                     </button>
                                 </div>
                             </div>
-                            ${client === 'codex' ? `
+                            ${client === 'codex' && !isVisionFallback ? `
                             <div class="form-group full">
                                 <label>Codex 能力</label>
                                 <div class="capability-options">
@@ -1533,6 +1543,22 @@ experimental_bearer_token = "dummy"</pre>
                                         <span>工具调用</span>
                                     </label>
                                 </div>
+                            </div>
+                            ` : ''}
+                            ${isVisionFallback ? `
+                            <div class="form-group">
+                                <label>视觉兜底</label>
+                                <select onchange="updateEndpoint('${client}', ${index}, 'vision_fallback_enabled', this.value === 'true')">
+                                    <option value="true" ${ep.vision_fallback_enabled !== false ? 'selected' : ''}>已启用</option>
+                                    <option value="false" ${ep.vision_fallback_enabled === false ? 'selected' : ''}>已关闭</option>
+                                </select>
+                            </div>
+                            <div class="form-group">
+                                <label>视觉兜底模型</label>
+                                <select onchange="updateEndpoint('${client}', ${index}, 'vision_model', this.value)">
+                                    <option value="">请选择模型</option>
+                                    ${(ep.models || []).map(model => `<option value="${escapeHtml(model)}" ${ep.vision_model === model ? 'selected' : ''}>${escapeHtml(model)}</option>`).join('')}
+                                </select>
                             </div>
                             ` : ''}
                             <div class="form-group full">
@@ -1623,7 +1649,8 @@ experimental_bearer_token = "dummy"</pre>
         }
 
         function getClaudeCodeDefaultEndpoint() {
-            const endpoints = config.clients?.code?.endpoints || [];
+            const endpoints = (config.clients?.code?.endpoints || [])
+                .filter(endpoint => endpoint.purpose !== 'vision_fallback');
             return endpoints.find(endpoint => endpoint.is_default === true)
                 || (endpoints.length === 1 ? endpoints[0] : null);
         }
@@ -1752,6 +1779,34 @@ experimental_bearer_token = "dummy"</pre>
             }, 0);
         }
 
+        window.addVisionFallbackEndpoint = function(client) {
+            config.clients[client].endpoints = config.clients[client].endpoints || [];
+            const existingIndex = config.clients[client].endpoints.findIndex(
+                endpoint => endpoint.purpose === 'vision_fallback'
+            );
+            if (existingIndex >= 0) {
+                selectedEndpoint = { client, index: existingIndex };
+                render();
+                return;
+            }
+            const type = client === 'codex' ? 'openai-responses' : 'anthropic';
+            config.clients[client].endpoints.unshift({
+                id: `ep_${crypto.randomUUID()}`,
+                name: "视觉兜底节点",
+                purpose: 'vision_fallback',
+                vision_fallback_enabled: true,
+                vision_model: "",
+                type,
+                base_url: "",
+                auth: 'bearer',
+                api_key: "",
+                models: [],
+                model_mapping: {}
+            });
+            selectedEndpoint = { client, index: 0 };
+            render();
+        }
+
         window.removeEndpoint = async function(client, index) {
             if (!confirm('确定删除这个节点吗？')) return;
             const [removedEndpoint] = config.clients[client].endpoints.splice(index, 1);
@@ -1769,6 +1824,7 @@ experimental_bearer_token = "dummy"</pre>
         }
 
         window.setAsDefault = async function(client, index) {
+            if (config.clients[client].endpoints[index]?.purpose === 'vision_fallback') return;
             const previousDefaults = config.clients[client].endpoints.map(ep => ep.is_default === true);
             const previousSlots = client === 'code'
                 ? structuredClone(config.clients.code.model_slots || {})
