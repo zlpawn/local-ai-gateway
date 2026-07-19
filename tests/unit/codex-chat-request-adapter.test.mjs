@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { responsesRequestToChat } from "../lib/codex/chat-request-adapter.mjs";
+import { responsesRequestToChat } from "../../lib/codex/chat-request-adapter.mjs";
 
 test("request adapter preserves image, function history, and custom tool metadata", () => {
   const result = responsesRequestToChat({

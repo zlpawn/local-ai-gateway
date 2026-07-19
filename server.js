@@ -394,6 +394,9 @@ async function route(req, res) {
         : modelDiscovery().data.map((model) => model.id);
     sendJson(res, 200, {
       ok: true,
+      service: "local-ai-gateway",
+      process_id: process.pid,
+      instance_id: process.env.GATEWAY_INSTANCE_ID || null,
       client: context.client,
       upstream: context.client === "codex" ? ARK_CODEX_BASE_URL : ARK_MESSAGES_URL,
       protocol: context.client === "codex" ? "openai-compatible" : "anthropic-messages",

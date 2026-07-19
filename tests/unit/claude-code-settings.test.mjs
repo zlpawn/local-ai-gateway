@@ -4,7 +4,7 @@ import { tmpdir } from "node:os";
 import path from "node:path";
 import test from "node:test";
 
-import { syncClaudeCodeSettings } from "../lib/config/claude-code-settings.mjs";
+import { syncClaudeCodeSettings } from "../../lib/config/claude-code-settings.mjs";
 
 test("Claude Code settings sync preserves unrelated settings and writes generated model slots", async (t) => {
   const dir = await mkdtemp(path.join(tmpdir(), "claude-code-settings-"));
