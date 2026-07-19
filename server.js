@@ -828,6 +828,58 @@ async function forwardOpenAIChatCompletions(body, clientReq, clientRes, context)
   );
 }
 
+// Normalize one tool coming out of an `additional_tools` input item for the
+// top-level Responses `tools` array: drop nameless entries, and ensure every
+// function tool carries a `parameters` schema (Ark rejects tools without it).
+function normalizePromotedTool(tool) {
+  if (!tool || typeof tool !== "object" || !tool.name) return null;
+  const out = { ...tool };
+  if (out.type === "function" && !("parameters" in out)) {
+    out.parameters = { type: "object", properties: {} };
+  }
+  return out;
+}
+
+// Codex Desktop declares its tools inside an `input` item of type
+// `additional_tools` (role: "developer") instead of the top-level `tools`
+// array. The official Codex backend understands that extension, but third-party
+// Responses endpoints (Ark, etc.) only read top-level `tools` -- so the model
+// gets zero tools and loops on narration ("let me read the skill..."). Promote
+// those tools to the top-level `tools` array (flattening `namespace` wrappers
+// like codex_app), dedup by name, and drop the non-standard input item.
+function promoteAdditionalTools(body) {
+  if (!Array.isArray(body?.input)) return body;
+  const promoted = [];
+  const keptInput = [];
+  for (const item of body.input) {
+    if (item && item.type === "additional_tools" && Array.isArray(item.tools)) {
+      for (const t of item.tools) {
+        if (t && t.type === "namespace" && Array.isArray(t.tools)) {
+          for (const inner of t.tools) {
+            const nt = normalizePromotedTool(inner);
+            if (nt) promoted.push(nt);
+          }
+        } else {
+          const nt = normalizePromotedTool(t);
+          if (nt) promoted.push(nt);
+        }
+      }
+    } else {
+      keptInput.push(item);
+    }
+  }
+  if (promoted.length === 0) return body;
+  const existing = Array.isArray(body.tools) ? body.tools : [];
+  const seen = new Set(existing.map((t) => t?.name).filter(Boolean));
+  const merged = [...existing];
+  for (const t of promoted) {
+    if (seen.has(t.name)) continue;
+    seen.add(t.name);
+    merged.push(t);
+  }
+  return { ...body, input: keptInput, tools: merged };
+}
+
 async function forwardOpenAIResponses(body, clientReq, clientRes, context) {
   const requestAbort = bindRequestAbort(clientReq, clientRes);
   const upstreamAbort = createUpstreamAbort(requestAbort.signal);
@@ -875,6 +927,7 @@ async function forwardResolvedCodexResponse({
   );
   const resolvedModel = route?.upstream_model || resolveModel(requestedModel);
   body = await maybePreprocessImages(body, route, clientReq, context);
+  body = promoteAdditionalTools(body);
   const responseToolKinds = collectResponseToolKinds(body.tools);
   const upstreamBody = route?.provider?.type === "anthropic"
     ? openAIResponsesToAnthropic(body, resolvedModel)
