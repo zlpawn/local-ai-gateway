@@ -75,6 +75,14 @@ test("config panel supports stable endpoint ids, secret status, exposure, and co
   assert.doesNotMatch(html, /codex:\s*\{\s*endpoints:\s*\[JSON\.parse/);
 });
 
+test("endpoint detail provides an explicit manual save action", async () => {
+  const html = await readFile(path.join(ROOT, "desktop", "config-panel.html"), "utf8");
+  assert.match(html, /id="save-node-\$\{client\}-\$\{index\}"/);
+  assert.match(html, /onclick="saveNode\('\$\{client\}', \$\{index\}\)"/);
+  assert.match(html, /window\.saveNode\s*=\s*async function/);
+  assert.match(html, /saveConfig\(\{\s*button:\s*btn,\s*client,\s*scope:\s*'node'/);
+});
+
 test("Codex capability updates preserve unrelated fields and do not copy secrets", async () => {
   const sentinel = "sk-task7-ui-must-not-copy";
   const config = {
