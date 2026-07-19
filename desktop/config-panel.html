@@ -944,10 +944,6 @@
                         <svg id="theme-icon-dark" style="display: none;" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"></path></svg>
                         <svg id="theme-icon-light" style="display: none;" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="5"></circle><line x1="12" y1="1" x2="12" y2="3"></line><line x1="12" y1="21" x2="12" y2="23"></line><line x1="4.22" y1="4.22" x2="5.64" y2="5.64"></line><line x1="18.36" y1="18.36" x2="19.78" y2="19.78"></line><line x1="1" y1="12" x2="3" y2="12"></line><line x1="21" y1="12" x2="23" y2="12"></line><line x1="4.22" y1="19.78" x2="5.64" y2="18.36"></line><line x1="18.36" y1="5.64" x2="19.78" y2="4.22"></line></svg>
                     </button>
-                    <button class="btn btn-primary" id="save-btn" onclick="saveConfig()" style="flex: 1;">
-                        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z"></path><polyline points="17 21 17 13 7 13 7 21"></polyline><polyline points="7 3 7 8 15 8"></polyline></svg>
-                        保存配置
-                    </button>
                 </div>
                 <button class="btn" onclick="loadDefaultTemplate()" style="width: 100%; border-color: transparent; color: var(--text-secondary); margin-top: 4px; background: var(--input-bg);">
                     <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 12a9 9 0 1 0 9-9 9.75 9.75 0 0 0-6.74 2.74L3 8"></path><polyline points="3 3 3 8 8 8"></polyline></svg>
@@ -1073,8 +1069,9 @@ experimental_bearer_token = "dummy"</pre>
             { value: "grok", label: "Grok 订阅" }
         ];
 
-        function loadDefaultTemplate() {
+        async function loadDefaultTemplate() {
             if (!confirm('这会覆盖你当前的所有配置，确定要恢复默认模板吗？')) return;
+            const previousConfig = config;
             const createTemplateEndpoint = () => ({
                 id: `ep_${crypto.randomUUID()}`,
                 name: "volcengine-anthropic",
@@ -1114,7 +1111,11 @@ experimental_bearer_token = "dummy"</pre>
                 }
             };
             render();
-            saveConfig();
+            const saved = await saveConfig({ scope: 'template' });
+            if (!saved) {
+                config = previousConfig;
+                render();
+            }
         }
 
         async function init() {
@@ -1498,21 +1499,35 @@ experimental_bearer_token = "dummy"</pre>
             }, 0);
         }
 
-        window.removeEndpoint = function(client, index) {
+        window.removeEndpoint = async function(client, index) {
             if (!confirm('确定删除这个节点吗？')) return;
-            config.clients[client].endpoints.splice(index, 1);
+            const [removedEndpoint] = config.clients[client].endpoints.splice(index, 1);
+            const previousSelection = selectedEndpoint;
             if (selectedEndpoint && selectedEndpoint.client === client) {
                 selectedEndpoint = null;
             }
             render();
+            const saved = await saveConfig({ client, scope: 'delete' });
+            if (!saved) {
+                config.clients[client].endpoints.splice(index, 0, removedEndpoint);
+                selectedEndpoint = previousSelection;
+                render();
+            }
         }
 
-        window.setAsDefault = function(client, index) {
+        window.setAsDefault = async function(client, index) {
+            const previousDefaults = config.clients[client].endpoints.map(ep => ep.is_default === true);
             config.clients[client].endpoints.forEach((ep, i) => {
                 ep.is_default = (i === index);
             });
             render();
-            saveConfig();
+            const saved = await saveConfig({ client, scope: 'default' });
+            if (!saved) {
+                config.clients[client].endpoints.forEach((ep, i) => {
+                    ep.is_default = previousDefaults[i];
+                });
+                render();
+            }
         }
 
         window.updateEndpoint = function(client, index, field, value) {
@@ -1643,15 +1658,14 @@ experimental_bearer_token = "dummy"</pre>
         }
 
         window.saveConfig = async function(options = {}) {
-            const btn = options.button || document.getElementById('save-btn');
-            if (!btn) return;
-            const originalContent = btn.innerHTML;
-            const showButtonProgress = btn.tagName === 'BUTTON';
+            const btn = options.button || null;
+            const originalContent = btn?.innerHTML || '';
+            const showButtonProgress = btn?.tagName === 'BUTTON';
 
             if (showButtonProgress) {
                 btn.innerHTML = `<svg class="spinner" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" style="animation: spin 1s linear infinite;"><line x1="12" y1="2" x2="12" y2="6"></line><line x1="12" y1="18" x2="12" y2="22"></line><line x1="4.93" y1="4.93" x2="7.76" y2="7.76"></line><line x1="16.24" y1="16.24" x2="19.07" y2="19.07"></line><line x1="2" y1="12" x2="6" y2="12"></line><line x1="18" y1="12" x2="22" y2="12"></line><line x1="4.93" y1="19.07" x2="7.76" y2="16.24"></line><line x1="16.24" y1="7.76" x2="19.07" y2="4.93"></line></svg> 保存中...`;
             }
-            btn.disabled = true;
+            if (btn) btn.disabled = true;
 
             try {
                 const res = await fetch('/v1/config/save', {
@@ -1700,12 +1714,18 @@ experimental_bearer_token = "dummy"</pre>
                         );
                     } else if (options.scope === 'node') {
                         showToast('节点已保存', 'success');
-                    } else if (payload.claude3pSync?.updated) {
-                        showToast('配置已生效，并已同步 Claude 第三方模型列表', 'success');
-                    } else if (payload.codex_model_catalog?.exists) {
-                        showToast('配置已生效，Codex 模型目录已更新', 'success');
+                    } else if (options.scope === 'default') {
+                        showToast('默认节点已设置', 'success');
+                    } else if (options.scope === 'delete' && options.client === 'desktop' && payload.claude3pSync?.updated) {
+                        showToast('节点已删除，Claude 3P 模型列表已同步', 'success');
+                    } else if (options.scope === 'delete' && options.client === 'codex' && payload.codex_model_catalog?.exists) {
+                        showToast('节点已删除，Codex 模型目录已刷新', 'success');
+                    } else if (options.scope === 'delete') {
+                        showToast('节点已删除', 'success');
+                    } else if (options.scope === 'template') {
+                        showToast('默认模板已恢复', 'success');
                     } else {
-                        showToast('配置已生效，服务已重新加载', 'success');
+                        showToast('配置已保存', 'success');
                     }
                     return true;
                 } else {
@@ -1731,7 +1751,7 @@ experimental_bearer_token = "dummy"</pre>
                 return false;
             } finally {
                 if (showButtonProgress) btn.innerHTML = originalContent;
-                btn.disabled = false;
+                if (btn) btn.disabled = false;
             }
         }
 

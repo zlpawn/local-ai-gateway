@@ -83,6 +83,17 @@ test("endpoint detail provides an explicit manual save action", async () => {
   assert.match(html, /saveConfig\(\{\s*button:\s*btn,\s*client,\s*scope:\s*'node'/);
 });
 
+test("card actions persist directly without the legacy global save button", async () => {
+  const html = await readFile(path.join(ROOT, "desktop", "config-panel.html"), "utf8");
+  assert.doesNotMatch(html, /id="save-btn"/);
+  assert.match(html, /window\.removeEndpoint\s*=\s*async function/);
+  assert.match(html, /saveConfig\(\{\s*client,\s*scope:\s*'delete'/);
+  assert.match(html, /window\.setAsDefault\s*=\s*async function/);
+  assert.match(html, /saveConfig\(\{\s*client,\s*scope:\s*'default'/);
+  assert.match(html, /options\.scope === 'default'/);
+  assert.doesNotMatch(html, /payload\.codex_model_catalog\?\.exists\)\s*\{\s*showToast\('配置已生效，Codex 模型目录已更新'/s);
+});
+
 test("endpoint cards expose a compact model visibility switch outside the detail form", async () => {
   const html = await readFile(path.join(ROOT, "desktop", "config-panel.html"), "utf8");
   assert.match(html, /\.detail-actions\s*\{[^}]*display:\s*flex[^}]*flex-wrap:\s*nowrap/s);
