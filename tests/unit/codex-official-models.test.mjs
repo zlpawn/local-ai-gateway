@@ -4,7 +4,7 @@ import {
   isOfficialCodexModelId,
   mergeOfficialDiscoveryModels,
   officialModelsFromOpenAIList,
-} from "../lib/codex/official-models.mjs";
+} from "../../lib/codex/official-models.mjs";
 
 test("official model id matcher accepts gpt and o-series only", () => {
   assert.equal(isOfficialCodexModelId("gpt-5.5"), true);

@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import { ReadableStream } from "node:stream/web";
-import { pipeResponsesSsePassthrough } from "../lib/codex/responses-passthrough.mjs";
+import { pipeResponsesSsePassthrough } from "../../lib/codex/responses-passthrough.mjs";
 
 function collectWritable() {
   const chunks = [];

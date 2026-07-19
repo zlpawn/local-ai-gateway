@@ -5,7 +5,7 @@ import test from "node:test";
 import vm from "node:vm";
 import { fileURLToPath } from "node:url";
 
-const ROOT = path.dirname(path.dirname(fileURLToPath(import.meta.url)));
+const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../..");
 const SERVER_PATH = path.join(ROOT, "server.js");
 
 function loadInjectHelpers(env = {}) {

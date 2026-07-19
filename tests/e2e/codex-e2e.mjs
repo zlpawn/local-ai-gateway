@@ -12,10 +12,10 @@ import http from "node:http";
 import os from "node:os";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
-import { buildCodexCatalog } from "../lib/codex/model-catalog.mjs";
+import { buildCodexCatalog } from "../../lib/codex/model-catalog.mjs";
 
-const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
-const FIXTURE_ROOT = path.join(ROOT, "scripts", "fixtures", "codex-e2e");
+const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../..");
+const FIXTURE_ROOT = path.join(ROOT, "tests", "fixtures", "codex-e2e");
 const REAL_SMOKE_MODEL = process.env.CODEX_REAL_SMOKE_MODEL || "";
 const WORK_ROOT = path.join(
   process.env.LOCALAPPDATA || os.tmpdir(),

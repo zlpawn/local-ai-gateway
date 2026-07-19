@@ -9,10 +9,12 @@ restore-codex-custom-provider.ps1
 
 # Runtime state
 gateway.pid
+gateway.pid.json
 gateway.*.pid
 gateway.log
 gateway.stdout.log
 gateway.stderr.log
+.gateway-test/
 *.log
 
 # Dependencies and package manager output

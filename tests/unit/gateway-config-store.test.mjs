@@ -13,7 +13,7 @@ import {
   saveGatewayState,
   selectExposedEndpoints,
   validateGatewayConfig,
-} from "../lib/config/gateway-config-store.mjs";
+} from "../../lib/config/gateway-config-store.mjs";
 
 test("load migrates legacy fields, adds stable ids, extracts keys, and creates a backup", () => {
   const root = mkdtempSync(path.join(os.tmpdir(), "gateway-config-store-"));

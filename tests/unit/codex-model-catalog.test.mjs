@@ -7,11 +7,11 @@ import test from "node:test";
 import {
   buildCodexCatalog,
   CodexCatalogError,
-} from "../lib/codex/model-catalog.mjs";
+} from "../../lib/codex/model-catalog.mjs";
 import {
   loadOfficialCodexIds,
   validateCodexEndpoints,
-} from "../lib/codex/config-validation.mjs";
+} from "../../lib/codex/config-validation.mjs";
 
 const officialModels = [{
   slug: "gpt-5.5",

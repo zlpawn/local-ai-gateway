@@ -55,8 +55,9 @@ real Claude model IDs are forwarded to the official Anthropic Messages endpoint.
 - `server.js`: local gateway server
 - `.env.example`: config template
 - `docs/providers.md`: provider recipes for Volcengine, OpenRouter, DeepSeek, and Anthropic
-- `scripts/init-config.ps1`: first-run config initializer for Windows
-- `scripts/init-config.sh`: first-run config initializer for Bash/macOS/Linux
+- `scripts/gateway.mjs`: cross-platform background gateway control
+- `scripts/init-config.mjs`: cross-platform first-run config initializer
+- `tests/`: unit, integration, and isolated E2E tests
 
 ## Provider Config
 
@@ -66,17 +67,10 @@ New setups should create the local environment file:
 npm run init
 ```
 
-For Bash/macOS/Linux:
-
-```bash
-npm run init:bash
-```
-
-On Windows, use `npm run init` unless you are running inside Git Bash or WSL.
-
 The init command creates `.env` only when it does not already exist, so it is
-safe to run again. Local `.env` and `gateway.config.json` files are ignored by
-Git.
+safe to run again. Local `.env` and `gateway.secrets.json` are ignored by Git;
+`gateway.config.json` is safe to commit because endpoint credentials are stored
+separately.
 
 Start the gateway, open `http://127.0.0.1:8787/config`, add endpoints, and save
 the page to create `gateway.config.json`.
@@ -143,7 +137,7 @@ npm start
 Open `http://127.0.0.1:8787/config` and save the web config page to create
 `gateway.config.json`.
 
-For background control on Windows, use:
+For background control on Windows, macOS, or Linux, use:
 
 ```powershell
 npm run gateway:start
@@ -155,11 +149,23 @@ npm run gateway:restart
 Background mode writes:
 
 ```text
-gateway.pid
+gateway.pid.json
 gateway.stdout.log
 gateway.stderr.log
 gateway.log
 ```
+
+Use the unified command directly when you need an isolated port or runtime
+directory:
+
+```bash
+npm run gateway -- start --test
+npm run gateway -- status --test
+npm run gateway -- stop --test
+```
+
+Test mode always uses port `8788`, writes runtime files under `.gateway-test`,
+and disables Claude Desktop, Claude Code, and Codex configuration sync.
 
 ## Desktop App
 
@@ -234,31 +240,16 @@ npm run doctor
 
 ## Global Command
 
-For Bash, add this to `~/.bashrc` or `~/.zshrc`. The Bash CLI does not require
-PowerShell:
+After installing the package globally, the same cross-platform control is
+available without npm:
 
 ```bash
-agent-gateway() {
-  local root="${AGENT_GATEWAY_ROOT:-$HOME/project/AI/local-ai-gateway}"
-  local script="$root/scripts/agent-gateway.sh"
-  if [ ! -f "$script" ]; then
-    echo "agent-gateway.sh not found: $script" >&2
-    return 1
-  fi
-  bash "$script" "$@"
-}
-```
-
-Then open a new Bash terminal, or run `source ~/.bashrc`.
-
-Global commands:
-
-```bash
-agent-gateway start
-agent-gateway status
-agent-gateway stop
-agent-gateway restart
-agent-gateway logs
+npm install -g @wuhezhizhong/local-ai-gateway
+local-ai-gateway start
+local-ai-gateway status
+local-ai-gateway stop
+local-ai-gateway restart
+local-ai-gateway logs
 ```
 
 ## Claude Desktop/Gateway Config

@@ -13,6 +13,8 @@
   "files": [
     "bin",
     "desktop",
+    "lib",
+    "scripts",
     "server.js",
     "gateway.config.example.json",
     "gateway.config.json",
@@ -22,8 +24,7 @@
     "LICENSE"
   ],
   "scripts": {
-    "init": "powershell -NoProfile -ExecutionPolicy Bypass -File scripts/init-config.ps1",
-    "init:bash": "bash scripts/init-config.sh",
+    "init": "node scripts/init-config.mjs",
     "start": "node server.js",
     "desktop": "electron desktop/main.mjs",
     "desktop:check": "node --check desktop/main.mjs && node --check desktop/lib/gateway-control.mjs && node --check desktop/lib/desktop-smoke.mjs && node --check scripts/smoke-desktop.mjs",
@@ -32,7 +33,7 @@
     "desktop:dist": "electron-builder --config electron-builder.yml",
     "desktop:dist:win": "electron-builder --config electron-builder.yml --win nsis",
     "desktop:dist:mac": "electron-builder --config electron-builder.yml --mac dmg",
-    "check": "node --check server.js && node scripts/check-bash-script.mjs",
+    "check": "node --check server.js && node --check scripts/gateway.mjs && node --check scripts/init-config.mjs && node --check bin/cli.js",
     "doctor": "node scripts/doctor.mjs",
     "validate:config": "node scripts/validate-config.mjs",
     "codex:catalog": "node scripts/codex-catalog.mjs",
@@ -40,18 +41,17 @@
     "codex:history:dry-run": "node scripts/codex-history-unify.mjs --dry-run",
     "codex:history:apply": "node scripts/codex-history-unify.mjs --apply",
     "codex:history:restore": "node scripts/codex-history-unify.mjs --restore",
-    "test:adapters": "powershell -NoProfile -ExecutionPolicy Bypass -File scripts/test-adapters.ps1",
-    "test:adapters:node": "node --test scripts/protocol-adapters.test.mjs",
-    "test:cli": "node --test scripts/agent-gateway.test.mjs",
-    "test:codex:unit": "node --test scripts/gateway-config-store.test.mjs scripts/codex-model-catalog.test.mjs scripts/codex-chat-request-adapter.test.mjs scripts/codex-responses-writer.test.mjs scripts/codex-chat-response-adapter.test.mjs scripts/codex-responses-passthrough.test.mjs scripts/codex-official-models.test.mjs scripts/codex-hosted-tools-inject.test.mjs",
-    "test:codex:catalog-write": "node --test scripts/codex-catalog-write.test.mjs",
-    "test:codex:integration": "node --test scripts/codex-gateway.integration.test.mjs",
-    "test:codex:e2e": "node scripts/codex-e2e.mjs",
-    "gateway:start": "powershell -NoProfile -ExecutionPolicy Bypass -File scripts/start-gateway.ps1",
-    "gateway:stop": "powershell -NoProfile -ExecutionPolicy Bypass -File scripts/stop-gateway.ps1",
-    "gateway:status": "powershell -NoProfile -ExecutionPolicy Bypass -File scripts/status-gateway.ps1",
-    "gateway:restart": "powershell -NoProfile -ExecutionPolicy Bypass -File scripts/restart-gateway.ps1",
-    "gateway:bash": "bash scripts/agent-gateway.sh"
+    "test:adapters": "node --test tests/integration/basic-routes.test.mjs tests/integration/protocol-adapters.test.mjs",
+    "test:cli": "node --test tests/unit/gateway-service.test.mjs tests/unit/init-config.test.mjs tests/integration/gateway-cli.integration.test.mjs",
+    "test:codex:unit": "node --test tests/unit/gateway-config-store.test.mjs tests/unit/claude-code-settings.test.mjs tests/unit/codex-model-catalog.test.mjs tests/unit/codex-chat-request-adapter.test.mjs tests/unit/codex-responses-writer.test.mjs tests/unit/codex-chat-response-adapter.test.mjs tests/unit/codex-responses-passthrough.test.mjs tests/unit/codex-official-models.test.mjs tests/unit/codex-hosted-tools-inject.test.mjs",
+    "test:codex:catalog-write": "node --test tests/integration/codex-catalog-write.test.mjs",
+    "test:codex:integration": "node --test tests/integration/codex-gateway.test.mjs",
+    "test:codex:e2e": "node tests/e2e/codex-e2e.mjs",
+    "gateway": "node scripts/gateway.mjs",
+    "gateway:start": "node scripts/gateway.mjs start",
+    "gateway:stop": "node scripts/gateway.mjs stop",
+    "gateway:status": "node scripts/gateway.mjs status",
+    "gateway:restart": "node scripts/gateway.mjs restart"
   },
   "engines": {
     "node": ">=18"

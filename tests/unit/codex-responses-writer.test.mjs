@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { ResponsesWriter } from "../lib/codex/responses-writer.mjs";
-import { iterateSse } from "../lib/codex/sse.mjs";
+import { ResponsesWriter } from "../../lib/codex/responses-writer.mjs";
+import { iterateSse } from "../../lib/codex/sse.mjs";
 
 test("writer emits stable text, reasoning, parallel function calls, and one terminal event", () => {
   const events = [];

@@ -4,9 +4,9 @@ import { ReadableStream } from "node:stream/web";
 import {
   chatCompletionToResponse,
   streamChatAsResponses,
-} from "../lib/codex/chat-response-adapter.mjs";
-import { collectResponsesStream } from "../lib/codex/responses-collector.mjs";
-import { ResponsesWriter } from "../lib/codex/responses-writer.mjs";
+} from "../../lib/codex/chat-response-adapter.mjs";
+import { collectResponsesStream } from "../../lib/codex/responses-collector.mjs";
+import { ResponsesWriter } from "../../lib/codex/responses-writer.mjs";
 
 test("Chat SSE becomes reasoning, text, and parallel Responses tool events", async () => {
   const chunks = [
