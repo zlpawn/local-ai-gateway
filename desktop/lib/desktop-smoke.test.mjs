@@ -83,13 +83,15 @@ test("endpoint detail provides an explicit manual save action", async () => {
   assert.match(html, /saveConfig\(\{\s*button:\s*btn,\s*client,\s*scope:\s*'node'/);
 });
 
-test("endpoint detail uses a horizontal action bar and compact model exposure switch", async () => {
+test("endpoint cards expose a compact model visibility switch outside the detail form", async () => {
   const html = await readFile(path.join(ROOT, "desktop", "config-panel.html"), "utf8");
   assert.match(html, /\.detail-actions\s*\{[^}]*display:\s*flex[^}]*flex-wrap:\s*nowrap/s);
   assert.match(html, /class="detail-actions"/);
-  assert.match(html, /class="switch-control"/);
-  assert.match(html, /class="switch-track"/);
-  assert.match(html, /class="switch-copy"/);
+  assert.match(html, /class="node-card-switch"/);
+  assert.match(html, /class="node-card-switch-track"/);
+  assert.match(html, /toggleEndpointExposure\(event,\s*'\$\{client\}',\s*\$\{index\},\s*this\)/);
+  assert.match(html, /window\.toggleEndpointExposure\s*=\s*async function/);
+  assert.doesNotMatch(html, /class="form-group full model-exposure-setting"/);
   assert.doesNotMatch(html, /accent-color:\s*var\(--primary\)/);
 });
 
