@@ -155,15 +155,20 @@
         }
 
         .nav-item {
-            padding: 8px 12px;
+            display: flex;
+            align-items: center;
+            flex: 0 0 auto;
+            min-height: 40px;
+            padding: 0 12px;
+            border: 1px solid transparent;
             border-radius: var(--radius-md);
             color: var(--text-secondary);
             text-decoration: none;
             font-size: 13px;
             font-weight: 500;
-            transition: all var(--transition-fast);
+            line-height: 1;
+            transition: background var(--transition-fast), color var(--transition-fast), border-color var(--transition-fast);
             cursor: pointer;
-            display: block;
         }
 
         .nav-item:hover {
@@ -175,8 +180,8 @@
             background: var(--input-bg);
             color: var(--text-primary);
             font-weight: 600;
-            border: 1px solid var(--border-color);
-            box-shadow: 0 1px 2px rgba(0,0,0,0.02);
+            border-color: transparent;
+            box-shadow: inset 2px 0 0 var(--text-primary);
         }
 
         .sidebar-footer {
@@ -722,6 +727,83 @@
             outline: none;
             border-color: var(--text-primary);
             background: var(--input-focus-bg);
+        }
+
+        .capability-options {
+            display: grid;
+            grid-template-columns: repeat(3, minmax(0, 1fr));
+            gap: 10px;
+        }
+
+        .capability-option {
+            display: flex;
+            align-items: center;
+            gap: 9px;
+            min-height: 42px;
+            padding: 10px 12px;
+            border: 1px solid var(--border-color);
+            border-radius: var(--radius-md);
+            background: var(--input-bg);
+            color: var(--text-primary);
+            text-transform: none;
+            letter-spacing: 0;
+            font-size: 13px;
+            font-weight: 500;
+            cursor: pointer;
+            transition: border-color var(--transition-fast), background var(--transition-fast);
+        }
+
+        .capability-option:hover {
+            border-color: var(--text-secondary);
+            background: var(--input-focus-bg);
+        }
+
+        .capability-checkbox {
+            appearance: none;
+            -webkit-appearance: none;
+            width: 16px;
+            height: 16px;
+            min-width: 16px;
+            padding: 0;
+            margin: 0;
+            border: 1px solid var(--text-secondary);
+            border-radius: 4px;
+            background: transparent;
+            display: grid;
+            place-content: center;
+            flex: 0 0 auto;
+            cursor: pointer;
+        }
+
+        .capability-checkbox::before {
+            content: "";
+            width: 4px;
+            height: 8px;
+            border-right: 2px solid var(--bg-color);
+            border-bottom: 2px solid var(--bg-color);
+            transform: rotate(45deg) scale(0);
+            transform-origin: center;
+            transition: transform var(--transition-fast);
+        }
+
+        .capability-checkbox:checked {
+            background: var(--text-primary);
+            border-color: var(--text-primary);
+        }
+
+        .capability-checkbox:checked::before {
+            transform: rotate(45deg) scale(1);
+        }
+
+        .capability-checkbox:focus-visible {
+            outline: 2px solid var(--text-primary);
+            outline-offset: 2px;
+        }
+
+        @media (max-width: 760px) {
+            .capability-options {
+                grid-template-columns: 1fr;
+            }
         }
 
         /* Empty State */
@@ -1318,30 +1400,33 @@ experimental_bearer_token = "dummy"</pre>
                             ${client === 'codex' ? `
                             <div class="form-group full">
                                 <label>Codex 能力</label>
-                                <div class="checkbox-row">
-                                    <label>
+                                <div class="capability-options">
+                                    <label class="capability-option">
                                         <input
+                                            class="capability-checkbox"
                                             id="capabilities-input-image-${client}-${index}"
                                             type="checkbox"
                                             ${ep.capabilities?.input_modalities?.includes('image') ? 'checked' : ''}
                                             onchange="updateCodexCapability('${client}', ${index}, 'image', this.checked)">
-                                        图片输入
+                                        <span>图片输入</span>
                                     </label>
-                                    <label>
+                                    <label class="capability-option">
                                         <input
+                                            class="capability-checkbox"
                                             id="capabilities-reasoning-${client}-${index}"
                                             type="checkbox"
                                             ${ep.capabilities?.reasoning ? 'checked' : ''}
                                             onchange="updateCodexCapability('${client}', ${index}, 'reasoning', this.checked)">
-                                        Reasoning 摘要
+                                        <span>Reasoning 摘要</span>
                                     </label>
-                                    <label>
+                                    <label class="capability-option">
                                         <input
+                                            class="capability-checkbox"
                                             id="capabilities-tools-${client}-${index}"
                                             type="checkbox"
                                             ${ep.capabilities?.tools !== false ? 'checked' : ''}
                                             onchange="updateCodexCapability('${client}', ${index}, 'tools', this.checked)">
-                                        工具调用
+                                        <span>工具调用</span>
                                     </label>
                                 </div>
                             </div>
@@ -1760,14 +1845,20 @@ experimental_bearer_token = "dummy"</pre>
                     const conflicts = payload?.error?.issues?.filter(issue =>
                         issue.code === 'duplicate_public_model'
                     ) || [];
-                    if (conflicts.length) {
-                        const message = conflicts.map(issue => {
+                    const invalidClaudeNames = payload?.error?.issues?.filter(issue =>
+                        issue.code === 'invalid_claude_model_name'
+                    ) || [];
+                    if (conflicts.length || invalidClaudeNames.length) {
+                        const messages = conflicts.map(issue => {
                             const suggestions = issue.occurrences
                                 .map(item => `${item.endpoint_name}: ${item.suggestion}`)
                                 .join('；');
                             return `模型 ${issue.model_id} 重复，候选名称：${suggestions}`;
-                        }).join('\n');
-                        showToast(message, 'error');
+                        });
+                        messages.push(...invalidClaudeNames.map(issue =>
+                            `Claude Desktop 映射名称 ${issue.model_id} 不符合规范，建议改为：${issue.suggestion}`
+                        ));
+                        showToast(messages.join('\n'), 'error');
                     } else {
                         showToast(payload?.error?.message || '保存配置失败', 'error');
                     }
