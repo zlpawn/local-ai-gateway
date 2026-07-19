@@ -64,6 +64,21 @@ test("catalog merges Responses, Chat, and Grok models under independent IDs", ()
   assert.equal(result.customIds.has("grok-4.5"), true);
 });
 
+test("catalog fills the required reasoning summaries flag for every model", () => {
+  const result = buildCodexCatalog({
+    officialModels,
+    endpoints: [{
+      name: "chat",
+      type: "openai-chat",
+      models: ["custom-chat"],
+      capabilities: { reasoning: false },
+    }],
+  });
+
+  assert.equal(result.models[0].supports_reasoning_summaries, true);
+  assert.equal(result.models[1].supports_reasoning_summaries, false);
+});
+
 test("catalog uses exposed endpoints, or every endpoint when none opt in", () => {
   const hidden = {
     name: "hidden",
