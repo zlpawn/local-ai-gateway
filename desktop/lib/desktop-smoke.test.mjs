@@ -87,6 +87,18 @@ test("config panel supports stable endpoint ids, secret status, exposure, and co
   assert.doesNotMatch(html, /codex:\s*\{\s*endpoints:\s*\[JSON\.parse/);
 });
 
+test("Codex endpoint editor offers Anthropic Messages protocol and auth selection", async () => {
+  const html = await readFile(path.join(ROOT, "desktop", "config-panel.html"), "utf8");
+  assert.match(html, /Anthropic Messages 协议/);
+  assert.match(
+    html,
+    /\['anthropic',\s*'openai-responses',\s*'openai-chat',\s*'grok'\]/,
+  );
+  assert.match(html, /<label>鉴权方式<\/label>/);
+  assert.match(html, /value="bearer"/);
+  assert.match(html, /value="x-api-key"/);
+});
+
 test("endpoint detail provides an explicit manual save action", async () => {
   const html = await readFile(path.join(ROOT, "desktop", "config-panel.html"), "utf8");
   assert.match(html, /id="save-node-\$\{client\}-\$\{index\}"/);

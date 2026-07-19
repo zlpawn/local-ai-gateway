@@ -447,8 +447,14 @@ async function startMatrixUpstream(t, scenario) {
         method: request.method,
         url: request.url,
         authorization: request.headers.authorization,
+        apiKey: request.headers["x-api-key"],
         body: raw ? JSON.parse(raw) : null,
       };
+
+      if (scenario.anthropicEvents) {
+        writeSse(response, scenario.anthropicEvents);
+        return;
+      }
 
       if (scenario.chatChunks) {
         writeChatSse(response, scenario.chatChunks);
@@ -474,6 +480,7 @@ async function startMatrixGateway(t, {
   publicModel = "public-model",
   upstreamModel = "upstream-model",
   grokAuth = false,
+  endpointCapabilities,
 }) {
   const baseEndpoint = {
     name: providerType,
@@ -484,6 +491,7 @@ async function startMatrixGateway(t, {
       input_modalities: ["text", "image"],
       reasoning: true,
       tools: true,
+      ...endpointCapabilities,
     },
   };
 
@@ -493,6 +501,10 @@ async function startMatrixGateway(t, {
   } else if (providerType === "openai-responses") {
     baseEndpoint.base_url = `http://127.0.0.1:${upstreamPort}/responses`;
     baseEndpoint.api_key = "env:TEST_MATRIX_KEY";
+  } else if (providerType === "anthropic") {
+    baseEndpoint.base_url = `http://127.0.0.1:${upstreamPort}`;
+    baseEndpoint.api_key = "env:TEST_MATRIX_KEY";
+    baseEndpoint.auth = "bearer";
   } else if (providerType === "grok") {
     baseEndpoint.base_url = `http://127.0.0.1:${upstreamPort}`;
     baseEndpoint.proxy = "";
@@ -530,6 +542,157 @@ async function startMatrixGateway(t, {
     },
   }, { TEST_MATRIX_KEY: "matrix-key" });
 }
+
+test("Codex Anthropic preserves custom tools and drops hosted tools", async (t) => {
+  const scenario = {
+    anthropicEvents: [
+      ["message_start", {
+        type: "message_start",
+        message: {
+          id: "msg_custom",
+          model: "anthropic-upstream",
+          usage: { input_tokens: 3, output_tokens: 0 },
+        },
+      }],
+      ["content_block_start", {
+        type: "content_block_start",
+        index: 0,
+        content_block: {
+          type: "tool_use",
+          id: "call_custom",
+          name: "shell_command",
+          input: {},
+        },
+      }],
+      ["content_block_delta", {
+        type: "content_block_delta",
+        index: 0,
+        delta: {
+          type: "input_json_delta",
+          partial_json: "{\"input\":\"pwd\"}",
+        },
+      }],
+      ["content_block_stop", { type: "content_block_stop", index: 0 }],
+      ["message_delta", {
+        type: "message_delta",
+        delta: { stop_reason: "tool_use" },
+        usage: { output_tokens: 2 },
+      }],
+      ["message_stop", { type: "message_stop" }],
+    ],
+  };
+  const { upstreamPort, getCapturedRequest } = await startMatrixUpstream(t, scenario);
+  const { gatewayPort } = await startMatrixGateway(t, {
+    providerType: "anthropic",
+    upstreamPort,
+    publicModel: "anthropic-public",
+    upstreamModel: "anthropic-upstream",
+  });
+
+  const response = await codexRequest(gatewayPort, {
+    model: "anthropic-public",
+    stream: true,
+    input: "Inspect the workspace.",
+    tools: [
+      {
+        type: "custom",
+        name: "shell_command",
+        description: "Run a shell command",
+      },
+      {
+        type: "web_search",
+      },
+    ],
+  });
+  const text = await response.text();
+  const captured = getCapturedRequest();
+
+  assert.equal(response.status, 200, text);
+  assert.equal(captured.body.tools.length, 1);
+  assert.equal(captured.body.tools[0].name, "shell_command");
+  assert.deepEqual(captured.body.tools[0].input_schema, {
+    type: "object",
+    properties: { input: { type: "string" } },
+    required: ["input"],
+    additionalProperties: false,
+  });
+  assert.match(text, /"type":"custom_tool_call"/);
+  assert.match(text, /"input":"pwd"/);
+  assert.match(text, /event: response\.completed/);
+});
+
+test("Codex Anthropic coalesces parallel tool history into alternating messages", async (t) => {
+  const scenario = {
+    anthropicEvents: [
+      ["message_start", {
+        type: "message_start",
+        message: {
+          id: "msg_after_tools",
+          model: "anthropic-upstream",
+          usage: { input_tokens: 8, output_tokens: 0 },
+        },
+      }],
+      ["content_block_start", {
+        type: "content_block_start",
+        index: 0,
+        content_block: { type: "text", text: "" },
+      }],
+      ["content_block_delta", {
+        type: "content_block_delta",
+        index: 0,
+        delta: { type: "text_delta", text: "done" },
+      }],
+      ["content_block_stop", { type: "content_block_stop", index: 0 }],
+      ["message_delta", {
+        type: "message_delta",
+        delta: { stop_reason: "end_turn" },
+        usage: { output_tokens: 1 },
+      }],
+      ["message_stop", { type: "message_stop" }],
+    ],
+  };
+  const { upstreamPort, getCapturedRequest } = await startMatrixUpstream(t, scenario);
+  const { gatewayPort } = await startMatrixGateway(t, {
+    providerType: "anthropic",
+    upstreamPort,
+    publicModel: "anthropic-public",
+    upstreamModel: "anthropic-upstream",
+  });
+
+  const response = await codexRequest(gatewayPort, {
+    model: "anthropic-public",
+    stream: true,
+    input: [
+      { role: "user", content: [{ type: "input_text", text: "Inspect both files." }] },
+      {
+        type: "function_call",
+        call_id: "call_a",
+        name: "read_file",
+        arguments: "{\"path\":\"a.txt\"}",
+      },
+      {
+        type: "function_call",
+        call_id: "call_b",
+        name: "read_file",
+        arguments: "{\"path\":\"b.txt\"}",
+      },
+      { type: "function_call_output", call_id: "call_a", output: "A" },
+      { type: "function_call_output", call_id: "call_b", output: "B" },
+    ],
+  });
+  const text = await response.text();
+  const messages = getCapturedRequest().body.messages;
+
+  assert.equal(response.status, 200, text);
+  assert.deepEqual(messages.map((message) => message.role), [
+    "user",
+    "assistant",
+    "user",
+  ]);
+  assert.equal(messages[1].content.filter((block) => block.type === "tool_use").length, 2);
+  assert.equal(messages[2].content.filter((block) => block.type === "tool_result").length, 2);
+  assert.match(text, /event: response\.completed/);
+});
 
 const providerMatrixScenarios = [
   {
@@ -603,6 +766,54 @@ const providerMatrixScenarios = [
     ],
   },
   {
+    name: "Anthropic translates images and tool calls",
+    providerType: "anthropic",
+    anthropicEvents: [
+      ["message_start", {
+        type: "message_start",
+        message: {
+          id: "msg_anthropic",
+          model: "upstream-model",
+          usage: { input_tokens: 4, output_tokens: 0 },
+        },
+      }],
+      ["content_block_start", {
+        type: "content_block_start",
+        index: 0,
+        content_block: {
+          type: "tool_use",
+          id: "call_anthropic",
+          name: "shell_command",
+          input: {},
+        },
+      }],
+      ["content_block_delta", {
+        type: "content_block_delta",
+        index: 0,
+        delta: {
+          type: "input_json_delta",
+          partial_json: "{\"command\":\"ls\"}",
+        },
+      }],
+      ["content_block_stop", {
+        type: "content_block_stop",
+        index: 0,
+      }],
+      ["message_delta", {
+        type: "message_delta",
+        delta: { stop_reason: "tool_use" },
+        usage: { output_tokens: 3 },
+      }],
+      ["message_stop", { type: "message_stop" }],
+    ],
+    expectedPatterns: [
+      /"type":"function_call"/,
+      /"call_id":"call_anthropic"/,
+      /"name":"shell_command"/,
+      /event: response\.completed/,
+    ],
+  },
+  {
     name: "Grok Responses uses the native Responses backend",
     providerType: "grok",
     grokAuth: true,
@@ -657,6 +868,18 @@ for (const scenario of providerMatrixScenarios) {
       assert.equal(
         capturedRequest.body.messages[0].content.some(
           (part) => part.type === "text" && String(part.text).includes("Inspect the image"),
+        ),
+        true,
+      );
+      assert.equal(Array.isArray(capturedRequest.body.tools), true);
+      assert.equal(capturedRequest.body.tools.length >= 2, true);
+    }
+    if (scenario.providerType === "anthropic") {
+      assert.equal(capturedRequest.apiKey, undefined);
+      assert.equal(capturedRequest.authorization, "Bearer matrix-key");
+      assert.equal(
+        capturedRequest.body.messages[0].content.some(
+          (part) => part.type === "image" && part.source?.type === "base64",
         ),
         true,
       );

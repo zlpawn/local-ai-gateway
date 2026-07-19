@@ -95,6 +95,26 @@
     "codex": {
       "endpoints": [
         {
+          "id": "ep_b7e69222-8a62-4ab8-a2cd-a0f8ab560d3f",
+          "name": "how88.top",
+          "type": "anthropic",
+          "base_url": "https://how88.top",
+          "auth": "bearer",
+          "models": [
+            "claude-opus-4-8-max",
+            "claude-opus-4-7-max"
+          ],
+          "model_mapping": {},
+          "capabilities": {
+            "input_modalities": [
+              "text",
+              "image"
+            ],
+            "reasoning": false,
+            "tools": true
+          }
+        },
+        {
           "id": "ep_f276eab2-3ae1-4323-89e5-7a085cc36fce",
           "name": "grok-subscription",
           "type": "grok",
@@ -114,7 +134,7 @@
         },
         {
           "name": "huoshan-codingplan",
-          "type": "openai-responses",
+          "type": "anthropic",
           "base_url": "https://ark.cn-beijing.volces.com/api/coding/v3",
           "models": [
             "glm-5.2",
