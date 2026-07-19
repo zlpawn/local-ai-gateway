@@ -7,31 +7,37 @@
     "code": {
       "endpoints": [
         {
-          "name": "volcengine-anthropic",
-          "type": "anthropic",
-          "base_url": "https://ark.cn-beijing.volces.com/api/plan/v1",
+          "id": "ep_ff7f32c0-96b9-430c-bd09-63dca678095a",
+          "name": "grok-subscription",
+          "type": "grok",
+          "base_url": "https://cli-chat-proxy.grok.com/v1",
+          "auth": "bearer",
           "models": [
-            "glm-5.2"
+            "grok-4.5"
           ],
-          "model_mapping": {
-            "claude-opus-4-8": "glm-5.2",
-            "claude-fable": "glm-5.2",
-            "fable": "glm-5.2",
-            "claude-haiku-4-0": "glm-5.2",
-            "claude-haiku": "glm-5.2",
-            "haiku": "glm-5.2",
-            "claude-opus-4-7": "minimax-m3",
-            "claude-opus": "minimax-m3",
-            "opus": "minimax-m3",
-            "minimax-m3": "minimax-m3",
-            "claude-sonnet-4-5": "deepseek-v4-pro",
-            "claude-sonnet": "deepseek-v4-pro",
-            "sonnet": "deepseek-v4-pro",
-            "deepseek-v4-pro": "deepseek-v4-pro"
-          },
-          "id": "ep_0017ac99-bf2d-4a7a-a70e-5f049c88054e"
+          "model_mapping": {},
+          "is_default": false
+        },
+        {
+          "name": "huoshan-codingplan",
+          "type": "anthropic",
+          "base_url": "https://ark.cn-beijing.volces.com/api/coding",
+          "models": [
+            "glm-5.2",
+            "minimax-m3",
+            "deepseek-v4-pro"
+          ],
+          "model_mapping": {},
+          "id": "ep_0017ac99-bf2d-4a7a-a70e-5f049c88054e",
+          "is_default": true
         }
-      ]
+      ],
+      "model_slots": {
+        "opus": "glm-5.2",
+        "fable": "glm-5.2",
+        "sonnet": "minimax-m3",
+        "haiku": "deepseek-v4-pro"
+      }
     },
     "desktop": {
       "endpoints": [
