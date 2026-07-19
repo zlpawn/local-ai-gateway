@@ -13,11 +13,46 @@ const GATEWAY_PORT = 8788;
 test("basic protocol route matrix works through the isolated 8788 gateway", async (t) => {
   const tempDir = await mkdtemp(path.join(os.tmpdir(), "gateway-basic-routes-"));
   const requests = new Map();
+  const requestHistory = [];
   const upstream = http.createServer(async (request, response) => {
     const body = JSON.parse(await readBody(request) || "{}");
     requests.set(request.url, body);
+    requestHistory.push({ url: request.url, body });
     response.setHeader("content-type", "application/json");
 
+    if (request.url === "/vision/chat/completions") {
+      response.end(JSON.stringify({
+        id: "chatcmpl_vision",
+        object: "chat.completion",
+        model: body.model,
+        choices: [{
+          index: 0,
+          message: { role: "assistant", content: "图片中显示错误代码 E42。" },
+          finish_reason: "stop",
+        }],
+      }));
+      return;
+    }
+    if (request.url === "/text/chat/completions") {
+      if (/image_url|base64,AA==/.test(JSON.stringify(body))) {
+        response.statusCode = 400;
+        response.end(JSON.stringify({
+          error: { message: "image input is not supported by this model" },
+        }));
+        return;
+      }
+      response.end(JSON.stringify({
+        id: "chatcmpl_text",
+        object: "chat.completion",
+        model: body.model,
+        choices: [{
+          index: 0,
+          message: { role: "assistant", content: "已根据图片解析结果处理。" },
+          finish_reason: "stop",
+        }],
+      }));
+      return;
+    }
     if (request.url === "/anthropic/messages") {
       response.end(JSON.stringify({
         id: "msg_mock",
@@ -73,14 +108,35 @@ test("basic protocol route matrix works through the isolated 8788 gateway", asyn
     server: { host: "127.0.0.1", port: GATEWAY_PORT },
     clients: {
       code: {
-        endpoints: [{
-          id: "ep_code_chat",
-          name: "mock-chat",
-          type: "openai-chat",
-          base_url: `http://127.0.0.1:${upstreamPort}/chat/completions`,
-          models: ["mock-upstream"],
-          model_mapping: { "claude-mock-sonnet": "mock-upstream" },
-        }],
+        endpoints: [
+          {
+            id: "ep_code_chat",
+            name: "mock-chat",
+            type: "openai-chat",
+            base_url: `http://127.0.0.1:${upstreamPort}/chat/completions`,
+            models: ["mock-upstream"],
+            model_mapping: { "claude-mock-sonnet": "mock-upstream" },
+          },
+          {
+            id: "ep_code_text",
+            name: "text-only",
+            type: "openai-chat",
+            base_url: `http://127.0.0.1:${upstreamPort}/text/chat/completions`,
+            models: ["text-only"],
+            model_mapping: { "claude-text-only": "text-only" },
+          },
+          {
+            id: "ep_code_vision",
+            name: "vision-fallback",
+            purpose: "vision_fallback",
+            vision_fallback_enabled: true,
+            vision_model: "vision-pro",
+            type: "openai-chat",
+            base_url: `http://127.0.0.1:${upstreamPort}/vision/chat/completions`,
+            models: ["vision-pro"],
+            model_mapping: {},
+          },
+        ],
       },
       codex: {
         endpoints: [{
@@ -127,6 +183,8 @@ test("basic protocol route matrix works through the isolated 8788 gateway", asyn
   await writeFile(path.join(tempDir, "gateway.secrets.json"), JSON.stringify({
     api_keys: {
       ep_code_chat: "test-key",
+      ep_code_text: "test-key",
+      ep_code_vision: "test-key",
       ep_codex_chat: "test-key",
       ep_desktop_anthropic: "test-key",
       ep_unknown_chat: "test-key",
@@ -173,6 +231,29 @@ test("basic protocol route matrix works through the isolated 8788 gateway", asyn
     requests.get("/chat/completions").messages.map((message) => message.role),
     ["system", "user"],
   );
+
+  const fallbackResult = await jsonRequest("/code/v1/messages", {
+    model: "claude-text-only",
+    max_tokens: 16,
+    messages: [{
+      role: "user",
+      content: [
+        { type: "text", text: "帮我分析" },
+        {
+          type: "image",
+          source: { type: "base64", media_type: "image/png", data: "AA==" },
+        },
+      ],
+    }],
+  }, { "anthropic-version": "2023-06-01" });
+  assert.equal(fallbackResult.content[0].text, "已根据图片解析结果处理。");
+  const visionRequest = requestHistory.find((item) => item.url === "/vision/chat/completions");
+  const textRequests = requestHistory.filter((item) => item.url === "/text/chat/completions");
+  const textRequest = textRequests.at(-1);
+  assert.equal(textRequests.length, 2);
+  assert.match(JSON.stringify(visionRequest.body), /data:image\/png;base64,AA==/);
+  assert.doesNotMatch(JSON.stringify(textRequest.body), /image_url|base64,AA==/);
+  assert.match(JSON.stringify(textRequest.body), /错误代码 E42/);
 
   const codex = await jsonRequest("/codex/v1/responses", {
     model: "mock-codex-model",

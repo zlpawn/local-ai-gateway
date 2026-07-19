@@ -15,6 +15,19 @@ import {
   validateGatewayConfig,
 } from "../../lib/config/gateway-config-store.mjs";
 
+test("vision fallback endpoints are excluded from exposed model selection", () => {
+  const endpoints = [
+    { id: "normal", models: ["glm-5.2"] },
+    {
+      id: "vision",
+      purpose: "vision_fallback",
+      expose_models: true,
+      models: ["vision-pro"],
+    },
+  ];
+  assert.deepEqual(selectExposedEndpoints(endpoints).map((item) => item.id), ["normal"]);
+});
+
 test("load migrates legacy fields, adds stable ids, extracts keys, and creates a backup", () => {
   const root = mkdtempSync(path.join(os.tmpdir(), "gateway-config-store-"));
   try {

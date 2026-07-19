@@ -124,3 +124,29 @@ test("Claude Code settings sync can use the gateway process listen URL", async (
   const settings = JSON.parse(await readFile(settingsPath, "utf8"));
   assert.equal(settings.env.ANTHROPIC_BASE_URL, "http://127.0.0.1:8788/code");
 });
+
+test("Claude Code settings sync ignores vision fallback endpoints for default selection", async (t) => {
+  const dir = await mkdtemp(path.join(tmpdir(), "claude-code-settings-vision-"));
+  t.after(() => rm(dir, { recursive: true, force: true }));
+  const settingsPath = path.join(dir, "settings.json");
+  await writeFile(settingsPath, "{}");
+
+  const result = syncClaudeCodeSettings({
+    settingsPath,
+    config: {
+      clients: {
+        code: {
+          endpoints: [{
+            id: "ep_vision",
+            purpose: "vision_fallback",
+            vision_model: "vision-pro",
+            models: ["vision-pro"],
+          }],
+        },
+      },
+    },
+  });
+
+  assert.equal(result.updated, false);
+  assert.equal(result.reason, "no-code-endpoints");
+});

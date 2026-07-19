@@ -62,7 +62,7 @@
     "codex:history:restore": "node scripts/codex-history-unify.mjs --restore",
     "test:adapters": "node --test tests/integration/basic-routes.test.mjs tests/integration/protocol-adapters.test.mjs",
     "test:cli": "node --test tests/unit/gateway-service.test.mjs tests/unit/init-config.test.mjs tests/unit/package-release.test.mjs tests/integration/gateway-cli.integration.test.mjs",
-    "test:codex:unit": "node --test tests/unit/gateway-config-store.test.mjs tests/unit/claude-code-settings.test.mjs tests/unit/codex-model-catalog.test.mjs tests/unit/codex-chat-request-adapter.test.mjs tests/unit/codex-responses-writer.test.mjs tests/unit/codex-chat-response-adapter.test.mjs tests/unit/codex-responses-passthrough.test.mjs tests/unit/codex-official-models.test.mjs tests/unit/codex-hosted-tools-inject.test.mjs",
+    "test:codex:unit": "node --test tests/unit/gateway-config-store.test.mjs tests/unit/vision-fallback.test.mjs tests/unit/claude-code-settings.test.mjs tests/unit/codex-model-catalog.test.mjs tests/unit/codex-chat-request-adapter.test.mjs tests/unit/codex-responses-writer.test.mjs tests/unit/codex-chat-response-adapter.test.mjs tests/unit/codex-responses-passthrough.test.mjs tests/unit/codex-official-models.test.mjs tests/unit/codex-hosted-tools-inject.test.mjs",
     "test:codex:catalog-write": "node --test tests/integration/codex-catalog-write.test.mjs",
     "test:codex:integration": "node --test tests/integration/codex-gateway.test.mjs",
     "test:codex:e2e": "node tests/e2e/codex-e2e.mjs",

@@ -107,6 +107,17 @@ test("endpoint detail provides an explicit manual save action", async () => {
   assert.match(html, /saveConfig\(\{\s*button:\s*btn,\s*client,\s*scope:\s*'node'/);
 });
 
+test("each client can add an ordinary configured vision fallback node", async () => {
+  const html = await readFile(path.join(ROOT, "desktop", "config-panel.html"), "utf8");
+  assert.match(html, /addVisionFallbackEndpoint\('code'\)/);
+  assert.match(html, /addVisionFallbackEndpoint\('desktop'\)/);
+  assert.match(html, /addVisionFallbackEndpoint\('codex'\)/);
+  assert.match(html, /purpose:\s*'vision_fallback'/);
+  assert.match(html, /vision_fallback_enabled:\s*true/);
+  assert.match(html, /视觉兜底模型/);
+  assert.match(html, /vision_model/);
+});
+
 test("global and card save actions preserve the active client context", async () => {
   const html = await readFile(path.join(ROOT, "desktop", "config-panel.html"), "utf8");
   assert.match(html, /id="save-btn"/);
