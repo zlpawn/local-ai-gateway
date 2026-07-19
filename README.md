@@ -67,10 +67,13 @@ New setups should create the local environment file:
 npm run init
 ```
 
-The init command creates `.env` only when it does not already exist, so it is
-safe to run again. Local `.env` and `gateway.secrets.json` are ignored by Git;
+The init command creates `.env` and `gateway.config.json` from public templates
+only when the target files do not already exist, so it is safe to run again.
+Local `.env` and `gateway.secrets.json` are ignored by Git;
 `gateway.config.json` is safe to commit because endpoint credentials are stored
-separately.
+separately. The published npm package intentionally excludes the repository's
+configured `gateway.config.json` and installs an empty endpoint template for
+each user.
 
 Start the gateway, open `http://127.0.0.1:8787/config`, add endpoints, and save
 the page to create `gateway.config.json`.
@@ -251,6 +254,10 @@ local-ai-gateway stop
 local-ai-gateway restart
 local-ai-gateway logs
 ```
+
+The first command creates user-owned configuration under
+`~/.local-ai-gateway/`. Existing `.env` and `gateway.config.json` files are
+never overwritten.
 
 ## Claude Desktop/Gateway Config
 
