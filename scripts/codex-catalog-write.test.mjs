@@ -150,6 +150,25 @@ test("saving config rewrites the Codex model catalog file", async (t) => {
     String(configPayload.codex_model_catalog?.path_posix || ""),
     /gateway-model-catalog\.json$/,
   );
+
+  const unconfirmedReveal = await fetch(
+    `http://127.0.0.1:${gatewayPort}/v1/config/secret?id=ep_chat`,
+  );
+  assert.equal(unconfirmedReveal.status, 403);
+
+  const reveal = await fetch(
+    `http://127.0.0.1:${gatewayPort}/v1/config/secret?id=ep_chat`,
+    {
+      headers: {
+        "sec-fetch-site": "same-origin",
+        "x-gateway-secret-intent": "reveal",
+      },
+    },
+  );
+  assert.equal(reveal.status, 200);
+  assert.match(reveal.headers.get("cache-control") || "", /no-store/);
+  assert.equal(reveal.headers.get("access-control-allow-origin"), null);
+  assert.deepEqual(await reveal.json(), { api_key: "env:TEST_KEY" });
 });
 
 test("saving duplicate public model ids returns conflict suggestions", async (t) => {

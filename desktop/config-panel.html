@@ -1150,7 +1150,7 @@ experimental_bearer_token = "dummy"</pre>
         let activeClient = 'code';
 
         const ENDPOINT_TYPES = [
-            { value: "anthropic", label: "Anthropic 官方" },
+            { value: "anthropic", label: "Anthropic Messages 协议" },
             { value: "openai-chat", label: "OpenAI Chat 补全格式" },
             { value: "openai-responses", label: "OpenAI Responses (实验性)" },
             { value: "grok", label: "Grok 订阅" }
@@ -1327,7 +1327,7 @@ experimental_bearer_token = "dummy"</pre>
         function createEndpointDetailHTML(client, index, ep) {
             const availableTypes = (client === 'code' || client === 'desktop')
                 ? ENDPOINT_TYPES.filter(t => ['anthropic', 'openai-chat', 'grok'].includes(t.value))
-                : ENDPOINT_TYPES.filter(t => ['openai-responses', 'openai-chat', 'grok'].includes(t.value));
+                : ENDPOINT_TYPES.filter(t => ['anthropic', 'openai-responses', 'openai-chat', 'grok'].includes(t.value));
 
             const typeOptions = availableTypes.map(t =>
                 `<option value="${t.value}" ${ep.type === t.value ? 'selected' : ''}>${t.label}</option>`
@@ -1386,10 +1386,18 @@ experimental_bearer_token = "dummy"</pre>
                                 <input class="mono" type="text" value="${escapeHtml(ep.base_url || '')}" placeholder="https://api.openai.com/v1" onchange="updateEndpoint('${client}', ${index}, 'base_url', this.value)">
                             </div>
                             <div class="form-group full">
+                                <label>鉴权方式</label>
+                                <select onchange="updateEndpoint('${client}', ${index}, 'auth', this.value)">
+                                    <option value="bearer" ${(ep.auth || 'bearer') === 'bearer' ? 'selected' : ''}>Bearer Token</option>
+                                    <option value="x-api-key" ${ep.auth === 'x-api-key' ? 'selected' : ''}>x-api-key</option>
+                                    <option value="none" ${ep.auth === 'none' ? 'selected' : ''}>不发送密钥</option>
+                                </select>
+                            </div>
+                            <div class="form-group full">
                                 <label>密钥 (API Key) ${ep.has_api_key ? '· 已配置' : '· 未配置'}</label>
                                 <div class="password-input-wrapper">
                                     <input class="mono" type="password" id="api-key-${client}-${index}" value="" placeholder="${ep.has_api_key ? '留空表示保留现有密钥' : '输入密钥或 env:变量名'}" onchange="updateEndpoint('${client}', ${index}, 'api_key', this.value)">
-                                    <button type="button" class="password-toggle-btn" onclick="togglePasswordVisibility('api-key-${client}-${index}')" title="显示/隐藏密钥">
+                                    <button type="button" class="password-toggle-btn" onclick="togglePasswordVisibility('${client}', ${index}, 'api-key-${client}-${index}')" title="${ep.has_api_key ? '查看已保存密钥' : '显示/隐藏密钥'}">
                                         <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
                                             <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"></path>
                                             <circle cx="12" cy="12" r="3"></circle>
@@ -1570,11 +1578,13 @@ experimental_bearer_token = "dummy"</pre>
 
         window.addEndpoint = function(client) {
             config.clients[client].endpoints = config.clients[client].endpoints || [];
+            const type = client === 'codex' ? 'openai-responses' : 'anthropic';
             config.clients[client].endpoints.unshift({
                 id: `ep_${crypto.randomUUID()}`,
                 name: "新服务商",
-                type: "anthropic",
+                type,
                 base_url: "",
+                auth: 'bearer',
                 api_key: "",
                 models: [],
                 model_mapping: {}
@@ -1622,7 +1632,8 @@ experimental_bearer_token = "dummy"</pre>
         }
 
         window.updateEndpoint = function(client, index, field, value) {
-            config.clients[client].endpoints[index][field] = value;
+            const endpoint = config.clients[client].endpoints[index];
+            endpoint[field] = value;
             if (field === 'name' && selectedEndpoint && selectedEndpoint.client === client && selectedEndpoint.index === index) {
                 const title = document.querySelector('.detail-title');
                 if (title) title.textContent = value || `节点 ${index + 1}`;
@@ -1698,18 +1709,44 @@ experimental_bearer_token = "dummy"</pre>
             }
         };
 
-        window.togglePasswordVisibility = function(inputId) {
+        window.togglePasswordVisibility = async function(client, index, inputId) {
             const input = document.getElementById(inputId);
             if (!input) return;
             const btn = input.nextElementSibling;
             if (input.type === 'password') {
+                const endpoint = config.clients?.[client]?.endpoints?.[index];
+                if (!input.value && endpoint?.has_api_key) {
+                    btn.disabled = true;
+                    try {
+                        const params = new URLSearchParams({ id: endpoint.id || '' });
+                        const response = await fetch(`/v1/config/secret?${params}`, {
+                            headers: { 'X-Gateway-Secret-Intent': 'reveal' },
+                            cache: 'no-store',
+                        });
+                        const payload = await response.json().catch(() => ({}));
+                        if (!response.ok) {
+                            throw new Error(payload.error?.message || '读取密钥失败');
+                        }
+                        input.value = payload.api_key || '';
+                        if (!input.value) throw new Error('未找到已保存密钥');
+                    } catch (error) {
+                        showToast(error.message || '读取密钥失败', 'error');
+                        return;
+                    } finally {
+                        btn.disabled = false;
+                    }
+                }
                 input.type = 'text';
+                input.focus();
+                input.setSelectionRange(input.value.length, input.value.length);
+                btn.title = '隐藏密钥';
                 btn.innerHTML = `<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
                     <path d="M17.94 17.94A10.07 10.07 0 0 1 12 20c-7 0-11-8-11-8a18.45 18.45 0 0 1 5.06-5.94M9.9 4.24A9.12 9.12 0 0 1 12 4c7 0 11 8 11 8a18.5 18.5 0 0 1-2.16 3.19m-6.72-1.07a3 3 0 1 1-4.24-4.24"></path>
                     <line x1="1" y1="1" x2="23" y2="23"></line>
                 </svg>`;
             } else {
                 input.type = 'password';
+                btn.title = input.value ? '显示密钥' : '查看已保存密钥';
                 btn.innerHTML = `<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
                     <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"></path>
                     <circle cx="12" cy="12" r="3"></circle>

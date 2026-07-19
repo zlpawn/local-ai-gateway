@@ -21,7 +21,7 @@ const officialModels = [{
   supported_in_api: true,
 }];
 
-test("catalog merges Responses, Chat, and Grok models under independent IDs", () => {
+test("catalog merges Responses, Chat, Anthropic, and Grok models under independent IDs", () => {
   const result = buildCodexCatalog({
     officialModels,
     endpoints: [
@@ -46,7 +46,7 @@ test("catalog merges Responses, Chat, and Grok models under independent IDs", ()
         models: ["grok-4.5"],
       },
       {
-        name: "ignored",
+        name: "anthropic",
         type: "anthropic",
         models: ["claude-sonnet"],
       },
@@ -58,6 +58,7 @@ test("catalog merges Responses, Chat, and Grok models under independent IDs", ()
     "glm-5.2",
     "openrouter-qwen3-coder",
     "grok-4.5",
+    "claude-sonnet",
   ]);
   assert.deepEqual(result.models[1].input_modalities, ["text", "image"]);
   assert.equal(result.officialIds.has("gpt-5.5"), true);
@@ -148,18 +149,29 @@ test("config validation rejects official model and mapping collisions", () => {
   );
 });
 
-test("config validation rejects unsupported Codex types and capability values", () => {
+test("config validation accepts Anthropic and rejects unknown Codex types and capability values", () => {
   const result = validateCodexEndpoints({
-    endpoints: [{
-      type: "anthropic",
-      capabilities: {
-        input_modalities: ["text", "audio"],
-        reasoning: "yes",
-        tools: 1,
+    endpoints: [
+      {
+        type: "anthropic",
+        capabilities: {
+          input_modalities: ["text", "image"],
+          reasoning: false,
+          tools: true,
+        },
       },
-    }],
+      {
+        type: "unknown",
+        capabilities: {
+          input_modalities: ["text", "audio"],
+          reasoning: "yes",
+          tools: 1,
+        },
+      },
+    ],
   });
 
+  assert.equal(result.errors.some((error) => error.includes("unsupported Codex type 'anthropic'")), false);
   assert.equal(result.errors.some((error) => error.includes("unsupported Codex type")), true);
   assert.equal(result.errors.some((error) => error.includes("unsupported input modality")), true);
   assert.equal(result.errors.some((error) => error.includes("capabilities.reasoning must be boolean")), true);
