@@ -521,6 +521,149 @@
             min-width: 0;
         }
 
+        .detail-actions {
+            display: flex;
+            flex-wrap: nowrap;
+            align-items: center;
+            justify-content: flex-end;
+            gap: 8px;
+            flex-shrink: 0;
+        }
+
+        .detail-actions .btn {
+            min-height: 32px;
+            white-space: nowrap;
+        }
+
+        .detail-default-action {
+            text-transform: none;
+            letter-spacing: normal;
+            font-weight: 500;
+            margin: 0;
+        }
+
+        .detail-default-action.is-active {
+            color: var(--success);
+            border-color: rgba(48, 164, 108, 0.35);
+            background: rgba(48, 164, 108, 0.10);
+        }
+
+        .detail-default-input {
+            position: absolute;
+            width: 1px;
+            height: 1px;
+            opacity: 0;
+            pointer-events: none;
+        }
+
+        .model-exposure-setting {
+            flex-direction: row;
+            align-items: center;
+            justify-content: space-between;
+            gap: 24px;
+            padding: 14px 16px;
+            border: 1px solid var(--border-color);
+            border-radius: var(--radius-md);
+            background: var(--input-bg);
+        }
+
+        .switch-control {
+            display: inline-flex;
+            align-items: center;
+            gap: 12px;
+            min-width: 0;
+            margin: 0;
+            cursor: pointer;
+            text-transform: none;
+            letter-spacing: normal;
+        }
+
+        .switch-control input {
+            position: absolute;
+            width: 1px;
+            height: 1px;
+            opacity: 0;
+            pointer-events: none;
+        }
+
+        .switch-track {
+            position: relative;
+            width: 38px;
+            height: 22px;
+            flex: 0 0 38px;
+            border: 1px solid var(--border-color);
+            border-radius: 999px;
+            background: var(--surface-hover);
+            transition: background var(--transition-fast), border-color var(--transition-fast);
+        }
+
+        .switch-track::after {
+            content: "";
+            position: absolute;
+            top: 3px;
+            left: 3px;
+            width: 14px;
+            height: 14px;
+            border-radius: 50%;
+            background: var(--text-secondary);
+            transition: transform var(--transition-fast), background var(--transition-fast);
+        }
+
+        .switch-control input:checked + .switch-track {
+            background: var(--text-primary);
+            border-color: var(--text-primary);
+        }
+
+        .switch-control input:checked + .switch-track::after {
+            background: var(--bg-color);
+            transform: translateX(16px);
+        }
+
+        .switch-control input:focus-visible + .switch-track {
+            outline: 2px solid var(--text-primary);
+            outline-offset: 2px;
+        }
+
+        .switch-copy {
+            display: flex;
+            flex-direction: column;
+            gap: 2px;
+            min-width: 0;
+        }
+
+        .switch-title {
+            color: var(--text-primary);
+            font-size: 13px;
+            font-weight: 600;
+        }
+
+        .switch-description {
+            color: var(--text-secondary);
+            font-size: 12px;
+            font-weight: 400;
+            line-height: 1.4;
+        }
+
+        @media (max-width: 900px) {
+            .detail-toolbar {
+                align-items: flex-start;
+                flex-direction: column;
+            }
+
+            .detail-actions {
+                width: 100%;
+                justify-content: flex-start;
+                overflow-x: auto;
+                padding-bottom: 2px;
+            }
+
+            .model-exposure-setting {
+                align-items: flex-start;
+                flex-direction: column;
+                gap: 8px;
+            }
+        }
+
         .detail-title {
             font-size: 16px;
             font-weight: 600;
@@ -1152,7 +1295,7 @@ experimental_bearer_token = "dummy"</pre>
                                 <div class="detail-subtitle">节点 ${index + 1} · 完整配置</div>
                             </div>
                         </div>
-                        <div class="card-actions">
+                        <div class="detail-actions">
                             <button
                                 class="btn btn-sm btn-primary"
                                 id="save-node-${client}-${index}"
@@ -1160,9 +1303,10 @@ experimental_bearer_token = "dummy"</pre>
                                 <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z"></path><polyline points="17 21 17 13 7 13 7 21"></polyline><polyline points="7 3 7 8 15 8"></polyline></svg>
                                 保存节点
                             </button>
-                            <label style="display: flex; align-items: center; gap: 6px; font-size: 13px; cursor: pointer; color: var(--text-secondary); font-weight: normal; margin: 0;">
-                                <input type="radio" name="default-${client}" ${ep.is_default ? 'checked' : ''} onchange="setAsDefault('${client}', ${index})" style="width: auto; margin: 0; padding: 0; accent-color: var(--primary);">
-                                设为默认节点
+                            <label class="btn btn-sm detail-default-action ${ep.is_default ? 'is-active' : ''}">
+                                <input class="detail-default-input" type="radio" name="default-${client}" ${ep.is_default ? 'checked' : ''} onchange="setAsDefault('${client}', ${index})">
+                                <svg width="14" height="14" viewBox="0 0 24 24" fill="${ep.is_default ? 'currentColor' : 'none'}" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"></polygon></svg>
+                                ${ep.is_default ? '默认节点' : '设为默认'}
                             </label>
                             <button class="btn btn-sm btn-danger" onclick="removeEndpoint('${client}', ${index})">
                                 <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="3 6 5 6 21 6"></polyline><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path></svg>删除</button>
@@ -1200,12 +1344,16 @@ experimental_bearer_token = "dummy"</pre>
                                     </button>
                                 </div>
                             </div>
-                            <div class="form-group full">
-                                <label style="display:flex;align-items:center;gap:8px;cursor:pointer">
+                            <div class="form-group full model-exposure-setting">
+                                <label class="switch-control">
                                     <input type="checkbox" ${ep.expose_models ? 'checked' : ''} onchange="updateEndpoint('${client}', ${index}, 'expose_models', this.checked)">
-                                    在桌面模型列表中展示此节点模型
+                                    <span class="switch-track" aria-hidden="true"></span>
+                                    <span class="switch-copy">
+                                        <span class="switch-title">在桌面模型列表中展示</span>
+                                        <span class="switch-description">启用后，此节点的模型会出现在客户端模型选择器中。</span>
+                                    </span>
                                 </label>
-                                <div class="detail-subtitle">若没有任何节点勾选，则默认展示所有节点模型。</div>
+                                <div class="detail-subtitle">没有任何节点开启时，默认展示全部节点模型。</div>
                             </div>
                             ${client === 'codex' ? `
                             <div class="form-group full">
