@@ -40,3 +40,6 @@ Thumbs.db
 _inspect_repo/
 .understand-anything/
 .worktrees/
+
+# codeg transfer artifacts (bundles, zips, patches, scratch clones)
+codeg-*
