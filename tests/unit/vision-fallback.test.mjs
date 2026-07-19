@@ -74,6 +74,7 @@ test("image detection and replacement support Anthropic, Chat, and Responses bod
 test("only explicit image capability errors trigger reactive fallback", () => {
   assert.equal(isImageCapabilityError(400, '{"error":"image input is not supported"}'), true);
   assert.equal(isImageCapabilityError(400, '{"error":"unsupported modality: image"}'), true);
+  assert.equal(isImageCapabilityError(400, "Model only support text input"), true);
   assert.equal(isImageCapabilityError(429, "Selected model is at capacity"), false);
   assert.equal(isImageCapabilityError(401, "invalid api key"), false);
 });

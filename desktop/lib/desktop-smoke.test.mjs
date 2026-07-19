@@ -118,6 +118,15 @@ test("each client can add an ordinary configured vision fallback node", async ()
   assert.match(html, /vision_model/);
 });
 
+test("each upstream model exposes supported and unsupported vision choices", async () => {
+  const html = await readFile(path.join(ROOT, "desktop", "config-panel.html"), "utf8");
+  assert.match(html, /updateModelImageCapability/);
+  assert.match(html, />支持视觉</);
+  assert.match(html, />不支持视觉</);
+  assert.match(html, /model_capabilities/);
+  assert.match(html, /delete endpoint\.model_capabilities\[model\]/);
+});
+
 test("global and card save actions preserve the active client context", async () => {
   const html = await readFile(path.join(ROOT, "desktop", "config-panel.html"), "utf8");
   assert.match(html, /id="save-btn"/);

@@ -1017,6 +1017,41 @@
         .tag button:hover {
             color: var(--danger);
         }
+        .tag.model-capability-tag {
+            padding-right: 4px;
+        }
+        .tag .model-capability-actions {
+            display: inline-flex;
+            align-items: center;
+            gap: 4px;
+            margin-left: 4px;
+        }
+        .tag .model-capability-choice {
+            opacity: 1;
+            padding: 3px 7px;
+            border: 1px solid var(--border-color);
+            border-radius: 999px;
+            color: var(--text-secondary);
+            background: var(--surface);
+            font-family: var(--font-sans);
+            font-size: 11px;
+            line-height: 1.2;
+        }
+        .tag .model-capability-choice:hover {
+            color: var(--text-primary);
+            border-color: var(--text-secondary);
+            background: var(--surface-hover);
+        }
+        .tag .model-capability-choice.is-supported {
+            color: var(--success);
+            border-color: color-mix(in srgb, var(--success) 45%, transparent);
+            background: color-mix(in srgb, var(--success) 10%, transparent);
+        }
+        .tag .model-capability-choice.is-unsupported {
+            color: var(--danger);
+            border-color: color-mix(in srgb, var(--danger) 45%, transparent);
+            background: color-mix(in srgb, var(--danger) 10%, transparent);
+        }
 
         .card .card-actions {
             opacity: 1;
@@ -1566,7 +1601,22 @@ experimental_bearer_token = "dummy"</pre>
                                 ${(ep.models && ep.models.length > 0) ? `
                                 <div class="tags-list">
                                     ${ep.models.map((m, i) => `
-                                        <span class="tag">${escapeHtml(m)} <button type="button" onclick="removeTag('${client}', ${index}, 'models', ${i})" title="移除模型">×</button></span>
+                                        <span class="tag model-capability-tag">
+                                            ${escapeHtml(m)}
+                                            ${!isVisionFallback ? `
+                                            <span class="model-capability-actions">
+                                                <button type="button"
+                                                    class="model-capability-choice ${ep.model_capabilities?.[m]?.image === true ? 'is-supported' : ''}"
+                                                    onclick="updateModelImageCapability('${client}', ${index}, ${i}, true)"
+                                                    title="再次点击可恢复默认（默认按支持视觉处理）">支持视觉</button>
+                                                <button type="button"
+                                                    class="model-capability-choice ${ep.model_capabilities?.[m]?.image === false ? 'is-unsupported' : ''}"
+                                                    onclick="updateModelImageCapability('${client}', ${index}, ${i}, false)"
+                                                    title="再次点击可恢复默认（默认按支持视觉处理）">不支持视觉</button>
+                                            </span>
+                                            ` : ''}
+                                            <button type="button" onclick="removeTag('${client}', ${index}, 'models', ${i})" title="移除模型">×</button>
+                                        </span>
                                     `).join('')}
                                 </div>
                                 ` : ''}
@@ -1869,6 +1919,28 @@ experimental_bearer_token = "dummy"</pre>
             }
         }
 
+        window.updateModelImageCapability = function(client, index, modelIndex, supported) {
+            const endpoint = config.clients[client].endpoints[index];
+            const model = endpoint.models?.[modelIndex];
+            if (!model) return;
+
+            const current = endpoint.model_capabilities?.[model]?.image;
+            if (current === supported) {
+                delete endpoint.model_capabilities[model].image;
+                if (Object.keys(endpoint.model_capabilities[model]).length === 0) {
+                    delete endpoint.model_capabilities[model];
+                }
+                if (Object.keys(endpoint.model_capabilities).length === 0) {
+                    delete endpoint.model_capabilities;
+                }
+            } else {
+                endpoint.model_capabilities ||= {};
+                endpoint.model_capabilities[model] ||= {};
+                endpoint.model_capabilities[model].image = supported;
+            }
+            render();
+        }
+
         window.handleTagInput = function(e, client, index, field) {
             if (e.key === 'Enter') {
                 e.preventDefault();
@@ -1889,8 +1961,16 @@ experimental_bearer_token = "dummy"</pre>
         };
 
         window.removeTag = function(client, index, field, tagIndex) {
-            if (config.clients[client].endpoints[index][field]) {
-                config.clients[client].endpoints[index][field].splice(tagIndex, 1);
+            const endpoint = config.clients[client].endpoints[index];
+            if (endpoint[field]) {
+                const removedModel = field === 'models' ? endpoint[field][tagIndex] : null;
+                endpoint[field].splice(tagIndex, 1);
+                if (removedModel && endpoint.model_capabilities?.[removedModel]) {
+                    delete endpoint.model_capabilities[removedModel];
+                    if (Object.keys(endpoint.model_capabilities).length === 0) {
+                        delete endpoint.model_capabilities;
+                    }
+                }
                 render();
             }
         };
