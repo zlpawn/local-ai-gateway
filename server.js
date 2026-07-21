@@ -4876,11 +4876,15 @@ function loadOfficialCodexCatalogModels() {
     }
   }
 
+  const defaultInstructions =
+    "You are Codex, a coding agent. Follow the active system and developer instructions.";
+
   const seedModels = [
     {
       slug: "gpt-5.6-sol",
       display_name: "5.6 Sol",
       description: "Frontier model for complex coding, research, and real-world work.",
+      base_instructions: defaultInstructions,
       default_reasoning_level: "medium",
       supported_reasoning_levels: [
         { effort: "low", description: "Fast responses with lighter reasoning" },
@@ -4898,6 +4902,7 @@ function loadOfficialCodexCatalogModels() {
       slug: "gpt-5.6-terra",
       display_name: "5.6 Terra",
       description: "Specialized model optimized for agentic coding and deep reasoning.",
+      base_instructions: defaultInstructions,
       default_reasoning_level: "high",
       supported_reasoning_levels: [
         { effort: "low", description: "Fast responses with lighter reasoning" },
@@ -4915,6 +4920,7 @@ function loadOfficialCodexCatalogModels() {
       slug: "gpt-5.6-luna",
       display_name: "5.6 Luna",
       description: "Faster, lightweight model for everyday coding and quick iterations.",
+      base_instructions: defaultInstructions,
       default_reasoning_level: "medium",
       supported_reasoning_levels: [
         { effort: "low", description: "Fast responses with lighter reasoning" },
@@ -4931,6 +4937,7 @@ function loadOfficialCodexCatalogModels() {
       slug: "gpt-5.5",
       display_name: "5.5",
       description: "Official Codex fallback model",
+      base_instructions: defaultInstructions,
       visibility: "list",
       supported_in_api: true,
       default_reasoning_level: "medium",
