@@ -4885,6 +4885,8 @@ function loadOfficialCodexCatalogModels() {
       display_name: "5.6 Sol",
       description: "Frontier model for complex coding, research, and real-world work.",
       base_instructions: defaultInstructions,
+      support_verbosity: true,
+      default_verbosity: "medium",
       default_reasoning_level: "medium",
       supported_reasoning_levels: [
         { effort: "low", description: "Fast responses with lighter reasoning" },
@@ -4903,6 +4905,8 @@ function loadOfficialCodexCatalogModels() {
       display_name: "5.6 Terra",
       description: "Specialized model optimized for agentic coding and deep reasoning.",
       base_instructions: defaultInstructions,
+      support_verbosity: true,
+      default_verbosity: "medium",
       default_reasoning_level: "high",
       supported_reasoning_levels: [
         { effort: "low", description: "Fast responses with lighter reasoning" },
@@ -4921,6 +4925,8 @@ function loadOfficialCodexCatalogModels() {
       display_name: "5.6 Luna",
       description: "Faster, lightweight model for everyday coding and quick iterations.",
       base_instructions: defaultInstructions,
+      support_verbosity: true,
+      default_verbosity: "low",
       default_reasoning_level: "medium",
       supported_reasoning_levels: [
         { effort: "low", description: "Fast responses with lighter reasoning" },
@@ -4938,6 +4944,8 @@ function loadOfficialCodexCatalogModels() {
       display_name: "5.5",
       description: "Official Codex fallback model",
       base_instructions: defaultInstructions,
+      support_verbosity: true,
+      default_verbosity: "medium",
       visibility: "list",
       supported_in_api: true,
       default_reasoning_level: "medium",
