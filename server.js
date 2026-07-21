@@ -4898,6 +4898,7 @@ function loadOfficialCodexCatalogModels() {
       visibility: "list",
       supported_in_api: true,
       priority: 1,
+      truncation_policy: { mode: "tokens", limit: 10000 },
       input_modalities: ["text", "image"]
     },
     {
@@ -4918,6 +4919,7 @@ function loadOfficialCodexCatalogModels() {
       visibility: "list",
       supported_in_api: true,
       priority: 2,
+      truncation_policy: { mode: "tokens", limit: 10000 },
       input_modalities: ["text", "image"]
     },
     {
@@ -4937,6 +4939,7 @@ function loadOfficialCodexCatalogModels() {
       visibility: "list",
       supported_in_api: true,
       priority: 3,
+      truncation_policy: { mode: "tokens", limit: 10000 },
       input_modalities: ["text", "image"]
     },
     {
@@ -4955,6 +4958,7 @@ function loadOfficialCodexCatalogModels() {
         { effort: "high", description: "More reasoning" }
       ],
       shell_type: "shell_command",
+      truncation_policy: { mode: "tokens", limit: 10000 },
       input_modalities: ["text", "image"]
     }
   ];
