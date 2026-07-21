@@ -176,7 +176,7 @@
         },
         {
           "name": "huoshan-codingplan",
-          "type": "openai-responses",
+          "type": "openai-chat",
           "base_url": "https://ark.cn-beijing.volces.com/api/coding/v3",
           "models": [
             "glm-5.2",
