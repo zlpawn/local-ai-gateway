@@ -4858,29 +4858,78 @@ function logLine(entry) {
 }
 
 function loadOfficialCodexCatalogModels() {
-  // Prefer Desktop's live cache. It includes newly rolled-out official models
-  // (e.g. gpt-5.6-*) that are not yet in `codex debug models --bundled`.
   const fromDesktopCache = loadOfficialCodexModelsFromDesktopCache();
-  if (fromDesktopCache.length) return fromDesktopCache;
+  let models = [...fromDesktopCache];
 
-  try {
-    const output = execFileSync("codex", ["debug", "models", "--bundled"], {
-      encoding: "utf8",
-      stdio: ["ignore", "pipe", "ignore"],
-      timeout: 15000,
-    });
-    const parsed = JSON.parse(output);
-    const models = Array.isArray(parsed.models) ? parsed.models : [];
-    const filtered = models.filter((model) => isBundledOfficialCodexModel(model.slug));
-    if (filtered.length) return filtered;
-  } catch {
-    // Fall through to the hardcoded seed model.
+  if (!models.length) {
+    try {
+      const output = execFileSync("codex", ["debug", "models", "--bundled"], {
+        encoding: "utf8",
+        stdio: ["ignore", "pipe", "ignore"],
+        timeout: 15000,
+      });
+      const parsed = JSON.parse(output);
+      const bundled = Array.isArray(parsed.models) ? parsed.models : [];
+      models = bundled.filter((model) => isBundledOfficialCodexModel(model.slug));
+    } catch {
+      // Fall through to seed models.
+    }
   }
 
-  return [
+  const seedModels = [
+    {
+      slug: "gpt-5.6-sol",
+      display_name: "5.6 Sol",
+      description: "Frontier model for complex coding, research, and real-world work.",
+      default_reasoning_level: "medium",
+      supported_reasoning_levels: [
+        { effort: "low", description: "Fast responses with lighter reasoning" },
+        { effort: "medium", description: "Balances speed and reasoning depth for everyday tasks" },
+        { effort: "high", description: "Greater reasoning depth for complex problems" },
+        { effort: "xhigh", description: "Extra high reasoning depth for complex problems" }
+      ],
+      shell_type: "shell_command",
+      visibility: "list",
+      supported_in_api: true,
+      priority: 1,
+      input_modalities: ["text", "image"]
+    },
+    {
+      slug: "gpt-5.6-terra",
+      display_name: "5.6 Terra",
+      description: "Specialized model optimized for agentic coding and deep reasoning.",
+      default_reasoning_level: "high",
+      supported_reasoning_levels: [
+        { effort: "low", description: "Fast responses with lighter reasoning" },
+        { effort: "medium", description: "Balances speed and reasoning depth for everyday tasks" },
+        { effort: "high", description: "Greater reasoning depth for complex problems" },
+        { effort: "xhigh", description: "Extra high reasoning depth for complex problems" }
+      ],
+      shell_type: "shell_command",
+      visibility: "list",
+      supported_in_api: true,
+      priority: 2,
+      input_modalities: ["text", "image"]
+    },
+    {
+      slug: "gpt-5.6-luna",
+      display_name: "5.6 Luna",
+      description: "Faster, lightweight model for everyday coding and quick iterations.",
+      default_reasoning_level: "medium",
+      supported_reasoning_levels: [
+        { effort: "low", description: "Fast responses with lighter reasoning" },
+        { effort: "medium", description: "Balances speed and reasoning depth for everyday tasks" },
+        { effort: "high", description: "Greater reasoning depth for complex problems" }
+      ],
+      shell_type: "shell_command",
+      visibility: "list",
+      supported_in_api: true,
+      priority: 3,
+      input_modalities: ["text", "image"]
+    },
     {
       slug: "gpt-5.5",
-      display_name: "GPT-5.5",
+      display_name: "5.5",
       description: "Official Codex fallback model",
       visibility: "list",
       supported_in_api: true,
@@ -4888,12 +4937,22 @@ function loadOfficialCodexCatalogModels() {
       supported_reasoning_levels: [
         { effort: "low", description: "Fast responses with lighter reasoning" },
         { effort: "medium", description: "Balanced reasoning" },
-        { effort: "high", description: "More reasoning" },
+        { effort: "high", description: "More reasoning" }
       ],
       shell_type: "shell_command",
-      input_modalities: ["text"],
-    },
+      input_modalities: ["text", "image"]
+    }
   ];
+
+  const existingSlugs = new Set(models.map((m) => m.slug || m.id));
+  for (const seed of seedModels) {
+    if (!existingSlugs.has(seed.slug)) {
+      models.push(seed);
+      existingSlugs.add(seed.slug);
+    }
+  }
+
+  return models;
 }
 
 function loadOfficialCodexModelsFromDesktopCache() {

@@ -87,7 +87,12 @@
             "claude-opus-4-6": "deepseek-v4-pro"
           },
           "is_default": false,
-          "id": "ep_0bb74284-d8fc-4fe7-bef4-54c32c8ee333"
+          "id": "ep_0bb74284-d8fc-4fe7-bef4-54c32c8ee333",
+          "model_capabilities": {
+            "glm-5.2": {
+              "image": false
+            }
+          }
         },
         {
           "name": "https://huskyapi.com",
@@ -106,7 +111,10 @@
             "claude-opus-4-8-max",
             "claude-opus-4-7-max"
           ],
-          "model_mapping": {},
+          "model_mapping": {
+            "claude-opus-4-8-max": "claude-opus-4-8-max",
+            "claude-opus-4-7-max": "claude-opus-4-7-max"
+          },
           "is_default": false,
           "id": "ep_69d5336b-018f-473d-8104-8589d343ae60"
         }
@@ -185,7 +193,12 @@
             "tools": true
           },
           "is_default": true,
-          "id": "ep_5f9be1d4-8d1f-4b4d-9e56-3c396fde4d7e"
+          "id": "ep_5f9be1d4-8d1f-4b4d-9e56-3c396fde4d7e",
+          "model_capabilities": {
+            "glm-5.2": {
+              "image": false
+            }
+          }
         }
       ]
     }
