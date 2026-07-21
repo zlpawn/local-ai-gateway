@@ -4899,6 +4899,7 @@ function loadOfficialCodexCatalogModels() {
       supported_in_api: true,
       priority: 1,
       truncation_policy: { mode: "tokens", limit: 10000 },
+      supports_parallel_tool_calls: true,
       input_modalities: ["text", "image"]
     },
     {
@@ -4920,6 +4921,7 @@ function loadOfficialCodexCatalogModels() {
       supported_in_api: true,
       priority: 2,
       truncation_policy: { mode: "tokens", limit: 10000 },
+      supports_parallel_tool_calls: true,
       input_modalities: ["text", "image"]
     },
     {
@@ -4940,6 +4942,7 @@ function loadOfficialCodexCatalogModels() {
       supported_in_api: true,
       priority: 3,
       truncation_policy: { mode: "tokens", limit: 10000 },
+      supports_parallel_tool_calls: true,
       input_modalities: ["text", "image"]
     },
     {
@@ -4959,14 +4962,19 @@ function loadOfficialCodexCatalogModels() {
       ],
       shell_type: "shell_command",
       truncation_policy: { mode: "tokens", limit: 10000 },
+      supports_parallel_tool_calls: true,
       input_modalities: ["text", "image"]
     }
   ];
 
+  const reference = models[0] || null;
   const existingSlugs = new Set(models.map((m) => m.slug || m.id));
   for (const seed of seedModels) {
     if (!existingSlugs.has(seed.slug)) {
-      models.push(seed);
+      const mergedSeed = reference
+        ? Object.assign(structuredClone(reference), seed)
+        : seed;
+      models.push(mergedSeed);
       existingSlugs.add(seed.slug);
     }
   }
