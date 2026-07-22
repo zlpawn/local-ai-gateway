@@ -37,7 +37,7 @@ test("sanitizeGrokResponsesInput converts custom_tool_call and output to standar
   assert.equal(clean.input[0].role, "user");
   assert.equal(clean.input[1].type, "function_call");
   assert.equal(clean.input[1].name, "apply_patch");
-  assert.equal(clean.input[1].arguments, "*** Patch");
+  assert.equal(clean.input[1].arguments, '{"input":"*** Patch"}');
   assert.equal(clean.input[2].type, "function_call_output");
   assert.equal(clean.input[2].output, "Success");
 });
