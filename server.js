@@ -376,7 +376,7 @@ function collectGroupedModelsFromConfig(config, exposedModels = []) {
       const targetGroupKey = clientType === 'claude' ? 'desktop' : clientType;
       if (groups[targetGroupKey] && Array.isArray(clientData.endpoints)) {
         for (const ep of clientData.endpoints) {
-          const epModels = [...(ep.models || []), ...Object.keys(ep.model_mapping || {})];
+          const epModels = Array.isArray(ep.models) ? ep.models : [];
           for (const m of epModels) {
             const modelId = typeof m === 'string' ? m : (m.id || m.name);
             if (modelId && !groups[targetGroupKey].models.includes(modelId)) {
