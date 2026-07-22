@@ -98,12 +98,6 @@ let GATEWAY_STATE = loadGatewayState({
 let GATEWAY_CONFIG = GATEWAY_STATE.config;
 let GATEWAY_SECRETS = GATEWAY_STATE.secrets;
 let globalWatcherDaemon = null;
-if (GATEWAY_CONFIG.sessionSync?.enabled) {
-  try {
-    globalWatcherDaemon = new SessionWatcherDaemon();
-    globalWatcherDaemon.start();
-  } catch {}
-}
 let CLAUDE_CODE_MODEL_ROUTES = buildClaudeCodeModelRoutes(
   GATEWAY_CONFIG.clients?.code?.endpoints || [],
 );
@@ -230,6 +224,37 @@ server.listen(LISTEN_PORT, LISTEN_HOST, () => {
   const host = LISTEN_HOST === "0.0.0.0" ? "127.0.0.1" : LISTEN_HOST;
   const url = `http://${host}:${LISTEN_PORT}/`;
   console.log(`Claude -> Ark gateway listening on ${url}`);
+
+  // Start session sync after the HTTP server is already accepting connections.
+  // Full historical scans can take longer than the health-check timeout, so keep
+  // them off the critical boot path.
+  if (GATEWAY_CONFIG.sessionSync?.enabled) {
+    setImmediate(() => {
+      try {
+        const sessionSync = GATEWAY_CONFIG.sessionSync || {};
+        if (!globalWatcherDaemon) {
+          globalWatcherDaemon = new SessionWatcherDaemon({
+            dateRange: sessionSync.dateRange || null,
+            summaryMode: sessionSync.summaryMode || 'rule',
+            summaryModel: sessionSync.summaryModel || '',
+            listenPort: LISTEN_PORT,
+          });
+        } else {
+          globalWatcherDaemon.setDateRange(sessionSync.dateRange || null);
+          globalWatcherDaemon.setSummaryOptions(
+            sessionSync.summaryMode || 'rule',
+            sessionSync.summaryModel || '',
+            LISTEN_PORT,
+          );
+        }
+        globalWatcherDaemon.start();
+        console.log(`Session sync watcher started (hub: ${globalWatcherDaemon.hubStore.baseDir})`);
+      } catch (error) {
+        console.error(`Session sync watcher failed to start: ${error instanceof Error ? error.message : String(error)}`);
+      }
+    });
+  }
+
   console.log(`Ark Anthropic messages URL: ${ARK_MESSAGES_URL}`);
   console.log(`Ark Codex/OpenAI URL: ${ARK_CODEX_BASE_URL}`);
   console.log(`Official Anthropic messages URL: ${ANTHROPIC_MESSAGES_URL}`);
