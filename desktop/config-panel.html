@@ -1133,6 +1133,7 @@
                 <a href="#code" class="nav-item active" onclick="switchTab('code')">Claude Code 代理</a>
                 <a href="#desktop" class="nav-item" onclick="switchTab('desktop')">Claude Desktop 代理</a>
                 <a href="#codex" class="nav-item" onclick="switchTab('codex')">Codex 代理</a>
+                <a href="#sync" class="nav-item" onclick="switchTab('sync')">会话同步 (Session Sync)</a>
             </nav>
             <div class="sidebar-footer" style="flex-direction: column;">
                 <div style="display: flex; gap: 12px; width: 100%;">
@@ -1263,6 +1264,53 @@ experimental_bearer_token = "dummy"</pre>
 
                 <div class="endpoints-grid" id="codex-endpoints"></div>
             </section>
+
+            <!-- Session Sync Section -->
+            <section id="section-sync" class="tab-section" style="display: none;">
+                <div class="section-header">
+                    <div>
+                        <h2>跨软件会话同步 (Session Sync)</h2>
+                        <p>在不同 AI 桌面软件（Antigravity、Claude Desktop、Codex）之间无缝共享与恢复历史对话。</p>
+                    </div>
+                    <button class="btn btn-primary" onclick="saveSyncConfig()">保存同步设置</button>
+                </div>
+
+                <div class="usage-guide">
+                    <h3>基本工作原理与 Skill 软链接</h3>
+                    <p>1. 主 Skill 文件优先安装到中央基准目录：<code>~/.agents/skills/session-sync/SKILL.md</code>。</p>
+                    <p>2. 在下方勾选需要开启的软件，系统会自动创建软链接（Symlinks）指向中央 Skill。</p>
+                </div>
+
+                <div class="model-slots-panel" style="margin-top: 20px;">
+                    <div class="model-slots-header">
+                        <h3>同步控制与 Skill 软链接管理</h3>
+                    </div>
+                    <div style="padding: 16px; display: flex; flex-direction: column; gap: 16px;">
+                        <label style="display: flex; align-items: center; gap: 10px; font-weight: 600; font-size: 15px; cursor: pointer; color: var(--text-primary);">
+                            <input type="checkbox" id="sync-enable-toggle" style="width: 18px; height: 18px;">
+                            开启后台跨软件会话监听 (Watcher Daemon)
+                        </label>
+
+                        <div style="border-top: 1px solid var(--border-color); padding-top: 16px; margin-top: 8px;">
+                            <h4 style="margin-bottom: 12px; font-size: 14px; color: var(--text-primary);">选择创建软链接的目标软件：</h4>
+                            <div style="display: flex; flex-direction: column; gap: 12px;">
+                                <label style="display: flex; align-items: center; gap: 10px; cursor: pointer; color: var(--text-primary);">
+                                    <input type="checkbox" id="sync-target-antigravity" style="width: 16px; height: 16px;">
+                                    <span>Google Antigravity <code style="font-size:12px; color:var(--text-secondary);">~/.gemini/config/skills/session-sync</code></span>
+                                </label>
+                                <label style="display: flex; align-items: center; gap: 10px; cursor: pointer; color: var(--text-primary);">
+                                    <input type="checkbox" id="sync-target-claude" style="width: 16px; height: 16px;">
+                                    <span>Claude Code / Desktop <code style="font-size:12px; color:var(--text-secondary);">~/.claude/skills/session-sync</code></span>
+                                </label>
+                                <label style="display: flex; align-items: center; gap: 10px; cursor: pointer; color: var(--text-primary);">
+                                    <input type="checkbox" id="sync-target-codex" style="width: 16px; height: 16px;">
+                                    <span>OpenAI Codex <code style="font-size:12px; color:var(--text-secondary);">~/.codex/skills/session-sync</code></span>
+                                </label>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </section>
         </main>
     </div>
 
@@ -1368,7 +1416,55 @@ experimental_bearer_token = "dummy"</pre>
             } catch (e) {
                 console.warn('加载初始配置失败，使用默认配置。');
             }
+            await loadSyncStatus();
             render();
+        }
+
+        async function loadSyncStatus() {
+            try {
+                const res = await fetch('/v1/sync/status');
+                if (res.ok) {
+                    const data = await res.json();
+                    if (data.success) {
+                        const enableToggle = document.getElementById('sync-enable-toggle');
+                        const agTarget = document.getElementById('sync-target-antigravity');
+                        const claudeTarget = document.getElementById('sync-target-claude');
+                        const codexTarget = document.getElementById('sync-target-codex');
+
+                        if (enableToggle) enableToggle.checked = Boolean(data.enabled);
+                        if (agTarget) agTarget.checked = Boolean(data.targets?.antigravity ?? data.symlinks?.antigravity);
+                        if (claudeTarget) claudeTarget.checked = Boolean(data.targets?.claude ?? data.symlinks?.claude);
+                        if (codexTarget) codexTarget.checked = Boolean(data.targets?.codex ?? data.symlinks?.codex);
+                    }
+                }
+            } catch (e) {
+                console.warn('加载会话同步状态失败。');
+            }
+        }
+
+        async function saveSyncConfig() {
+            const enabled = document.getElementById('sync-enable-toggle').checked;
+            const targets = {
+                antigravity: document.getElementById('sync-target-antigravity').checked,
+                claude: document.getElementById('sync-target-claude').checked,
+                codex: document.getElementById('sync-target-codex').checked
+            };
+
+            try {
+                const res = await fetch('/v1/sync/configure', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ enabled, targets })
+                });
+                const data = await res.json();
+                if (data.success) {
+                    showToast('会话同步与 Skill 软链接设置已成功保存并应用！', 'success');
+                } else {
+                    showToast('保存设置失败: ' + (data.error || '未知错误'), 'danger');
+                }
+            } catch (e) {
+                showToast('网络请求失败: ' + e.message, 'danger');
+            }
         }
 
         function formatModelMapping(mapping) {

@@ -118,19 +118,34 @@ test('SessionWatcherDaemon - scanExistingSessions on startup', () => {
   }
 });
 
-test('SkillInstaller - install skill file', () => {
-  const tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), 'skill-test-'));
+test('SkillInstaller - central installation and symlinks management', () => {
+  const tmpHome = fs.mkdtempSync(path.join(os.tmpdir(), 'skill-symlink-test-'));
   try {
-    assert.equal(SkillInstaller.isInstalled(tmpDir), false);
+    const centralDir = path.join(tmpHome, '.agents', 'skills', 'session-sync');
+    const centralFile = SkillInstaller.installBaseSkill(centralDir);
+    assert.ok(fs.existsSync(centralFile));
 
-    const installedFile = SkillInstaller.install(tmpDir);
-    assert.ok(fs.existsSync(installedFile));
-    assert.equal(SkillInstaller.isInstalled(tmpDir), true);
+    // Test symlinks update (select antigravity & codex, unselect claude)
+    const results = SkillInstaller.updateSymlinks(
+      { antigravity: true, claude: false, codex: true },
+      tmpHome,
+      centralFile
+    );
 
-    const content = fs.readFileSync(installedFile, 'utf-8');
-    assert.ok(content.includes('name: session-sync'));
+    assert.equal(results.antigravity, true);
+    assert.equal(results.claude, false);
+    assert.equal(results.codex, true);
+
+    const status = SkillInstaller.getSymlinkStatus(tmpHome);
+    assert.equal(status.antigravity, true);
+    assert.equal(status.claude, false);
+    assert.equal(status.codex, true);
+
+    const agLink = path.join(tmpHome, '.gemini', 'config', 'skills', 'session-sync', 'SKILL.md');
+    assert.ok(fs.existsSync(agLink));
+    assert.ok(fs.lstatSync(agLink).isSymbolicLink() || fs.lstatSync(agLink).isFile());
   } finally {
-    fs.rmSync(tmpDir, { recursive: true, force: true });
+    fs.rmSync(tmpHome, { recursive: true, force: true });
   }
 });
 
