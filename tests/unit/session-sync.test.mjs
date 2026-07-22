@@ -6,6 +6,7 @@ import os from 'node:os';
 import { HubStore } from '../../lib/session-sync/hub-store.mjs';
 import { SessionWatcherDaemon } from '../../lib/session-sync/watcher-daemon.mjs';
 import { SkillInstaller } from '../../lib/session-sync/skill-installer.mjs';
+import { interactiveSetup } from '../../lib/cli/init-config.mjs';
 
 test('HubStore - save and retrieve session', () => {
   const tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), 'hub-store-test-'));
@@ -93,5 +94,19 @@ test('SkillInstaller - install skill file', () => {
     assert.ok(content.includes('name: session-sync'));
   } finally {
     fs.rmSync(tmpDir, { recursive: true, force: true });
+  }
+});
+
+test('interactiveSetup - interactive mode choice', async () => {
+  const pkgDir = path.resolve('.');
+  const tmpDataDir = fs.mkdtempSync(path.join(os.tmpdir(), 'init-setup-test-'));
+  try {
+    const res = await interactiveSetup(pkgDir, tmpDataDir, { isTTY: true, forceChoice: true });
+    assert.equal(res.enableSync, true);
+    assert.ok(fs.existsSync(path.join(tmpDataDir, 'gateway.config.json')));
+    const config = JSON.parse(fs.readFileSync(path.join(tmpDataDir, 'gateway.config.json'), 'utf-8'));
+    assert.equal(config.sessionSync?.enabled, true);
+  } finally {
+    fs.rmSync(tmpDataDir, { recursive: true, force: true });
   }
 });

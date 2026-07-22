@@ -3,11 +3,11 @@
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 
-import { initializeConfig } from "../lib/cli/init-config.mjs";
+import { interactiveSetup } from "../lib/cli/init-config.mjs";
 
 try {
   const rootDir = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
-  const result = await initializeConfig(rootDir);
+  const result = await interactiveSetup(rootDir);
   for (const file of result.existing) console.log(`Exists: ${file}`);
   for (const file of result.created) console.log(`Created: ${file}`);
   console.log(`
