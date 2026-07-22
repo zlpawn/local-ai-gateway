@@ -361,26 +361,38 @@ async function route(req, res) {
     return;
   }
 
-function collectGroupedModelsFromConfig(config) {
+function collectGroupedModelsFromConfig(config, exposedModels = []) {
   const groups = {
     code: { label: 'Claude Code / CLI 节点', models: [] },
     desktop: { label: 'Claude Desktop 节点', models: [] },
-    codex: { label: 'OpenAI Codex 节点', models: [] }
+    codex: { label: 'OpenAI Codex 节点', models: [] },
+    general: { label: '网关代理模型 (Gateway Exposed Models)', models: [] }
   };
+
+  const assignedModels = new Set();
 
   if (config && config.clients) {
     for (const [clientType, clientData] of Object.entries(config.clients)) {
-      if (groups[clientType] && Array.isArray(clientData.endpoints)) {
+      const targetGroupKey = clientType === 'claude' ? 'desktop' : clientType;
+      if (groups[targetGroupKey] && Array.isArray(clientData.endpoints)) {
         for (const ep of clientData.endpoints) {
-          if (Array.isArray(ep.models)) {
-            for (const m of ep.models) {
-              const modelId = typeof m === 'string' ? m : (m.id || m.name);
-              if (modelId && !groups[clientType].models.includes(modelId)) {
-                groups[clientType].models.push(modelId);
-              }
+          const epModels = [...(ep.models || []), ...Object.keys(ep.model_mapping || {})];
+          for (const m of epModels) {
+            const modelId = typeof m === 'string' ? m : (m.id || m.name);
+            if (modelId && !groups[targetGroupKey].models.includes(modelId)) {
+              groups[targetGroupKey].models.push(modelId);
+              assignedModels.add(modelId);
             }
           }
         }
+      }
+    }
+  }
+
+  if (Array.isArray(exposedModels)) {
+    for (const m of exposedModels) {
+      if (m && !assignedModels.has(m)) {
+        groups.general.models.push(m);
       }
     }
   }
@@ -393,7 +405,7 @@ function collectGroupedModelsFromConfig(config) {
     const daemonStatus = globalWatcherDaemon ? globalWatcherDaemon.status() : { isRunning: false };
     const symlinkStatus = SkillInstaller.getSymlinkStatus();
     const isCentralInstalled = SkillInstaller.isInstalled();
-    const groupedModels = collectGroupedModelsFromConfig(GATEWAY_CONFIG);
+    const groupedModels = collectGroupedModelsFromConfig(GATEWAY_CONFIG, EXPOSED_MODELS);
     sendJson(res, 200, {
       success: true,
       enabled: Boolean(GATEWAY_CONFIG.sessionSync?.enabled),
