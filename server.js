@@ -10,6 +10,7 @@ import https from "node:https";
 import { Readable } from "node:stream";
 import { HttpsProxyAgent } from "https-proxy-agent";
 import { responsesRequestToChat } from "./lib/codex/chat-request-adapter.mjs";
+import { sanitizeGrokResponsesInput } from "./lib/codex/grok-input-sanitizer.mjs";
 import {
   chatCompletionToResponse,
   streamChatAsResponses,
@@ -955,7 +956,8 @@ async function forwardResolvedCodexResponse({
       : null;
     let upstream;
     if (backend === "responses") {
-      upstream = await fetchGrok(route.provider, "/responses", { ...body, model: resolvedModel }, signal);
+      const sanitizedBody = sanitizeGrokResponsesInput({ ...body, model: resolvedModel });
+      upstream = await fetchGrok(route.provider, "/responses", sanitizedBody, signal);
     } else {
       upstream = await fetchGrok(route.provider, "/chat/completions", chatRequest.body, signal);
     }
@@ -970,7 +972,7 @@ async function forwardResolvedCodexResponse({
           return fetchGrok(
             route.provider,
             "/responses",
-            { ...retryBody, model: resolvedModel },
+            sanitizeGrokResponsesInput({ ...retryBody, model: resolvedModel }),
             signal,
           );
         }
