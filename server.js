@@ -36,6 +36,8 @@ import {
   selectExposedEndpoints,
 } from "./lib/config/gateway-config-store.mjs";
 import { syncClaudeCodeSettings } from "./lib/config/claude-code-settings.mjs";
+import { SkillInstaller } from "./lib/session-sync/skill-installer.mjs";
+import { SessionWatcherDaemon } from "./lib/session-sync/watcher-daemon.mjs";
 import {
   collectImages,
   containsImages,
@@ -95,6 +97,13 @@ let GATEWAY_STATE = loadGatewayState({
 });
 let GATEWAY_CONFIG = GATEWAY_STATE.config;
 let GATEWAY_SECRETS = GATEWAY_STATE.secrets;
+let globalWatcherDaemon = null;
+if (GATEWAY_CONFIG.sessionSync?.enabled) {
+  try {
+    globalWatcherDaemon = new SessionWatcherDaemon();
+    globalWatcherDaemon.start();
+  } catch {}
+}
 let CLAUDE_CODE_MODEL_ROUTES = buildClaudeCodeModelRoutes(
   GATEWAY_CONFIG.clients?.code?.endpoints || [],
 );
@@ -348,6 +357,71 @@ async function route(req, res) {
       } else {
         sendJson(res, 500, { error: error.message });
       }
+    }
+    return;
+  }
+
+  if (reqPath === "/v1/sync/status" && req.method === "GET") {
+    if (!checkLocalAuth(req, res)) return;
+    const daemonStatus = globalWatcherDaemon ? globalWatcherDaemon.status() : { isRunning: false };
+    const symlinkStatus = SkillInstaller.getSymlinkStatus();
+    const isCentralInstalled = SkillInstaller.isInstalled();
+    sendJson(res, 200, {
+      success: true,
+      enabled: Boolean(GATEWAY_CONFIG.sessionSync?.enabled),
+      daemonStatus,
+      isCentralInstalled,
+      centralSkillFile: SkillInstaller.centralSkillFile,
+      symlinks: symlinkStatus,
+      targets: {
+        antigravity: GATEWAY_CONFIG.sessionSync?.targets?.antigravity ?? false,
+        claude: GATEWAY_CONFIG.sessionSync?.targets?.claude ?? false,
+        codex: GATEWAY_CONFIG.sessionSync?.targets?.codex ?? false
+      }
+    });
+    return;
+  }
+
+  if (reqPath === "/v1/sync/configure" && req.method === "POST") {
+    if (!checkLocalAuth(req, res)) return;
+    try {
+      const payload = JSON.parse(await readText(req));
+      const enabled = Boolean(payload.enabled);
+      const targets = {
+        antigravity: Boolean(payload.targets?.antigravity),
+        claude: Boolean(payload.targets?.claude),
+        codex: Boolean(payload.targets?.codex)
+      };
+
+      GATEWAY_CONFIG.sessionSync = { enabled, targets };
+      saveGatewayState({
+        configPath: GATEWAY_CONFIG_FILE,
+        secretsPath: GATEWAY_SECRETS_FILE,
+        config: GATEWAY_CONFIG,
+        officialCodexIds: OFFICIAL_CODEX_MODEL_IDS,
+      });
+
+      if (enabled) {
+        SkillInstaller.installBaseSkill();
+        SkillInstaller.updateSymlinks(targets);
+        if (!globalWatcherDaemon) {
+          globalWatcherDaemon = new SessionWatcherDaemon();
+        }
+        globalWatcherDaemon.start();
+      } else {
+        if (globalWatcherDaemon) {
+          globalWatcherDaemon.stop();
+        }
+        SkillInstaller.updateSymlinks({ antigravity: false, claude: false, codex: false });
+      }
+
+      sendJson(res, 200, {
+        success: true,
+        enabled,
+        symlinks: SkillInstaller.getSymlinkStatus()
+      });
+    } catch (err) {
+      sendJson(res, 500, { error: err.message });
     }
     return;
   }
