@@ -361,11 +361,39 @@ async function route(req, res) {
     return;
   }
 
+function collectGroupedModelsFromConfig(config) {
+  const groups = {
+    code: { label: 'Claude Code / CLI 节点', models: [] },
+    desktop: { label: 'Claude Desktop 节点', models: [] },
+    codex: { label: 'OpenAI Codex 节点', models: [] }
+  };
+
+  if (config && config.clients) {
+    for (const [clientType, clientData] of Object.entries(config.clients)) {
+      if (groups[clientType] && Array.isArray(clientData.endpoints)) {
+        for (const ep of clientData.endpoints) {
+          if (Array.isArray(ep.models)) {
+            for (const m of ep.models) {
+              const modelId = typeof m === 'string' ? m : (m.id || m.name);
+              if (modelId && !groups[clientType].models.includes(modelId)) {
+                groups[clientType].models.push(modelId);
+              }
+            }
+          }
+        }
+      }
+    }
+  }
+
+  return groups;
+}
+
   if (reqPath === "/v1/sync/status" && req.method === "GET") {
     if (!checkLocalAuth(req, res)) return;
     const daemonStatus = globalWatcherDaemon ? globalWatcherDaemon.status() : { isRunning: false };
     const symlinkStatus = SkillInstaller.getSymlinkStatus();
     const isCentralInstalled = SkillInstaller.isInstalled();
+    const groupedModels = collectGroupedModelsFromConfig(GATEWAY_CONFIG);
     sendJson(res, 200, {
       success: true,
       enabled: Boolean(GATEWAY_CONFIG.sessionSync?.enabled),
@@ -376,6 +404,7 @@ async function route(req, res) {
       summaryMode: GATEWAY_CONFIG.sessionSync?.summaryMode || 'rule',
       summaryModel: GATEWAY_CONFIG.sessionSync?.summaryModel || '',
       availableModels: EXPOSED_MODELS,
+      groupedModels,
       symlinks: symlinkStatus,
       targets: {
         antigravity: GATEWAY_CONFIG.sessionSync?.targets?.antigravity ?? false,

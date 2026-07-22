@@ -1686,23 +1686,44 @@ experimental_bearer_token = "dummy"</pre>
 
                         setSummaryMode(data.summaryMode || 'rule');
 
-                        // Populate model dropdown
+                        // Populate model dropdown with optgroups
                         if (modelSelect) {
                             modelSelect.innerHTML = '';
-                            const models = data.availableModels || [];
-                            if (models.length === 0) {
-                                const opt = document.createElement('option');
-                                opt.value = 'claude-haiku-4-5-20251001';
-                                opt.textContent = 'claude-haiku-4-5-20251001';
-                                modelSelect.appendChild(opt);
-                            } else {
-                                models.forEach(m => {
+                            const grouped = data.groupedModels || {};
+                            let hasAnyModel = false;
+
+                            for (const [key, group] of Object.entries(grouped)) {
+                                if (group.models && group.models.length > 0) {
+                                    hasAnyModel = true;
+                                    const optGroup = document.createElement('optgroup');
+                                    optGroup.label = group.label;
+                                    group.models.forEach(m => {
+                                        const opt = document.createElement('option');
+                                        opt.value = m;
+                                        opt.textContent = m;
+                                        if (m === data.summaryModel) opt.selected = true;
+                                        optGroup.appendChild(opt);
+                                    });
+                                    modelSelect.appendChild(optGroup);
+                                }
+                            }
+
+                            if (!hasAnyModel) {
+                                const models = data.availableModels || [];
+                                if (models.length === 0) {
                                     const opt = document.createElement('option');
-                                    opt.value = m;
-                                    opt.textContent = m;
-                                    if (m === data.summaryModel) opt.selected = true;
+                                    opt.value = 'claude-haiku-4-5-20251001';
+                                    opt.textContent = 'claude-haiku-4-5-20251001';
                                     modelSelect.appendChild(opt);
-                                });
+                                } else {
+                                    models.forEach(m => {
+                                        const opt = document.createElement('option');
+                                        opt.value = m;
+                                        opt.textContent = m;
+                                        if (m === data.summaryModel) opt.selected = true;
+                                        modelSelect.appendChild(opt);
+                                    });
+                                }
                             }
                         }
 
