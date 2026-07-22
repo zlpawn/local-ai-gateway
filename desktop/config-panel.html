@@ -184,6 +184,45 @@
             box-shadow: inset 2px 0 0 var(--text-primary);
         }
 
+        .nav-group-title {
+            font-size: 11px;
+            font-weight: 700;
+            text-transform: uppercase;
+            letter-spacing: 0.05em;
+            color: var(--text-secondary);
+            padding: 16px 12px 6px;
+            opacity: 0.7;
+        }
+
+        .sync-tool-card {
+            background: var(--surface);
+            border: 1px solid var(--border-color);
+            border-radius: var(--radius-lg);
+            padding: 16px;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            transition: border-color var(--transition-fast), background var(--transition-fast);
+        }
+
+        .sync-tool-card:hover {
+            background: var(--surface-hover);
+        }
+
+        .sync-tool-card.active-link {
+            border-color: var(--text-primary);
+        }
+
+        .path-pill {
+            font-family: var(--font-mono);
+            font-size: 11px;
+            background: var(--input-bg);
+            border: 1px solid var(--border-color);
+            padding: 2px 8px;
+            border-radius: var(--radius-sm);
+            color: var(--text-secondary);
+        }
+
         .sidebar-footer {
             padding: 24px;
             display: flex;
@@ -1130,10 +1169,25 @@
                 AI 网关配置
             </div>
             <nav class="sidebar-nav">
-                <a href="#code" class="nav-item active" onclick="switchTab('code')">Claude Code 代理</a>
-                <a href="#desktop" class="nav-item" onclick="switchTab('desktop')">Claude Desktop 代理</a>
-                <a href="#codex" class="nav-item" onclick="switchTab('codex')">Codex 代理</a>
-                <a href="#sync" class="nav-item" onclick="switchTab('sync')">会话同步 (Session Sync)</a>
+                <div class="nav-group-title">代理节点</div>
+                <a href="#code" class="nav-item active" onclick="switchTab('code')">
+                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="margin-right: 8px;"><polyline points="16 18 22 12 16 6"></polyline><polyline points="8 6 2 12 8 18"></polyline></svg>
+                    Claude Code 代理
+                </a>
+                <a href="#desktop" class="nav-item" onclick="switchTab('desktop')">
+                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="margin-right: 8px;"><rect x="2" y="3" width="20" height="14" rx="2" ry="2"></rect><line x1="8" y1="21" x2="16" y2="21"></line><line x1="12" y1="17" x2="12" y2="21"></line></svg>
+                    Claude Desktop 代理
+                </a>
+                <a href="#codex" class="nav-item" onclick="switchTab('codex')">
+                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="margin-right: 8px;"><path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z"></path></svg>
+                    Codex 代理
+                </a>
+
+                <div class="nav-group-title">系统扩展</div>
+                <a href="#sync" class="nav-item" onclick="switchTab('sync')">
+                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="margin-right: 8px;"><path d="M21.5 2v6h-6M21.34 15.57a10 10 0 1 1-.57-8.38l5.67-5.67"></path></svg>
+                    会话同步 (Session Sync)
+                </a>
             </nav>
             <div class="sidebar-footer" style="flex-direction: column;">
                 <div style="display: flex; gap: 12px; width: 100%;">
@@ -1272,39 +1326,82 @@ experimental_bearer_token = "dummy"</pre>
                         <h2>跨软件会话同步 (Session Sync)</h2>
                         <p>在不同 AI 桌面软件（Antigravity、Claude Desktop、Codex）之间无缝共享与恢复历史对话。</p>
                     </div>
-                    <button class="btn btn-primary" onclick="saveSyncConfig()">保存同步设置</button>
+                    <button class="btn btn-primary" onclick="saveSyncConfig()">
+                        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z"></path><polyline points="17 21 17 13 7 13 7 21"></polyline><polyline points="7 3 7 8 15 8"></polyline></svg>
+                        保存同步设置与软链接
+                    </button>
                 </div>
 
                 <div class="usage-guide">
-                    <h3>基本工作原理与 Skill 软链接</h3>
-                    <p>1. 主 Skill 文件优先安装到中央基准目录：<code>~/.agents/skills/session-sync/SKILL.md</code>。</p>
-                    <p>2. 在下方勾选需要开启的软件，系统会自动创建软链接（Symlinks）指向中央 Skill。</p>
+                    <h3>💡 中央 Skill 架构与软链接管理</h3>
+                    <p>基准 Skill 文件保持单一数据源：<code class="path-pill">~/.agents/skills/session-sync/SKILL.md</code>。</p>
+                    <p>勾选下方软件后，系统会自动创建系统软链接（Symlink）挂载给对应软件，无需重复安装。</p>
                 </div>
 
-                <div class="model-slots-panel" style="margin-top: 20px;">
-                    <div class="model-slots-header">
-                        <h3>同步控制与 Skill 软链接管理</h3>
-                    </div>
-                    <div style="padding: 16px; display: flex; flex-direction: column; gap: 16px;">
-                        <label style="display: flex; align-items: center; gap: 10px; font-weight: 600; font-size: 15px; cursor: pointer; color: var(--text-primary);">
-                            <input type="checkbox" id="sync-enable-toggle" style="width: 18px; height: 18px;">
-                            开启后台跨软件会话监听 (Watcher Daemon)
+                <div style="margin-top: 24px; display: flex; flex-direction: column; gap: 20px;">
+                    <!-- Daemon Engine Control Card -->
+                    <div class="sync-tool-card">
+                        <div>
+                            <div style="display: flex; align-items: center; gap: 10px; margin-bottom: 4px;">
+                                <h3 style="font-size: 15px; font-weight: 600; color: var(--text-primary);">后台跨软件会话监听 (Watcher Daemon)</h3>
+                                <span class="path-pill" id="daemon-status-badge" style="background: var(--input-bg);">⚪ 已关闭</span>
+                            </div>
+                            <p style="font-size: 13px; color: var(--text-secondary);">基于操作系统原生的 FSEvents / Win32 API 零 CPU 占用静默监听落盘增量。</p>
+                        </div>
+                        <label style="display: flex; align-items: center; cursor: pointer; gap: 8px;">
+                            <input type="checkbox" id="sync-enable-toggle" style="width: 18px; height: 18px; cursor: pointer;">
+                            <span style="font-size: 13px; font-weight: 600;">开启服务</span>
                         </label>
+                    </div>
 
-                        <div style="border-top: 1px solid var(--border-color); padding-top: 16px; margin-top: 8px;">
-                            <h4 style="margin-bottom: 12px; font-size: 14px; color: var(--text-primary);">选择创建软链接的目标软件：</h4>
-                            <div style="display: flex; flex-direction: column; gap: 12px;">
-                                <label style="display: flex; align-items: center; gap: 10px; cursor: pointer; color: var(--text-primary);">
-                                    <input type="checkbox" id="sync-target-antigravity" style="width: 16px; height: 16px;">
-                                    <span>Google Antigravity <code style="font-size:12px; color:var(--text-secondary);">~/.gemini/config/skills/session-sync</code></span>
+                    <!-- Symlink Tool Grid -->
+                    <div class="model-slots-panel">
+                        <div class="model-slots-header">
+                            <h3>要挂载 Skill 软链接的目标 AI 软件：</h3>
+                        </div>
+                        <div style="padding: 16px; display: flex; flex-direction: column; gap: 12px;">
+                            <!-- Tool 1: Antigravity -->
+                            <div class="sync-tool-card" id="card-antigravity">
+                                <div style="display: flex; align-items: center; gap: 12px;">
+                                    <div style="width: 32px; height: 32px; border-radius: var(--radius-md); background: var(--input-bg); display: flex; align-items: center; justify-content: center; font-weight: 700; font-size: 14px;">G</div>
+                                    <div>
+                                        <div style="font-weight: 600; font-size: 14px; color: var(--text-primary);">Google Antigravity</div>
+                                        <div class="path-pill" style="margin-top: 2px;">~/.gemini/config/skills/session-sync</div>
+                                    </div>
+                                </div>
+                                <label style="display: flex; align-items: center; gap: 8px; cursor: pointer;">
+                                    <input type="checkbox" id="sync-target-antigravity" style="width: 16px; height: 16px; cursor: pointer;">
+                                    <span style="font-size: 13px;">创建软链接</span>
                                 </label>
-                                <label style="display: flex; align-items: center; gap: 10px; cursor: pointer; color: var(--text-primary);">
-                                    <input type="checkbox" id="sync-target-claude" style="width: 16px; height: 16px;">
-                                    <span>Claude Code / Desktop <code style="font-size:12px; color:var(--text-secondary);">~/.claude/skills/session-sync</code></span>
+                            </div>
+
+                            <!-- Tool 2: Claude -->
+                            <div class="sync-tool-card" id="card-claude">
+                                <div style="display: flex; align-items: center; gap: 12px;">
+                                    <div style="width: 32px; height: 32px; border-radius: var(--radius-md); background: var(--input-bg); display: flex; align-items: center; justify-content: center; font-weight: 700; font-size: 14px;">C</div>
+                                    <div>
+                                        <div style="font-weight: 600; font-size: 14px; color: var(--text-primary);">Claude Code / Desktop</div>
+                                        <div class="path-pill" style="margin-top: 2px;">~/.claude/skills/session-sync</div>
+                                    </div>
+                                </div>
+                                <label style="display: flex; align-items: center; gap: 8px; cursor: pointer;">
+                                    <input type="checkbox" id="sync-target-claude" style="width: 16px; height: 16px; cursor: pointer;">
+                                    <span style="font-size: 13px;">创建软链接</span>
                                 </label>
-                                <label style="display: flex; align-items: center; gap: 10px; cursor: pointer; color: var(--text-primary);">
-                                    <input type="checkbox" id="sync-target-codex" style="width: 16px; height: 16px;">
-                                    <span>OpenAI Codex <code style="font-size:12px; color:var(--text-secondary);">~/.codex/skills/session-sync</code></span>
+                            </div>
+
+                            <!-- Tool 3: Codex -->
+                            <div class="sync-tool-card" id="card-codex">
+                                <div style="display: flex; align-items: center; gap: 12px;">
+                                    <div style="width: 32px; height: 32px; border-radius: var(--radius-md); background: var(--input-bg); display: flex; align-items: center; justify-content: center; font-weight: 700; font-size: 14px;">O</div>
+                                    <div>
+                                        <div style="font-weight: 600; font-size: 14px; color: var(--text-primary);">OpenAI Codex</div>
+                                        <div class="path-pill" style="margin-top: 2px;">~/.codex/skills/session-sync</div>
+                                    </div>
+                                </div>
+                                <label style="display: flex; align-items: center; gap: 8px; cursor: pointer;">
+                                    <input type="checkbox" id="sync-target-codex" style="width: 16px; height: 16px; cursor: pointer;">
+                                    <span style="font-size: 13px;">创建软链接</span>
                                 </label>
                             </div>
                         </div>
@@ -1430,11 +1527,22 @@ experimental_bearer_token = "dummy"</pre>
                         const agTarget = document.getElementById('sync-target-antigravity');
                         const claudeTarget = document.getElementById('sync-target-claude');
                         const codexTarget = document.getElementById('sync-target-codex');
+                        const badge = document.getElementById('daemon-status-badge');
 
                         if (enableToggle) enableToggle.checked = Boolean(data.enabled);
                         if (agTarget) agTarget.checked = Boolean(data.targets?.antigravity ?? data.symlinks?.antigravity);
                         if (claudeTarget) claudeTarget.checked = Boolean(data.targets?.claude ?? data.symlinks?.claude);
                         if (codexTarget) codexTarget.checked = Boolean(data.targets?.codex ?? data.symlinks?.codex);
+
+                        if (badge) {
+                            if (data.daemonStatus?.isRunning || data.enabled) {
+                                badge.textContent = '🟢 运行中';
+                                badge.style.color = 'var(--success)';
+                            } else {
+                                badge.textContent = '⚪ 已关闭';
+                                badge.style.color = 'var(--text-secondary)';
+                            }
+                        }
                     }
                 }
             } catch (e) {
@@ -1458,6 +1566,16 @@ experimental_bearer_token = "dummy"</pre>
                 });
                 const data = await res.json();
                 if (data.success) {
+                    const badge = document.getElementById('daemon-status-badge');
+                    if (badge) {
+                        if (enabled) {
+                            badge.textContent = '🟢 运行中';
+                            badge.style.color = 'var(--success)';
+                        } else {
+                            badge.textContent = '⚪ 已关闭';
+                            badge.style.color = 'var(--text-secondary)';
+                        }
+                    }
                     showToast('会话同步与 Skill 软链接设置已成功保存并应用！', 'success');
                 } else {
                     showToast('保存设置失败: ' + (data.error || '未知错误'), 'danger');
