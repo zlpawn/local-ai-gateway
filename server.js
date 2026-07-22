@@ -361,15 +361,12 @@ async function route(req, res) {
     return;
   }
 
-function collectGroupedModelsFromConfig(config, exposedModels = []) {
+function collectGroupedModelsFromConfig(config) {
   const groups = {
     code: { label: 'Claude Code / CLI 节点', models: [] },
     desktop: { label: 'Claude Desktop 节点', models: [] },
-    codex: { label: 'OpenAI Codex 节点', models: [] },
-    general: { label: '网关代理模型 (Gateway Exposed Models)', models: [] }
+    codex: { label: 'OpenAI Codex 节点', models: [] }
   };
-
-  const assignedModels = new Set();
 
   if (config && config.clients) {
     for (const [clientType, clientData] of Object.entries(config.clients)) {
@@ -381,18 +378,9 @@ function collectGroupedModelsFromConfig(config, exposedModels = []) {
             const modelId = typeof m === 'string' ? m : (m.id || m.name);
             if (modelId && !groups[targetGroupKey].models.includes(modelId)) {
               groups[targetGroupKey].models.push(modelId);
-              assignedModels.add(modelId);
             }
           }
         }
-      }
-    }
-  }
-
-  if (Array.isArray(exposedModels)) {
-    for (const m of exposedModels) {
-      if (m && !assignedModels.has(m)) {
-        groups.general.models.push(m);
       }
     }
   }
@@ -405,7 +393,7 @@ function collectGroupedModelsFromConfig(config, exposedModels = []) {
     const daemonStatus = globalWatcherDaemon ? globalWatcherDaemon.status() : { isRunning: false };
     const symlinkStatus = SkillInstaller.getSymlinkStatus();
     const isCentralInstalled = SkillInstaller.isInstalled();
-    const groupedModels = collectGroupedModelsFromConfig(GATEWAY_CONFIG, EXPOSED_MODELS);
+    const groupedModels = collectGroupedModelsFromConfig(GATEWAY_CONFIG);
     sendJson(res, 200, {
       success: true,
       enabled: Boolean(GATEWAY_CONFIG.sessionSync?.enabled),
