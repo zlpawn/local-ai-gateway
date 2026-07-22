@@ -1383,6 +1383,34 @@ experimental_bearer_token = "dummy"</pre>
                         </div>
                     </div>
 
+                    <!-- Summary Mode Card -->
+                    <div class="model-slots-panel">
+                        <div class="model-slots-header">
+                            <h3>🧠 会话摘要生成模式</h3>
+                            <p>选择提炼会话摘要的方式：规则提取（0 额度开销）或使用便宜模型自动生成智能总结。</p>
+                        </div>
+                        <div style="padding: 16px; display: flex; flex-direction: column; gap: 14px;">
+                            <div style="display: flex; gap: 20px; flex-wrap: wrap;">
+                                <label style="display: flex; align-items: center; gap: 8px; cursor: pointer; font-size: 13px; font-weight: 600; color: var(--text-primary);">
+                                    <input type="radio" name="sync-summary-mode" value="rule" id="summary-mode-rule" checked onchange="toggleSummaryModelSelect()">
+                                    <span>规则提取 (默认, 0 额度开销, 0 延迟)</span>
+                                </label>
+                                <label style="display: flex; align-items: center; gap: 8px; cursor: pointer; font-size: 13px; font-weight: 600; color: var(--text-primary);">
+                                    <input type="radio" name="sync-summary-mode" value="llm" id="summary-mode-llm" onchange="toggleSummaryModelSelect()">
+                                    <span>大模型智能提炼 (推荐使用便宜快速的模型)</span>
+                                </label>
+                            </div>
+
+                            <div id="summary-model-container" style="display: none; border-top: 1px dashed var(--border-color); padding-top: 12px;">
+                                <div style="display: flex; flex-direction: column; gap: 6px; max-width: 340px;">
+                                    <label style="font-size: 12px; font-weight: 600; color: var(--text-secondary);">选择用于提炼摘要的目标模型：</label>
+                                    <select id="sync-summary-model" class="form-control" style="padding: 6px 10px; font-family: var(--font-sans); background: var(--input-bg); border: 1px solid var(--border-color); color: var(--text-primary); border-radius: var(--radius-md);">
+                                    </select>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
                     <!-- Symlink Tool Grid -->
                     <div class="model-slots-panel">
                         <div class="model-slots-header">
@@ -1569,6 +1597,12 @@ experimental_bearer_token = "dummy"</pre>
             }
         }
 
+        function toggleSummaryModelSelect() {
+            const isLlm = document.getElementById('summary-mode-llm')?.checked;
+            const container = document.getElementById('summary-model-container');
+            if (container) container.style.display = isLlm ? 'block' : 'none';
+        }
+
         async function loadSyncStatus() {
             try {
                 const res = await fetch('/v1/sync/status');
@@ -1582,6 +1616,9 @@ experimental_bearer_token = "dummy"</pre>
                         const startDateInput = document.getElementById('sync-start-date');
                         const endDateInput = document.getElementById('sync-end-date');
                         const badge = document.getElementById('daemon-status-badge');
+                        const ruleRadio = document.getElementById('summary-mode-rule');
+                        const llmRadio = document.getElementById('summary-mode-llm');
+                        const modelSelect = document.getElementById('sync-summary-model');
 
                         if (enableToggle) enableToggle.checked = Boolean(data.enabled);
                         if (agTarget) agTarget.checked = Boolean(data.targets?.antigravity ?? data.symlinks?.antigravity);
@@ -1590,6 +1627,32 @@ experimental_bearer_token = "dummy"</pre>
 
                         if (startDateInput && data.dateRange?.startDate) startDateInput.value = data.dateRange.startDate;
                         if (endDateInput && data.dateRange?.endDate) endDateInput.value = data.dateRange.endDate;
+
+                        const isLlmMode = data.summaryMode === 'llm';
+                        if (ruleRadio) ruleRadio.checked = !isLlmMode;
+                        if (llmRadio) llmRadio.checked = isLlmMode;
+
+                        // Populate model dropdown
+                        if (modelSelect) {
+                            modelSelect.innerHTML = '';
+                            const models = data.availableModels || [];
+                            if (models.length === 0) {
+                                const opt = document.createElement('option');
+                                opt.value = 'claude-haiku-4-5-20251001';
+                                opt.textContent = 'claude-haiku-4-5-20251001';
+                                modelSelect.appendChild(opt);
+                            } else {
+                                models.forEach(m => {
+                                    const opt = document.createElement('option');
+                                    opt.value = m;
+                                    opt.textContent = m;
+                                    if (m === data.summaryModel) opt.selected = true;
+                                    modelSelect.appendChild(opt);
+                                });
+                            }
+                        }
+
+                        toggleSummaryModelSelect();
 
                         if (badge) {
                             if (data.daemonStatus?.isRunning || data.enabled) {
@@ -1617,12 +1680,14 @@ experimental_bearer_token = "dummy"</pre>
             const startDate = document.getElementById('sync-start-date').value || null;
             const endDate = document.getElementById('sync-end-date').value || null;
             const dateRange = (startDate || endDate) ? { startDate, endDate } : null;
+            const summaryMode = document.getElementById('summary-mode-llm').checked ? 'llm' : 'rule';
+            const summaryModel = document.getElementById('sync-summary-model').value || '';
 
             try {
                 const res = await fetch('/v1/sync/configure', {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ enabled, targets, dateRange })
+                    body: JSON.stringify({ enabled, targets, dateRange, summaryMode, summaryModel })
                 });
                 const data = await res.json();
                 if (data.success) {
@@ -1636,7 +1701,7 @@ experimental_bearer_token = "dummy"</pre>
                             badge.style.color = 'var(--text-secondary)';
                         }
                     }
-                    showToast('会话同步设置与时间范围已成功保存并应用！', 'success');
+                    showToast('会话同步设置、时间范围与摘要模式已成功保存并应用！', 'success');
                 } else {
                     showToast('保存设置失败: ' + (data.error || '未知错误'), 'danger');
                 }

@@ -373,6 +373,9 @@ async function route(req, res) {
       isCentralInstalled,
       centralSkillFile: SkillInstaller.centralSkillFile,
       dateRange: GATEWAY_CONFIG.sessionSync?.dateRange || null,
+      summaryMode: GATEWAY_CONFIG.sessionSync?.summaryMode || 'rule',
+      summaryModel: GATEWAY_CONFIG.sessionSync?.summaryModel || '',
+      availableModels: EXPOSED_MODELS,
       symlinks: symlinkStatus,
       targets: {
         antigravity: GATEWAY_CONFIG.sessionSync?.targets?.antigravity ?? false,
@@ -394,8 +397,10 @@ async function route(req, res) {
         codex: Boolean(payload.targets?.codex)
       };
       const dateRange = payload.dateRange || null;
+      const summaryMode = payload.summaryMode || 'rule';
+      const summaryModel = payload.summaryModel || '';
 
-      GATEWAY_CONFIG.sessionSync = { enabled, targets, dateRange };
+      GATEWAY_CONFIG.sessionSync = { enabled, targets, dateRange, summaryMode, summaryModel };
       saveGatewayState({
         configPath: GATEWAY_CONFIG_FILE,
         secretsPath: GATEWAY_SECRETS_FILE,
@@ -407,9 +412,10 @@ async function route(req, res) {
         SkillInstaller.installBaseSkill();
         SkillInstaller.updateSymlinks(targets);
         if (!globalWatcherDaemon) {
-          globalWatcherDaemon = new SessionWatcherDaemon({ dateRange });
+          globalWatcherDaemon = new SessionWatcherDaemon({ dateRange, summaryMode, summaryModel, listenPort: LISTEN_PORT });
         } else {
           globalWatcherDaemon.setDateRange(dateRange);
+          globalWatcherDaemon.setSummaryOptions(summaryMode, summaryModel, LISTEN_PORT);
         }
         globalWatcherDaemon.start();
       } else {
@@ -423,6 +429,8 @@ async function route(req, res) {
         success: true,
         enabled,
         dateRange,
+        summaryMode,
+        summaryModel,
         symlinks: SkillInstaller.getSymlinkStatus()
       });
     } catch (err) {
