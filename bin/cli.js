@@ -5,6 +5,7 @@ import path from "node:path";
 import { fileURLToPath } from "node:url";
 
 import {
+  detectDefaultDataDir,
   initializeConfig,
   loadEnvironmentFile,
   resolveUserPath,
@@ -15,7 +16,7 @@ import {
 } from "../lib/cli/gateway-service.mjs";
 
 const packageRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
-const dataDir = process.env.GATEWAY_DATA_DIR || process.cwd();
+const dataDir = detectDefaultDataDir(packageRoot);
 await initializeConfig(packageRoot, dataDir);
 await loadEnvironmentFile(path.join(dataDir, ".env"));
 
