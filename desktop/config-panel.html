@@ -223,6 +223,46 @@
             color: var(--text-secondary);
         }
 
+        .mode-card {
+            background: var(--input-bg);
+            border: 1px solid var(--border-color);
+            border-radius: var(--radius-md);
+            padding: 12px 16px;
+            cursor: pointer;
+            transition: all var(--transition-fast);
+            display: flex;
+            flex-direction: column;
+            gap: 4px;
+            flex: 1;
+            min-width: 240px;
+        }
+
+        .mode-card:hover {
+            background: var(--surface-hover);
+            border-color: var(--text-secondary);
+        }
+
+        .mode-card.active {
+            border-color: var(--text-primary);
+            background: var(--surface-hover);
+            box-shadow: 0 0 0 1px var(--text-primary);
+        }
+
+        .mode-card-title {
+            font-size: 13px;
+            font-weight: 600;
+            color: var(--text-primary);
+            display: flex;
+            align-items: center;
+            gap: 6px;
+        }
+
+        .mode-card-desc {
+            font-size: 12px;
+            color: var(--text-secondary);
+            line-height: 1.4;
+        }
+
         .sidebar-footer {
             padding: 24px;
             display: flex;
@@ -1390,21 +1430,26 @@ experimental_bearer_token = "dummy"</pre>
                             <p>选择提炼会话摘要的方式：规则提取（0 额度开销）或使用便宜模型自动生成智能总结。</p>
                         </div>
                         <div style="padding: 16px; display: flex; flex-direction: column; gap: 14px;">
-                            <div style="display: flex; gap: 20px; flex-wrap: wrap;">
-                                <label style="display: flex; align-items: center; gap: 8px; cursor: pointer; font-size: 13px; font-weight: 600; color: var(--text-primary);">
-                                    <input type="radio" name="sync-summary-mode" value="rule" id="summary-mode-rule" checked onchange="toggleSummaryModelSelect()">
-                                    <span>规则提取 (默认, 0 额度开销, 0 延迟)</span>
-                                </label>
-                                <label style="display: flex; align-items: center; gap: 8px; cursor: pointer; font-size: 13px; font-weight: 600; color: var(--text-primary);">
-                                    <input type="radio" name="sync-summary-mode" value="llm" id="summary-mode-llm" onchange="toggleSummaryModelSelect()">
-                                    <span>大模型智能提炼 (推荐使用便宜快速的模型)</span>
-                                </label>
+                            <div style="display: flex; gap: 12px; flex-wrap: wrap;">
+                                <div class="mode-card active" id="card-mode-rule" onclick="setSummaryMode('rule')">
+                                    <div class="mode-card-title">
+                                        <span>⚡ 规则提取 (默认)</span>
+                                    </div>
+                                    <div class="mode-card-desc">0 额度开销 · 0 毫秒延迟。从日志中提取关键提问语句。</div>
+                                </div>
+                                <div class="mode-card" id="card-mode-llm" onclick="setSummaryMode('llm')">
+                                    <div class="mode-card-title">
+                                        <span>✨ 大模型智能提炼</span>
+                                    </div>
+                                    <div class="mode-card-desc">后台自动使用小模型提炼最新进展与接续任务。</div>
+                                </div>
                             </div>
+                            <input type="hidden" id="sync-summary-mode-val" value="rule">
 
-                            <div id="summary-model-container" style="display: none; border-top: 1px dashed var(--border-color); padding-top: 12px;">
-                                <div style="display: flex; flex-direction: column; gap: 6px; max-width: 340px;">
+                            <div id="summary-model-container" style="display: none; border-top: 1px dashed var(--border-color); padding-top: 14px;">
+                                <div style="display: flex; flex-direction: column; gap: 6px; max-width: 360px;">
                                     <label style="font-size: 12px; font-weight: 600; color: var(--text-secondary);">选择用于提炼摘要的目标模型：</label>
-                                    <select id="sync-summary-model" class="form-control" style="padding: 6px 10px; font-family: var(--font-sans); background: var(--input-bg); border: 1px solid var(--border-color); color: var(--text-primary); border-radius: var(--radius-md);">
+                                    <select id="sync-summary-model" class="form-control" style="padding: 6px 12px; font-family: var(--font-sans); background: var(--input-bg); border: 1px solid var(--border-color); color: var(--text-primary); border-radius: var(--radius-md); font-size: 13px;">
                                     </select>
                                 </div>
                             </div>
@@ -1597,10 +1642,23 @@ experimental_bearer_token = "dummy"</pre>
             }
         }
 
-        function toggleSummaryModelSelect() {
-            const isLlm = document.getElementById('summary-mode-llm')?.checked;
+        function setSummaryMode(mode) {
+            const hiddenVal = document.getElementById('sync-summary-mode-val');
+            if (hiddenVal) hiddenVal.value = mode;
+
+            const ruleCard = document.getElementById('card-mode-rule');
+            const llmCard = document.getElementById('card-mode-llm');
             const container = document.getElementById('summary-model-container');
-            if (container) container.style.display = isLlm ? 'block' : 'none';
+
+            if (mode === 'llm') {
+                if (ruleCard) ruleCard.classList.remove('active');
+                if (llmCard) llmCard.classList.add('active');
+                if (container) container.style.display = 'block';
+            } else {
+                if (ruleCard) ruleCard.classList.add('active');
+                if (llmCard) llmCard.classList.remove('active');
+                if (container) container.style.display = 'none';
+            }
         }
 
         async function loadSyncStatus() {
@@ -1616,8 +1674,6 @@ experimental_bearer_token = "dummy"</pre>
                         const startDateInput = document.getElementById('sync-start-date');
                         const endDateInput = document.getElementById('sync-end-date');
                         const badge = document.getElementById('daemon-status-badge');
-                        const ruleRadio = document.getElementById('summary-mode-rule');
-                        const llmRadio = document.getElementById('summary-mode-llm');
                         const modelSelect = document.getElementById('sync-summary-model');
 
                         if (enableToggle) enableToggle.checked = Boolean(data.enabled);
@@ -1628,9 +1684,7 @@ experimental_bearer_token = "dummy"</pre>
                         if (startDateInput && data.dateRange?.startDate) startDateInput.value = data.dateRange.startDate;
                         if (endDateInput && data.dateRange?.endDate) endDateInput.value = data.dateRange.endDate;
 
-                        const isLlmMode = data.summaryMode === 'llm';
-                        if (ruleRadio) ruleRadio.checked = !isLlmMode;
-                        if (llmRadio) llmRadio.checked = isLlmMode;
+                        setSummaryMode(data.summaryMode || 'rule');
 
                         // Populate model dropdown
                         if (modelSelect) {
@@ -1651,8 +1705,6 @@ experimental_bearer_token = "dummy"</pre>
                                 });
                             }
                         }
-
-                        toggleSummaryModelSelect();
 
                         if (badge) {
                             if (data.daemonStatus?.isRunning || data.enabled) {
@@ -1680,7 +1732,8 @@ experimental_bearer_token = "dummy"</pre>
             const startDate = document.getElementById('sync-start-date').value || null;
             const endDate = document.getElementById('sync-end-date').value || null;
             const dateRange = (startDate || endDate) ? { startDate, endDate } : null;
-            const summaryMode = document.getElementById('summary-mode-llm').checked ? 'llm' : 'rule';
+            const summaryModeInput = document.getElementById('sync-summary-mode-val');
+            const summaryMode = summaryModeInput ? summaryModeInput.value : 'rule';
             const summaryModel = document.getElementById('sync-summary-model').value || '';
 
             try {
