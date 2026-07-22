@@ -81,6 +81,43 @@ test('SessionWatcherDaemon - parser logic', () => {
   }
 });
 
+test('SessionWatcherDaemon - scanExistingSessions on startup', () => {
+  const tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), 'scan-existing-test-'));
+  const codexDir = path.join(tmpDir, 'codex');
+  const agDir = path.join(tmpDir, 'brain');
+  fs.mkdirSync(codexDir, { recursive: true });
+  fs.mkdirSync(path.join(agDir, 'conv1', '.system_generated', 'logs'), { recursive: true });
+
+  // Existing Codex session prior to gateway startup
+  fs.writeFileSync(path.join(codexDir, 'old_sess.json'), JSON.stringify({
+    workspace_path: '/old/project',
+    messages: [{ role: 'user', content: 'Old question' }, { role: 'assistant', content: 'Old answer' }]
+  }));
+
+  // Existing Antigravity session prior to gateway startup
+  fs.writeFileSync(path.join(agDir, 'conv1', '.system_generated', 'logs', 'transcript.jsonl'), [
+    JSON.stringify({ type: 'USER_INPUT', content: 'Past question' }),
+    JSON.stringify({ type: 'PLANNER_RESPONSE', content: 'Past answer' })
+  ].join('\n'));
+
+  try {
+    const hubStore = new HubStore({ baseDir: path.join(tmpDir, 'hub') });
+    const daemon = new SessionWatcherDaemon({
+      hubStore,
+      codexDir,
+      antigravityDir: agDir
+    });
+
+    daemon.start();
+    daemon.stop();
+
+    const sessions = hubStore.listSessions();
+    assert.equal(sessions.length, 2);
+  } finally {
+    fs.rmSync(tmpDir, { recursive: true, force: true });
+  }
+});
+
 test('SkillInstaller - install skill file', () => {
   const tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), 'skill-test-'));
   try {
