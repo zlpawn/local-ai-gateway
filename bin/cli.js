@@ -15,7 +15,7 @@ import {
 } from "../lib/cli/gateway-service.mjs";
 
 const packageRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
-const dataDir = path.join(os.homedir(), ".local-ai-gateway");
+const dataDir = process.env.GATEWAY_DATA_DIR || process.cwd();
 await initializeConfig(packageRoot, dataDir);
 await loadEnvironmentFile(path.join(dataDir, ".env"));
 
