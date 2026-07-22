@@ -81,7 +81,7 @@ test('SessionWatcherDaemon - parser logic', () => {
   }
 });
 
-test('SessionWatcherDaemon - scanExistingSessions on startup', () => {
+test('SessionWatcherDaemon - scanExistingSessions on startup', async () => {
   const tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), 'scan-existing-test-'));
   const codexDir = path.join(tmpDir, 'codex');
   const agDir = path.join(tmpDir, 'brain');
@@ -109,6 +109,8 @@ test('SessionWatcherDaemon - scanExistingSessions on startup', () => {
     });
 
     daemon.start();
+    // scanExistingSessions is async/background now; wait for it to finish.
+    await new Promise((resolve) => setTimeout(resolve, 50));
     daemon.stop();
 
     const sessions = hubStore.listSessions();
@@ -160,5 +162,48 @@ test('interactiveSetup - interactive mode choice', async () => {
     assert.equal(config.sessionSync?.enabled, true);
   } finally {
     fs.rmSync(tmpDataDir, { recursive: true, force: true });
+  }
+});
+
+test('HubStore - default hub path is under ~/.local-ai-gateway/hub', () => {
+  const prev = process.env.LOCAL_AI_GATEWAY_HUB_DIR;
+  delete process.env.LOCAL_AI_GATEWAY_HUB_DIR;
+  try {
+    const store = new HubStore();
+    const expected = path.join(os.homedir(), '.local-ai-gateway', 'hub');
+    assert.equal(store.baseDir, expected);
+    assert.equal(store.sessionsDir, path.join(expected, 'sessions'));
+    assert.equal(store.pointerFile, path.join(expected, 'CURRENT_ACTIVE.json'));
+  } finally {
+    if (prev === undefined) delete process.env.LOCAL_AI_GATEWAY_HUB_DIR;
+    else process.env.LOCAL_AI_GATEWAY_HUB_DIR = prev;
+  }
+});
+
+test('SessionWatcherDaemon - Claude Desktop only, skip Claude Code CLI', () => {
+  const tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), 'claude-desktop-only-'));
+  try {
+    const daemon = new SessionWatcherDaemon({ baseDir: tmpDir });
+
+    const desktopFile = path.join(tmpDir, 'desktop-sess.jsonl');
+    fs.writeFileSync(desktopFile, [
+      JSON.stringify({ type: 'user', timestamp: '2026-07-22T01:00:00.000Z', entrypoint: 'claude-desktop-3p', cwd: 'D:\\\\agent-transfer', message: { content: 'hello from desktop' } }),
+      JSON.stringify({ type: 'assistant', timestamp: '2026-07-22T01:00:01.000Z', entrypoint: 'claude-desktop-3p', message: { content: 'hi desktop' } }),
+    ].join('\n'));
+
+    const cliFile = path.join(tmpDir, 'cli-sess.jsonl');
+    fs.writeFileSync(cliFile, [
+      JSON.stringify({ type: 'user', timestamp: '2026-07-22T01:00:00.000Z', entrypoint: 'cli', cwd: 'D:\\\\agent-transfer', message: { content: 'hello from cli' } }),
+      JSON.stringify({ type: 'assistant', timestamp: '2026-07-22T01:00:01.000Z', entrypoint: 'cli', message: { content: 'hi cli' } }),
+    ].join('\n'));
+
+    const desktop = daemon.parseClaudeDesktopSession(desktopFile);
+    const cli = daemon.parseClaudeDesktopSession(cliFile);
+    assert.ok(desktop);
+    assert.equal(desktop.source_app, 'claude');
+    assert.equal(desktop.messages.length, 2);
+    assert.equal(cli, null);
+  } finally {
+    fs.rmSync(tmpDir, { recursive: true, force: true });
   }
 });
