@@ -9,8 +9,25 @@ import {
   generateSemanticFilename,
   slugifyPrompt,
   formatDateYYYYMMDDHHmmss,
+  parseCliArgs,
 } from "../../lib/skills/grok-imagine/scripts/grok_imagine.mjs";
 import { SkillInstaller } from "../../lib/session-sync/skill-installer.mjs";
+
+test("Grok Imagine Skill - parseCliArgs parser test", () => {
+  const rawArgs = [
+    "--prompt", "Cyberpunk neon city",
+    "--type", "video",
+    "--images", "/img1.jpg,/img2.jpg",
+    "--duration", "10",
+    "--aspect-ratio", "9:16",
+  ];
+  const parsed = parseCliArgs(rawArgs);
+  assert.equal(parsed.prompt, "Cyberpunk neon city");
+  assert.equal(parsed.type, "video");
+  assert.deepEqual(parsed.imagePaths, ["/img1.jpg", "/img2.jpg"]);
+  assert.equal(parsed.duration, 10);
+  assert.equal(parsed.aspectRatio, "9:16");
+});
 
 test("Grok Imagine Skill - semantic filename generator", () => {
   const prompt = "A cute fluffy kitten in space!";
