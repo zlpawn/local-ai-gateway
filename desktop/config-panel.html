@@ -1228,6 +1228,10 @@
                     <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="margin-right: 8px;"><path d="M21.5 2v6h-6M21.34 15.57a10 10 0 1 1-.57-8.38l5.67-5.67"></path></svg>
                     会话同步 (Session Sync)
                 </a>
+                <a href="#skills" class="nav-item" onclick="switchTab('skills')">
+                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="margin-right: 8px;"><path d="M12 2L2 7l10 5 10-5-10-5zM2 17l10 5 10-5M2 12l10 5 10-5"></path></svg>
+                    预置技能 (Agent Skills)
+                </a>
             </nav>
             <div class="sidebar-footer" style="flex-direction: column;">
                 <div style="display: flex; gap: 12px; width: 100%;">
@@ -1508,13 +1512,43 @@ experimental_bearer_token = "dummy"</pre>
                             </div>
                         </div>
                     </div>
+                </div>
+            </section>
 
-                    <!-- Symlink Tool Grid for Grok Imagine -->
+            <!-- Agent Skills Section -->
+            <section id="section-skills" class="tab-section">
+                <div class="section-header">
+                    <div>
+                        <h2>预置技能库 (Agent Skills)</h2>
+                        <p>一键扩展 AI 助手的能力，支持跨软件安装与系统软链接（Symlink）管理。</p>
+                    </div>
+                    <button class="btn btn-primary" onclick="saveSyncConfig()">
+                        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z"></path><polyline points="17 21 17 13 7 13 7 21"></polyline><polyline points="7 3 7 8 15 8"></polyline></svg>
+                        保存技能挂载配置
+                    </button>
+                </div>
+
+                <div class="usage-guide">
+                    <h3>💡 Agent Skill 体系说明</h3>
+                    <p>预置技能存储于网关中央目录：<code class="path-pill">~/.agents/skills/</code>。</p>
+                    <p>勾选下方目标软件后，系统会自动创建系统软链接挂载给对应的 Agent 客户端，零配置开箱即用。</p>
+                </div>
+
+                <div style="margin-top: 24px; display: flex; flex-direction: column; gap: 20px;">
+                    <!-- Skill Card 1: Grok Imagine -->
                     <div class="model-slots-panel">
-                        <div class="model-slots-header">
-                            <h3>🎨 Grok 生图生视频技能 (grok-imagine) 挂载目标：</h3>
+                        <div class="model-slots-header" style="display: flex; align-items: center; justify-content: space-between;">
+                            <div>
+                                <h3 style="font-size: 16px; font-weight: 600; color: var(--text-primary); display: flex; align-items: center; gap: 8px;">
+                                    🎨 Grok 多模态视觉生成技能 (grok-imagine)
+                                </h3>
+                                <p style="font-size: 13px; color: var(--text-secondary); margin-top: 2px;">
+                                    自动调用本地 <code class="path-pill">~/.grok/auth.json</code> 订阅 Token，支持文生图、图生图、文生视频、图生视频与多参考图合成。
+                                </p>
+                            </div>
                         </div>
                         <div style="padding: 16px; display: flex; flex-direction: column; gap: 12px;">
+                            <div style="font-size: 12px; font-weight: 600; color: var(--text-secondary); margin-bottom: 4px;">选择要开启安装该 Skill 的目标软件：</div>
                             <div class="sync-tool-card" id="grok-card-antigravity">
                                 <div style="display: flex; align-items: center; gap: 12px;">
                                     <div style="width: 32px; height: 32px; border-radius: var(--radius-md); background: var(--input-bg); display: flex; align-items: center; justify-content: center; font-weight: 700; font-size: 14px; color: #10a37f;">G</div>
@@ -1525,7 +1559,7 @@ experimental_bearer_token = "dummy"</pre>
                                 </div>
                                 <label style="display: flex; align-items: center; gap: 8px; cursor: pointer;">
                                     <input type="checkbox" id="grok-target-antigravity" style="width: 16px; height: 16px; cursor: pointer;">
-                                    <span style="font-size: 13px;">安装 Skill</span>
+                                    <span style="font-size: 13px;">安装/创建软链接</span>
                                 </label>
                             </div>
 
@@ -1539,7 +1573,7 @@ experimental_bearer_token = "dummy"</pre>
                                 </div>
                                 <label style="display: flex; align-items: center; gap: 8px; cursor: pointer;">
                                     <input type="checkbox" id="grok-target-claude" style="width: 16px; height: 16px; cursor: pointer;">
-                                    <span style="font-size: 13px;">安装 Skill</span>
+                                    <span style="font-size: 13px;">安装/创建软链接</span>
                                 </label>
                             </div>
 
@@ -1553,7 +1587,7 @@ experimental_bearer_token = "dummy"</pre>
                                 </div>
                                 <label style="display: flex; align-items: center; gap: 8px; cursor: pointer;">
                                     <input type="checkbox" id="grok-target-codex" style="width: 16px; height: 16px; cursor: pointer;">
-                                    <span style="font-size: 13px;">安装 Skill</span>
+                                    <span style="font-size: 13px;">安装/创建软链接</span>
                                 </label>
                             </div>
                         </div>
@@ -2277,7 +2311,7 @@ experimental_bearer_token = "dummy"</pre>
 
         window.addEventListener('load', () => {
             const hash = window.location.hash.replace('#', '');
-            if (hash === 'code' || hash === 'desktop' || hash === 'codex') {
+            if (hash === 'code' || hash === 'desktop' || hash === 'codex' || hash === 'sync' || hash === 'skills') {
                 switchTab(hash);
             }
         });
