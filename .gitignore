@@ -43,3 +43,8 @@ _inspect_repo/
 
 # codeg transfer artifacts (bundles, zips, patches, scratch clones)
 codeg-*
+
+# Generated media outputs
+images/
+videos/
+
