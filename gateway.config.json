@@ -202,5 +202,21 @@
         }
       ]
     }
+  },
+  "sessionSync": {
+    "enabled": false,
+    "targets": {
+      "antigravity": false,
+      "claude": false,
+      "codex": false
+    },
+    "grokImagineTargets": {
+      "antigravity": false,
+      "claude": false,
+      "codex": false
+    },
+    "dateRange": null,
+    "summaryMode": "rule",
+    "summaryModel": "grok-4.5"
   }
 }
