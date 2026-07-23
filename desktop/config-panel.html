@@ -1456,10 +1456,10 @@ experimental_bearer_token = "dummy"</pre>
                         </div>
                     </div>
 
-                    <!-- Symlink Tool Grid -->
+                    <!-- Symlink Tool Grid for Session Sync -->
                     <div class="model-slots-panel">
                         <div class="model-slots-header">
-                            <h3>要挂载 Skill 软链接的目标 AI 软件：</h3>
+                            <h3>🔄 会话同步技能 (session-sync) 挂载目标：</h3>
                         </div>
                         <div style="padding: 16px; display: flex; flex-direction: column; gap: 12px;">
                             <!-- Tool 1: Antigravity -->
@@ -1508,10 +1508,61 @@ experimental_bearer_token = "dummy"</pre>
                             </div>
                         </div>
                     </div>
+
+                    <!-- Symlink Tool Grid for Grok Imagine -->
+                    <div class="model-slots-panel">
+                        <div class="model-slots-header">
+                            <h3>🎨 Grok 生图生视频技能 (grok-imagine) 挂载目标：</h3>
+                        </div>
+                        <div style="padding: 16px; display: flex; flex-direction: column; gap: 12px;">
+                            <div class="sync-tool-card" id="grok-card-antigravity">
+                                <div style="display: flex; align-items: center; gap: 12px;">
+                                    <div style="width: 32px; height: 32px; border-radius: var(--radius-md); background: var(--input-bg); display: flex; align-items: center; justify-content: center; font-weight: 700; font-size: 14px; color: #10a37f;">G</div>
+                                    <div>
+                                        <div style="font-weight: 600; font-size: 14px; color: var(--text-primary);">Google Antigravity</div>
+                                        <div class="path-pill" style="margin-top: 2px;">~/.gemini/config/skills/grok-imagine</div>
+                                    </div>
+                                </div>
+                                <label style="display: flex; align-items: center; gap: 8px; cursor: pointer;">
+                                    <input type="checkbox" id="grok-target-antigravity" style="width: 16px; height: 16px; cursor: pointer;">
+                                    <span style="font-size: 13px;">安装 Skill</span>
+                                </label>
+                            </div>
+
+                            <div class="sync-tool-card" id="grok-card-claude">
+                                <div style="display: flex; align-items: center; gap: 12px;">
+                                    <div style="width: 32px; height: 32px; border-radius: var(--radius-md); background: var(--input-bg); display: flex; align-items: center; justify-content: center; font-weight: 700; font-size: 14px; color: #d97706;">C</div>
+                                    <div>
+                                        <div style="font-weight: 600; font-size: 14px; color: var(--text-primary);">Claude Code / Desktop</div>
+                                        <div class="path-pill" style="margin-top: 2px;">~/.claude/skills/grok-imagine</div>
+                                    </div>
+                                </div>
+                                <label style="display: flex; align-items: center; gap: 8px; cursor: pointer;">
+                                    <input type="checkbox" id="grok-target-claude" style="width: 16px; height: 16px; cursor: pointer;">
+                                    <span style="font-size: 13px;">安装 Skill</span>
+                                </label>
+                            </div>
+
+                            <div class="sync-tool-card" id="grok-card-codex">
+                                <div style="display: flex; align-items: center; gap: 12px;">
+                                    <div style="width: 32px; height: 32px; border-radius: var(--radius-md); background: var(--input-bg); display: flex; align-items: center; justify-content: center; font-weight: 700; font-size: 14px; color: #2563eb;">O</div>
+                                    <div>
+                                        <div style="font-weight: 600; font-size: 14px; color: var(--text-primary);">OpenAI Codex</div>
+                                        <div class="path-pill" style="margin-top: 2px;">~/.codex/skills/grok-imagine</div>
+                                    </div>
+                                </div>
+                                <label style="display: flex; align-items: center; gap: 8px; cursor: pointer;">
+                                    <input type="checkbox" id="grok-target-codex" style="width: 16px; height: 16px; cursor: pointer;">
+                                    <span style="font-size: 13px;">安装 Skill</span>
+                                </label>
+                            </div>
+                        </div>
+                    </div>
                 </div>
             </section>
         </main>
     </div>
+
 
     <div class="toast-container" id="toast-container"></div>
 
@@ -1681,6 +1732,14 @@ experimental_bearer_token = "dummy"</pre>
                         if (claudeTarget) claudeTarget.checked = Boolean(data.targets?.claude ?? data.symlinks?.claude);
                         if (codexTarget) codexTarget.checked = Boolean(data.targets?.codex ?? data.symlinks?.codex);
 
+                        const grokAgTarget = document.getElementById('grok-target-antigravity');
+                        const grokClaudeTarget = document.getElementById('grok-target-claude');
+                        const grokCodexTarget = document.getElementById('grok-target-codex');
+
+                        if (grokAgTarget) grokAgTarget.checked = Boolean(data.grokImagineTargets?.antigravity ?? data.grokImagineSymlinks?.antigravity);
+                        if (grokClaudeTarget) grokClaudeTarget.checked = Boolean(data.grokImagineTargets?.claude ?? data.grokImagineSymlinks?.claude);
+                        if (grokCodexTarget) grokCodexTarget.checked = Boolean(data.grokImagineTargets?.codex ?? data.grokImagineSymlinks?.codex);
+
                         if (startDateInput && data.dateRange?.startDate) startDateInput.value = data.dateRange.startDate;
                         if (endDateInput && data.dateRange?.endDate) endDateInput.value = data.dateRange.endDate;
 
@@ -1749,6 +1808,11 @@ experimental_bearer_token = "dummy"</pre>
                 antigravity: document.getElementById('sync-target-antigravity').checked,
                 claude: document.getElementById('sync-target-claude').checked,
                 codex: document.getElementById('sync-target-codex').checked
+            };
+            const grokImagineTargets = {
+                antigravity: document.getElementById('grok-target-antigravity').checked,
+                claude: document.getElementById('grok-target-claude').checked,
+                codex: document.getElementById('grok-target-codex').checked
             };
             const startDate = document.getElementById('sync-start-date').value || null;
             const endDate = document.getElementById('sync-end-date').value || null;
