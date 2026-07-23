@@ -55,7 +55,7 @@ enableNodeEnvProxy();
 
 const ENV_PORT = intEnv("GATEWAY_PORT", intEnv("PORT", 0));
 const ENV_HOST = process.env.GATEWAY_HOST || process.env.HOST || "";
-const REQUEST_TIMEOUT_MS = intEnv("REQUEST_TIMEOUT_MS", 120000);
+const REQUEST_TIMEOUT_MS = intEnv("REQUEST_TIMEOUT_MS", 600000);
 const GATEWAY_API_KEY = process.env.GATEWAY_API_KEY || "";
 const CONFIGURED_API_KEY_SENTINEL = "all";
 const ARK_API_KEY = process.env.ARK_API_KEY || "";
