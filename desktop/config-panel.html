@@ -1522,7 +1522,7 @@ experimental_bearer_token = "dummy"</pre>
                         <h2>预置技能库 (Agent Skills)</h2>
                         <p>一键扩展 AI 助手的能力，支持跨软件安装与系统软链接（Symlink）管理。</p>
                     </div>
-                    <button class="btn btn-primary" onclick="saveSyncConfig()">
+                    <button class="btn btn-primary" onclick="saveSyncConfig('skills')">
                         <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z"></path><polyline points="17 21 17 13 7 13 7 21"></polyline><polyline points="7 3 7 8 15 8"></polyline></svg>
                         保存技能挂载配置
                     </button>
@@ -1836,7 +1836,7 @@ experimental_bearer_token = "dummy"</pre>
             }
         }
 
-        async function saveSyncConfig() {
+        async function saveSyncConfig(source = 'sync') {
             const enabled = document.getElementById('sync-enable-toggle').checked;
             const targets = {
                 antigravity: document.getElementById('sync-target-antigravity').checked,
@@ -1859,7 +1859,7 @@ experimental_bearer_token = "dummy"</pre>
                 const res = await fetch('/v1/sync/configure', {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ enabled, targets, dateRange, summaryMode, summaryModel })
+                    body: JSON.stringify({ enabled, targets, grokImagineTargets, dateRange, summaryMode, summaryModel })
                 });
                 const data = await res.json();
                 if (data.success) {
@@ -1873,7 +1873,11 @@ experimental_bearer_token = "dummy"</pre>
                             badge.style.color = 'var(--text-secondary)';
                         }
                     }
-                    showToast('会话同步设置、时间范围与摘要模式已成功保存并应用！', 'success');
+                    if (source === 'skills') {
+                        showToast('🎨 预置技能 (Agent Skills) 挂载设置已成功保存并同步！', 'success');
+                    } else {
+                        showToast('🔄 会话同步设置、时间范围与摘要模式已成功保存并应用！', 'success');
+                    }
                 } else {
                     showToast('保存设置失败: ' + (data.error || '未知错误'), 'danger');
                 }
@@ -2575,7 +2579,11 @@ experimental_bearer_token = "dummy"</pre>
         window.saveCurrentConfig = async function() {
             const btn = document.getElementById('save-btn');
             if (!btn) return;
-            await saveConfig({ button: btn, client: activeClient, scope: 'global' });
+            if (activeClient === 'sync' || activeClient === 'skills') {
+                await saveSyncConfig(activeClient);
+            } else {
+                await saveConfig({ button: btn, client: activeClient, scope: 'global' });
+            }
         }
 
         window.toggleEndpointExposure = async function(event, client, index, input) {
