@@ -416,25 +416,35 @@ function collectGroupedModelsFromConfig(config) {
   if (reqPath === "/v1/sync/status" && req.method === "GET") {
     if (!checkLocalAuth(req, res)) return;
     const daemonStatus = globalWatcherDaemon ? globalWatcherDaemon.status() : { isRunning: false };
-    const symlinkStatus = SkillInstaller.getSymlinkStatus();
-    const isCentralInstalled = SkillInstaller.isInstalled();
+    const symlinkStatus = SkillInstaller.getSymlinkStatus(os.homedir(), "session-sync");
+    const grokImagineSymlinkStatus = SkillInstaller.getSymlinkStatus(os.homedir(), "grok-imagine");
+    const isCentralInstalled = SkillInstaller.isInstalled("session-sync");
+    const isGrokImagineInstalled = SkillInstaller.isInstalled("grok-imagine");
     const groupedModels = collectGroupedModelsFromConfig(GATEWAY_CONFIG);
     sendJson(res, 200, {
       success: true,
       enabled: Boolean(GATEWAY_CONFIG.sessionSync?.enabled),
       daemonStatus,
       isCentralInstalled,
-      centralSkillFile: SkillInstaller.centralSkillFile,
+      isGrokImagineInstalled,
+      centralSkillFile: SkillInstaller.getCentralSkillFile("session-sync"),
+      grokImagineSkillFile: SkillInstaller.getCentralSkillFile("grok-imagine"),
       dateRange: GATEWAY_CONFIG.sessionSync?.dateRange || null,
       summaryMode: GATEWAY_CONFIG.sessionSync?.summaryMode || 'rule',
       summaryModel: GATEWAY_CONFIG.sessionSync?.summaryModel || '',
       availableModels: EXPOSED_MODELS,
       groupedModels,
       symlinks: symlinkStatus,
+      grokImagineSymlinks: grokImagineSymlinkStatus,
       targets: {
         antigravity: GATEWAY_CONFIG.sessionSync?.targets?.antigravity ?? false,
         claude: GATEWAY_CONFIG.sessionSync?.targets?.claude ?? false,
         codex: GATEWAY_CONFIG.sessionSync?.targets?.codex ?? false
+      },
+      grokImagineTargets: {
+        antigravity: GATEWAY_CONFIG.sessionSync?.grokImagineTargets?.antigravity ?? false,
+        claude: GATEWAY_CONFIG.sessionSync?.grokImagineTargets?.claude ?? false,
+        codex: GATEWAY_CONFIG.sessionSync?.grokImagineTargets?.codex ?? false
       }
     });
     return;
@@ -450,11 +460,16 @@ function collectGroupedModelsFromConfig(config) {
         claude: Boolean(payload.targets?.claude),
         codex: Boolean(payload.targets?.codex)
       };
+      const grokImagineTargets = {
+        antigravity: Boolean(payload.grokImagineTargets?.antigravity),
+        claude: Boolean(payload.grokImagineTargets?.claude),
+        codex: Boolean(payload.grokImagineTargets?.codex)
+      };
       const dateRange = payload.dateRange || null;
       const summaryMode = payload.summaryMode || 'rule';
       const summaryModel = payload.summaryModel || '';
 
-      GATEWAY_CONFIG.sessionSync = { enabled, targets, dateRange, summaryMode, summaryModel };
+      GATEWAY_CONFIG.sessionSync = { enabled, targets, grokImagineTargets, dateRange, summaryMode, summaryModel };
       saveGatewayState({
         configPath: GATEWAY_CONFIG_FILE,
         secretsPath: GATEWAY_SECRETS_FILE,
@@ -462,9 +477,13 @@ function collectGroupedModelsFromConfig(config) {
         officialCodexIds: OFFICIAL_CODEX_MODEL_IDS,
       });
 
+      // Always process Grok Imagine Skill symlinks according to user selection
+      SkillInstaller.installBaseSkill(SkillInstaller.getCentralSkillDir("grok-imagine"), "grok-imagine");
+      SkillInstaller.updateSymlinks(grokImagineTargets, os.homedir(), null, "grok-imagine");
+
       if (enabled) {
-        SkillInstaller.installBaseSkill();
-        SkillInstaller.updateSymlinks(targets);
+        SkillInstaller.installBaseSkill(SkillInstaller.getCentralSkillDir("session-sync"), "session-sync");
+        SkillInstaller.updateSymlinks(targets, os.homedir(), null, "session-sync");
         if (!globalWatcherDaemon) {
           globalWatcherDaemon = new SessionWatcherDaemon({ dateRange, summaryMode, summaryModel, listenPort: LISTEN_PORT });
         } else {
