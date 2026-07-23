@@ -79,10 +79,10 @@ node ~/.agents/skills/grok-imagine/scripts/grok_imagine.mjs --check-status "req_
 
 ## Agent 回传与渲染规则 (必须执行)
 1. **标准输出解析**: 脚本执行成功后会在控制台输出包含 Markdown 的文本段落。
-2. **回传要求**: Agent **必须将控制台输出的原始 Markdown 语法块直接包含在回复给用户的 Message 中**（渲染采用兼容各种 Electron 客户端的绝对路径）：
+2. **回传要求**: Agent **必须将控制台输出的原始 Markdown 语法块直接包含在回复给用户的 Message 中**（兼容 Codex / Antigravity / Claude 界面直接预览与点击播放）：
    - 图片格式：`![Generated Image](/absolute/path/to/image.jpg)`
-   - 视频格式：`<video src="/absolute/path/to/video.mp4" controls width="100%"></video>`
-   这样用户的 Codex / Antigravity / Claude 界面才能直接预览渲染生成的图片与视频媒体！
+   - 视频格式：`![Generated Video](/absolute/path/to/video.mp4)` 以及 `[▶️ 点击播放/预览视频](file:///absolute/path/to/video.mp4)`
+   这样用户的 AI 客户端界面才能直接渲染预览与一键拉起播放器！
 
 ## 异常处理与恢复指引
 - **401 Unauthorized / Token Missing**: 告知用户 `~/.grok/auth.json` 凭证缺失或过期，请运行 `grok` 命令重连。
