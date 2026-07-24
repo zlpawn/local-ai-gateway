@@ -241,6 +241,83 @@ Run the local doctor when a client cannot connect or a model does not appear:
 npm run doctor
 ```
 
+## Gateway Web Search
+
+Third-party models (e.g. GLM, DeepSeek) often lack hosted web search. The
+gateway can inject a `web_search` tool into their request, execute the search
+via a configured provider, and feed results back through a tool loop, so these
+models gain search without any client-side changes.
+
+Official GPT routes are not affected. They continue to use OpenAI hosted
+`web_search` and never touch the gateway-local search path.
+
+### Add a web search node
+
+Add an endpoint with `purpose: "web_search"` to any client in
+`gateway.config.json`. Search nodes are excluded from `/v1/models` and do not
+appear as selectable models.
+
+```json
+{
+  "id": "ep_web_search_1",
+  "name": "tavily-search",
+  "purpose": "web_search",
+  "provider": "tavily",
+  "enabled": true,
+  "is_default": true,
+  "options": {
+    "search_depth": "basic",
+    "max_results": 5,
+    "topic": "general",
+    "country": "china",
+    "include_answer": false,
+    "include_raw_content": false
+  }
+}
+```
+
+Each client may have multiple web search nodes but only one `is_default: true`.
+The gateway uses the default node (or the first enabled node with a valid API
+key) when injecting the tool.
+
+### Configure the API key
+
+Store the Tavily key in `gateway.secrets.json`, keyed by the endpoint ID:
+
+```json
+{
+  "api_keys": {
+    "ep_web_search_1": "env:TAVILY_API_KEY"
+  }
+}
+```
+
+The `env:` prefix reads from the environment variable `TAVILY_API_KEY`. You can
+also set the key directly as a literal string instead of `env:TAVILY_API_KEY`.
+As a fallback, the gateway checks `process.env.TAVILY_API_KEY` when no
+per-endpoint key is configured.
+
+### Supported protocols
+
+Gateway web search works across all third-party request paths:
+
+```text
+Codex / Responses        -> web_search tool injected in Responses format
+OpenAI Chat              -> web_search tool injected in Chat function format
+Claude / Anthropic       -> web_search tool injected in Anthropic tool_use format
+```
+
+Streaming requests run the tool loop internally with `stream: false`, then
+re-emit the final answer as SSE to preserve the streaming contract.
+
+### Environment variables
+
+```text
+TAVILY_API_KEY             Tavily API key (also settable per-endpoint in secrets)
+GATEWAY_WEB_SEARCH_DISABLED  Set to 1/true to disable gateway web search globally
+GATEWAY_WEB_SEARCH_MAX_LOOPS Max tool-loop rounds before forcing a final answer (default 3)
+```
+
 ## Global Command
 
 After installing the package globally, the same cross-platform control is

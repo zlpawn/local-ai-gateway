@@ -138,6 +138,58 @@ and Codex-style clients through the gateway adapters.
 }
 ```
 
+## Web Search (Tavily)
+
+Web search is configured as a capability endpoint (`purpose: "web_search"`)
+rather than a model endpoint. Add it to any client's `endpoints` array:
+
+```json
+{
+  "id": "ep_web_search_1",
+  "name": "tavily-search",
+  "purpose": "web_search",
+  "provider": "tavily",
+  "enabled": true,
+  "is_default": true,
+  "options": {
+    "search_depth": "basic",
+    "max_results": 5,
+    "topic": "general",
+    "country": "china",
+    "include_answer": false,
+    "include_raw_content": false
+  }
+}
+```
+
+Set the API key in `gateway.secrets.json`:
+
+```json
+{
+  "api_keys": {
+    "ep_web_search_1": "env:TAVILY_API_KEY"
+  }
+}
+```
+
+Supported `options` fields:
+
+```text
+search_depth        basic | advanced | fast | ultra-fast
+max_results         1-20 (default 5)
+topic               general | news | finance
+country             country code, e.g. china, us, jp
+include_answer      boolean, return a synthesized answer
+include_raw_content boolean, include raw page content
+include_domains     array of domains to restrict results
+exclude_domains     array of domains to exclude
+time_range          day | week | month | year
+```
+
+The gateway injects a `web_search` function tool into third-party model
+requests (Responses, Chat, and Anthropic protocols). Official GPT routes keep
+using OpenAI hosted `web_search` and bypass this path.
+
 ## Key Rules
 
 - Prefer `api_key_env` instead of inline `api_key`.

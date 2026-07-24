@@ -1261,6 +1261,7 @@
                     </div>
                     <div style="display:flex; gap:8px;">
                         <button class="btn" onclick="addVisionFallbackEndpoint('code')">添加视觉兜底</button>
+                        <button class="btn" onclick="addWebSearchEndpoint('code')">添加联网搜索</button>
                         <button class="btn" onclick="addEndpoint('code')">
                             <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="12" y1="5" x2="12" y2="19"></line><line x1="5" y1="12" x2="19" y2="12"></line></svg>添加节点</button>
                     </div>
@@ -1310,6 +1311,7 @@
                     </div>
                     <div style="display:flex; gap:8px;">
                         <button class="btn" onclick="addVisionFallbackEndpoint('desktop')">添加视觉兜底</button>
+                        <button class="btn" onclick="addWebSearchEndpoint('desktop')">添加联网搜索</button>
                         <button class="btn" onclick="addEndpoint('desktop')">
                             <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="12" y1="5" x2="12" y2="19"></line><line x1="5" y1="12" x2="19" y2="12"></line></svg>添加节点</button>
                     </div>
@@ -1335,6 +1337,7 @@
                             迁移历史会话
                         </button>
                         <button class="btn" onclick="addVisionFallbackEndpoint('codex')">添加视觉兜底</button>
+                        <button class="btn" onclick="addWebSearchEndpoint('codex')">添加联网搜索</button>
                         <button class="btn" onclick="addEndpoint('codex')">
                             <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="12" y1="5" x2="12" y2="19"></line><line x1="5" y1="12" x2="19" y2="12"></line></svg>添加节点</button>
                     </div>
@@ -1916,6 +1919,8 @@ experimental_bearer_token = "dummy"</pre>
 
         function createEndpointSummaryHTML(client, index, ep) {
             const isVisionFallback = ep.purpose === 'vision_fallback';
+            const isWebSearch = ep.purpose === 'web_search';
+            const isCapabilityNode = isVisionFallback || isWebSearch;
             const name = escapeHtml(ep.name || `节点 ${index + 1}`);
             const type = escapeHtml(typeLabel(ep.type));
             const url = escapeHtml(shortUrl(ep.base_url));
@@ -1937,12 +1942,12 @@ experimental_bearer_token = "dummy"</pre>
                     <div class="node-card-top">
                         <div class="node-card-title">${name}</div>
                         <div class="node-card-actions" onclick="event.stopPropagation()">
-                            ${isVisionFallback ? '' : `<label class="node-card-switch" title="${ep.expose_models ? '从模型列表隐藏此节点' : '在模型列表展示此节点'}">
+                            ${isCapabilityNode ? '' : `<label class="node-card-switch" title="${ep.expose_models ? '从模型列表隐藏此节点' : '在模型列表展示此节点'}">
                                 <input type="checkbox" ${ep.expose_models ? 'checked' : ''}
                                     onchange="toggleEndpointExposure(event, '${client}', ${index}, this)">
                                 <span class="node-card-switch-track" aria-hidden="true"></span>
                             </label>`}
-                            ${isVisionFallback ? '' : `<button type="button" class="${defaultClass}" title="${defaultTitle}"
+                            ${isCapabilityNode ? '' : `<button type="button" class="${defaultClass}" title="${defaultTitle}"
                                 onclick="event.stopPropagation(); setAsDefault('${client}', ${index})">
                                 <svg width="14" height="14" viewBox="0 0 24 24" fill="${ep.is_default ? 'currentColor' : 'none'}" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
                                     <polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"></polygon>
@@ -1961,18 +1966,23 @@ experimental_bearer_token = "dummy"</pre>
                         <div class="node-card-row">
                             <span class="badge">${type}</span>
                             ${isVisionFallback ? '<span class="badge badge-default">视觉兜底</span>' : ''}
+                            ${isWebSearch ? '<span class="badge badge-default">联网搜索</span>' : ''}
                             ${ep.is_default ? '<span class="badge badge-default">默认</span>' : ''}
                         </div>
                         <div class="node-card-row">
-                            <span class="mono" title="${escapeHtml(ep.base_url || '')}">${url}</span>
+                            <span class="mono" title="${escapeHtml(isWebSearch ? (ep.provider || 'tavily') : (ep.base_url || ''))}">${isWebSearch ? escapeHtml(ep.provider || 'tavily') : url}</span>
                         </div>
                         <div class="node-card-models">
-                            ${previewModels || '<span class="badge">暂无上游模型</span>'}
-                            ${moreModels}
+                            ${isWebSearch
+                                ? `<span class="badge">${escapeHtml(ep.options?.search_depth || 'basic')}</span><span class="badge">top ${escapeHtml(String(ep.options?.max_results ?? 5))}</span>`
+                                : (previewModels || '<span class="badge">暂无上游模型</span>')}
+                            ${isWebSearch ? '' : moreModels}
                         </div>
                     </div>
                     <div class="node-card-footer">
-                        <span>${models.length} 模型 · ${mappingCount} 映射</span>
+                        <span>${isWebSearch
+                            ? `${escapeHtml(ep.provider || 'tavily')}${ep.enabled === false ? ' · 已关闭' : ' · 已启用'}`
+                            : `${models.length} 模型 · ${mappingCount} 映射`}</span>
                         <span class="node-card-cta">打开配置 →</span>
                     </div>
                 </div>
@@ -1981,12 +1991,20 @@ experimental_bearer_token = "dummy"</pre>
 
         function createEndpointDetailHTML(client, index, ep) {
             const isVisionFallback = ep.purpose === 'vision_fallback';
+            const isWebSearch = ep.purpose === 'web_search';
+            const isCapabilityNode = isVisionFallback || isWebSearch;
             const availableTypes = (client === 'code' || client === 'desktop')
                 ? ENDPOINT_TYPES.filter(t => ['anthropic', 'openai-chat', 'grok'].includes(t.value))
                 : ENDPOINT_TYPES.filter(t => ['anthropic', 'openai-responses', 'openai-chat', 'grok'].includes(t.value));
 
             const typeOptions = availableTypes.map(t =>
                 `<option value="${t.value}" ${ep.type === t.value ? 'selected' : ''}>${t.label}</option>`
+            ).join('');
+            const webSearchProviders = [
+                { value: 'tavily', label: 'Tavily' },
+            ];
+            const webSearchProviderOptions = webSearchProviders.map(p =>
+                `<option value="${p.value}" ${(ep.provider || 'tavily') === p.value ? 'selected' : ''}>${p.label}</option>`
             ).join('');
 
             const title = escapeHtml(ep.name || `节点 ${index + 1}`);
@@ -2012,7 +2030,11 @@ experimental_bearer_token = "dummy"</pre>
                                 <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z"></path><polyline points="17 21 17 13 7 13 7 21"></polyline><polyline points="7 3 7 8 15 8"></polyline></svg>
                                 保存节点
                             </button>
-                            ${isVisionFallback ? '' : `<label class="btn btn-sm detail-default-action ${ep.is_default ? 'is-active' : ''}">
+                            ${isCapabilityNode ? (isWebSearch ? `<label class="btn btn-sm detail-default-action ${ep.is_default ? 'is-active' : ''}">
+                                <input class="detail-default-input" type="radio" name="default-search-${client}" ${ep.is_default ? 'checked' : ''} onchange="setAsDefaultWebSearch('${client}', ${index})">
+                                <svg width="14" height="14" viewBox="0 0 24 24" fill="${ep.is_default ? 'currentColor' : 'none'}" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"></polygon></svg>
+                                ${ep.is_default ? '默认搜索' : '设为默认搜索'}
+                            </label>` : '') : `<label class="btn btn-sm detail-default-action ${ep.is_default ? 'is-active' : ''}">
                                 <input class="detail-default-input" type="radio" name="default-${client}" ${ep.is_default ? 'checked' : ''} onchange="setAsDefault('${client}', ${index})">
                                 <svg width="14" height="14" viewBox="0 0 24 24" fill="${ep.is_default ? 'currentColor' : 'none'}" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"></polygon></svg>
                                 ${ep.is_default ? '默认节点' : '设为默认'}
@@ -2031,6 +2053,21 @@ experimental_bearer_token = "dummy"</pre>
                                 <label>名称</label>
                                 <input type="text" id="input-name-${client}-${index}" value="${escapeHtml(ep.name || '')}" placeholder="例如：OpenRouter" onchange="updateEndpoint('${client}', ${index}, 'name', this.value)">
                             </div>
+                            ${isWebSearch ? `
+                            <div class="form-group">
+                                <label>搜索提供商</label>
+                                <select onchange="updateEndpoint('${client}', ${index}, 'provider', this.value)">
+                                    ${webSearchProviderOptions}
+                                </select>
+                            </div>
+                            <div class="form-group">
+                                <label>启用状态</label>
+                                <select onchange="updateEndpoint('${client}', ${index}, 'enabled', this.value === 'true')">
+                                    <option value="true" ${ep.enabled !== false ? 'selected' : ''}>已启用</option>
+                                    <option value="false" ${ep.enabled === false ? 'selected' : ''}>已关闭</option>
+                                </select>
+                            </div>
+                            ` : `
                             <div class="form-group">
                                 <label>类型</label>
                                 <select onchange="updateEndpoint('${client}', ${index}, 'type', this.value)">
@@ -2049,10 +2086,11 @@ experimental_bearer_token = "dummy"</pre>
                                     <option value="none" ${ep.auth === 'none' ? 'selected' : ''}>不发送密钥</option>
                                 </select>
                             </div>
+                            `}
                             <div class="form-group full">
-                                <label>密钥 (API Key) ${ep.has_api_key ? '· 已配置' : '· 未配置'}</label>
+                                <label>${isWebSearch ? 'Tavily API Key' : '密钥 (API Key)'} ${ep.has_api_key ? '· 已配置' : '· 未配置'}</label>
                                 <div class="password-input-wrapper">
-                                    <input class="mono" type="password" id="api-key-${client}-${index}" value="" placeholder="${ep.has_api_key ? '留空表示保留现有密钥' : '输入密钥或 env:变量名'}" onchange="updateEndpoint('${client}', ${index}, 'api_key', this.value)">
+                                    <input class="mono" type="password" id="api-key-${client}-${index}" value="" placeholder="${ep.has_api_key ? '留空表示保留现有密钥' : (isWebSearch ? 'tvly-... 或 env:TAVILY_API_KEY' : '输入密钥或 env:变量名')}" onchange="updateEndpoint('${client}', ${index}, 'api_key', this.value)">
                                     <button type="button" class="password-toggle-btn" onclick="togglePasswordVisibility('${client}', ${index}, 'api-key-${client}-${index}')" title="${ep.has_api_key ? '查看已保存密钥' : '显示/隐藏密钥'}">
                                         <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
                                             <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"></path>
@@ -2061,7 +2099,7 @@ experimental_bearer_token = "dummy"</pre>
                                     </button>
                                 </div>
                             </div>
-                            ${client === 'codex' && !isVisionFallback ? `
+                            ${client === 'codex' && !isCapabilityNode ? `
                             <div class="form-group full">
                                 <label>Codex 能力</label>
                                 <div class="capability-options">
@@ -2111,7 +2149,35 @@ experimental_bearer_token = "dummy"</pre>
                                 </select>
                             </div>
                             ` : ''}
+                            ${isWebSearch ? `
+                            <div class="form-group">
+                                <label>search_depth</label>
+                                <select onchange="updateWebSearchOption('${client}', ${index}, 'search_depth', this.value)">
+                                    ${['basic','advanced','fast','ultra-fast'].map(v => `<option value="${v}" ${(ep.options?.search_depth || 'basic') === v ? 'selected' : ''}>${v}</option>`).join('')}
+                                </select>
+                            </div>
+                            <div class="form-group">
+                                <label>max_results</label>
+                                <input type="number" min="1" max="20" value="${escapeHtml(String(ep.options?.max_results ?? 5))}" onchange="updateWebSearchOption('${client}', ${index}, 'max_results', Number(this.value) || 5)">
+                            </div>
+                            <div class="form-group">
+                                <label>topic</label>
+                                <select onchange="updateWebSearchOption('${client}', ${index}, 'topic', this.value)">
+                                    ${['general','news','finance'].map(v => `<option value="${v}" ${(ep.options?.topic || 'general') === v ? 'selected' : ''}>${v}</option>`).join('')}
+                                </select>
+                            </div>
+                            <div class="form-group">
+                                <label>country（中文可填 china）</label>
+                                <input type="text" value="${escapeHtml(ep.options?.country || 'china')}" placeholder="china" onchange="updateWebSearchOption('${client}', ${index}, 'country', this.value)">
+                            </div>
                             <div class="form-group full">
+                                <label>说明</label>
+                                <div class="usage-guide" style="margin:0;">
+                                    <p style="margin:0;">联网搜索节点不会出现在模型列表里。第三方模型在需要时会调用网关注入的 <code>web_search</code> 工具，由这里配置的 Tavily 执行。</p>
+                                </div>
+                            </div>
+                            ` : ''}
+                            ${isWebSearch ? '' : `<div class="form-group full">
                                 <label>上游模型列表 (输入模型名称后按回车添加)</label>
                                 ${(ep.models && ep.models.length > 0) ? `
                                 <div class="tags-list">
@@ -2152,6 +2218,7 @@ experimental_bearer_token = "dummy"</pre>
                                     <input type="text" id="input-mapping-up-${client}-${index}" class="mono" placeholder="映射模型 (如 glm-5.2) + 回车" onkeydown="handleMappingInput(event, '${client}', ${index}, false)">
                                 </div>
                             </div>
+                            `}
                         </div>
                     </div>
                 </div>
@@ -2215,7 +2282,7 @@ experimental_bearer_token = "dummy"</pre>
 
         function getClaudeCodeDefaultEndpoint() {
             const endpoints = (config.clients?.code?.endpoints || [])
-                .filter(endpoint => endpoint.purpose !== 'vision_fallback');
+                .filter(endpoint => endpoint.purpose !== 'vision_fallback' && endpoint.purpose !== 'web_search');
             return endpoints.find(endpoint => endpoint.is_default === true)
                 || (endpoints.length === 1 ? endpoints[0] : null);
         }
@@ -2372,6 +2439,64 @@ experimental_bearer_token = "dummy"</pre>
             render();
         }
 
+        window.addWebSearchEndpoint = function(client) {
+            config.clients[client].endpoints = config.clients[client].endpoints || [];
+            const hasDefaultSearch = config.clients[client].endpoints.some(
+                endpoint => endpoint.purpose === 'web_search' && endpoint.is_default === true
+            );
+            config.clients[client].endpoints.unshift({
+                id: `ep_${crypto.randomUUID()}`,
+                name: "联网搜索节点",
+                purpose: 'web_search',
+                provider: 'tavily',
+                enabled: true,
+                is_default: !hasDefaultSearch,
+                auth: 'bearer',
+                api_key: "",
+                options: {
+                    search_depth: 'basic',
+                    max_results: 5,
+                    topic: 'general',
+                    include_answer: false,
+                    include_raw_content: false,
+                    country: 'china'
+                },
+                models: [],
+                model_mapping: {}
+            });
+            selectedEndpoint = { client, index: 0 };
+            render();
+        }
+
+        window.updateWebSearchOption = function(client, index, key, value) {
+            const endpoint = config.clients[client].endpoints[index];
+            endpoint.options = endpoint.options && typeof endpoint.options === 'object'
+                ? endpoint.options
+                : {};
+            if (value === '' || value == null) delete endpoint.options[key];
+            else endpoint.options[key] = value;
+        }
+
+        window.setAsDefaultWebSearch = async function(client, index) {
+            const endpoint = config.clients[client].endpoints[index];
+            if (endpoint?.purpose !== 'web_search') return;
+            const previous = config.clients[client].endpoints.map(ep => ({
+                purpose: ep.purpose,
+                is_default: ep.is_default === true,
+            }));
+            config.clients[client].endpoints.forEach((ep, i) => {
+                if (ep.purpose === 'web_search') ep.is_default = (i === index);
+            });
+            render();
+            const saved = await saveConfig({ client, scope: 'default-web-search' });
+            if (!saved) {
+                config.clients[client].endpoints.forEach((ep, i) => {
+                    if (previous[i]?.purpose === 'web_search') ep.is_default = previous[i].is_default;
+                });
+                render();
+            }
+        }
+
         window.removeEndpoint = async function(client, index) {
             if (!confirm('确定删除这个节点吗？')) return;
             const [removedEndpoint] = config.clients[client].endpoints.splice(index, 1);
@@ -2389,7 +2514,8 @@ experimental_bearer_token = "dummy"</pre>
         }
 
         window.setAsDefault = async function(client, index) {
-            if (config.clients[client].endpoints[index]?.purpose === 'vision_fallback') return;
+            const purpose = config.clients[client].endpoints[index]?.purpose;
+            if (purpose === 'vision_fallback' || purpose === 'web_search') return;
             const previousDefaults = config.clients[client].endpoints.map(ep => ep.is_default === true);
             const previousSlots = client === 'code'
                 ? structuredClone(config.clients.code.model_slots || {})
@@ -2569,10 +2695,21 @@ experimental_bearer_token = "dummy"</pre>
             }
         };
 
-        window.saveNode = async function(client, index) {
-            const endpoint = config.clients?.[client]?.endpoints?.[index];
-            const btn = document.getElementById(`save-node-${client}-${index}`);
-            if (!endpoint || !btn) return;
+       window.saveNode = async function(client, index) {
+           const endpoint = config.clients?.[client]?.endpoints?.[index];
+           const btn = document.getElementById(`save-node-${client}-${index}`);
+           if (!endpoint || !btn) return;
+            if (endpoint.purpose === 'web_search') {
+                if (!endpoint.provider) {
+                    showToast('请先选择搜索提供商', 'error');
+                    return;
+                }
+                if (!endpoint.api_key && !endpoint.has_api_key) {
+                    if (!confirm('该搜索节点未配置 API Key，搜索功能将无法使用。确定要保存吗？')) {
+                        return;
+                    }
+                }
+            }
             await saveConfig({ button: btn, client, scope: 'node' });
         }
 
@@ -2680,6 +2817,8 @@ experimental_bearer_token = "dummy"</pre>
                                 : '默认节点已设置',
                             'success'
                         );
+                    } else if (options.scope === 'default-web-search') {
+                        showToast('默认搜索节点已设置', 'success');
                     } else if (options.scope === 'delete' && options.client === 'desktop' && payload.claude3pSync?.updated) {
                         showToast('节点已删除，Claude 3P 模型列表已同步', 'success');
                     } else if (options.scope === 'delete' && options.client === 'codex' && payload.codex_model_catalog?.exists) {

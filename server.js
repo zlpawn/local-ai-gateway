@@ -47,6 +47,14 @@ import {
   selectVisionFallback,
   shouldPreprocessImages,
 } from "./lib/vision-fallback.mjs";
+import {
+  gatewayWebSearchMaxLoops,
+  maybeInjectGatewayWebSearch,
+  runGatewayWebSearchAnthropicLoop,
+  runGatewayWebSearchChatLoop,
+  runGatewayWebSearchResponsesLoop,
+  withoutStreamFlag,
+} from "./lib/web-search/index.mjs";
 
 const PROJECT_ROOT = path.dirname(fileURLToPath(import.meta.url));
 
@@ -108,7 +116,7 @@ const _allEndpoints = [
   ...(GATEWAY_CONFIG.clients?.desktop?.endpoints || []),
   ...(GATEWAY_CONFIG.clients?.claude?.endpoints || []),
   ...(GATEWAY_CONFIG.clients?.codex?.endpoints || [])
-].filter((endpoint) => endpoint?.purpose !== "vision_fallback");
+].filter((endpoint) => endpoint?.purpose !== "vision_fallback" && endpoint?.purpose !== "web_search");
 let EXPOSED_MODELS = [...new Set(_allEndpoints.flatMap(ep => [
   ...(ep.models || []),
   ...Object.keys(ep.model_mapping || {})
@@ -680,6 +688,32 @@ async function forwardAnthropicMessages(body, clientReq, clientRes, context) {
   const requestedModel = body.model;
   const route = resolveAnthropicRoute(requestedModel, context.client);
   body = await maybePreprocessImages(body, route, clientReq, context);
+
+  // Official Anthropic / Grok keep their own tool semantics; only inject for
+  // third-party configured providers on non-stream turns.
+  const canUseGatewaySearch = Boolean(route.provider)
+    && route.kind !== "official"
+    && route.provider?.type !== "grok";
+  const injectedSearch = canUseGatewaySearch
+    ? maybeInjectGatewayWebSearch(body, {
+      endpoints: GATEWAY_CONFIG.clients?.[context.client]?.endpoints || [],
+      secrets: GATEWAY_SECRETS,
+      officialRoute: false,
+      format: route.provider?.type === "openai-chat" ? "chat" : "anthropic",
+    })
+    : { body, injected: false, selected: null, reason: "ineligible" };
+  body = injectedSearch.body;
+  if (injectedSearch.injected) {
+    logInfo("gateway_web_search_injected", {
+      request_id: context.requestId,
+      client: context.client,
+      provider: injectedSearch.selected?.providerId || null,
+      endpoint_id: injectedSearch.selected?.endpoint?.id || null,
+      model: requestedModel || null,
+      protocol: "anthropic_messages",
+    });
+  }
+
   const upstreamBody =
     route.provider?.type === "openai-chat"
       ? anthropicMessagesToOpenAIChat(body, route.model)
@@ -698,7 +732,137 @@ async function forwardAnthropicMessages(body, clientReq, clientRes, context) {
     provider: route.provider?.id || null,
     route: route.kind,
     stream: Boolean(body.stream),
+    gateway_web_search: Boolean(injectedSearch.injected),
   });
+
+  if (injectedSearch.selected && route.provider) {
+    if (route.provider.type === "openai-chat") {
+      const chatBody = withoutStreamFlag(anthropicMessagesToOpenAIChat(body, route.model));
+      const loop = await runGatewayWebSearchChatLoop({
+        body: chatBody,
+        selected: injectedSearch.selected,
+        maxLoops: gatewayWebSearchMaxLoops(),
+        onSearch: (event) => logInfo("gateway_web_search", {
+          request_id: context.requestId,
+          client: context.client,
+          chat_model: requestedModel || null,
+          protocol: "anthropic_messages",
+          ...event,
+        }),
+        fetchCompletion: async (loopBody) => {
+          let upstream = await fetchConfiguredOpenAI(
+            route.provider,
+            "/v1/chat/completions",
+            { ...loopBody, stream: false },
+            clientReq,
+          );
+          upstream = await maybeRetryAfterImageError({
+            upstream,
+            originalBody: body,
+            route,
+            clientReq,
+            context,
+            fetchAgain: async (retryBody) => fetchConfiguredOpenAI(
+              route.provider,
+              "/v1/chat/completions",
+              {
+                ...withoutStreamFlag(anthropicMessagesToOpenAIChat(retryBody, route.model)),
+                stream: false,
+              },
+              clientReq,
+            ),
+          });
+          if (!upstream.ok) {
+            await sendUpstreamError(upstream, clientRes);
+            return null;
+          }
+          return upstream.json();
+        },
+      });
+      if (!loop.completion) return;
+      const finalMessage = openAIChatCompletionToAnthropicMessage(loop.completion, requestedModel);
+      logInfo("messages_response", {
+        request_id: context.requestId,
+        client: context.client,
+        status: 200,
+        provider: route.provider.id || null,
+        route: route.kind,
+        gateway_web_search_loops: loop.loops,
+        gateway_web_search_stop: loop.stopReason,
+        client_stream: Boolean(body.stream),
+      });
+      if (body.stream) {
+        streamFinalAnthropicMessage(clientRes, finalMessage, requestedModel);
+      } else {
+        clientRes.writeHead(200, {
+          "Content-Type": "application/json; charset=utf-8",
+          "Access-Control-Allow-Origin": "*",
+        });
+        clientRes.end(JSON.stringify(finalMessage));
+      }
+      return;
+    }
+
+    if (route.provider.type === "anthropic") {
+      const loop = await runGatewayWebSearchAnthropicLoop({
+        body: withoutStreamFlag(body),
+        selected: injectedSearch.selected,
+        maxLoops: gatewayWebSearchMaxLoops(),
+        onSearch: (event) => logInfo("gateway_web_search", {
+          request_id: context.requestId,
+          client: context.client,
+          chat_model: requestedModel || null,
+          protocol: "anthropic_messages",
+          ...event,
+        }),
+        fetchMessage: async (loopBody) => {
+          let upstream = await fetchConfiguredAnthropic(
+            route.provider,
+            { ...loopBody, model: route.model, stream: false },
+            clientReq,
+          );
+          upstream = await maybeRetryAfterImageError({
+            upstream,
+            originalBody: body,
+            route,
+            clientReq,
+            context,
+            fetchAgain: (retryBody) => fetchConfiguredAnthropic(
+              route.provider,
+              { ...withoutStreamFlag(retryBody), model: route.model, stream: false },
+              clientReq,
+            ),
+          });
+          if (!upstream.ok) {
+            await sendUpstreamError(upstream, clientRes);
+            return null;
+          }
+          return upstream.json();
+        },
+      });
+      if (!loop.message) return;
+      logInfo("messages_response", {
+        request_id: context.requestId,
+        client: context.client,
+        status: 200,
+        provider: route.provider.id || null,
+        route: route.kind,
+        gateway_web_search_loops: loop.loops,
+        gateway_web_search_stop: loop.stopReason,
+        client_stream: Boolean(body.stream),
+      });
+      if (body.stream) {
+        streamFinalAnthropicMessage(clientRes, loop.message, requestedModel);
+      } else {
+        clientRes.writeHead(200, {
+          "Content-Type": "application/json; charset=utf-8",
+          "Access-Control-Allow-Origin": "*",
+        });
+        clientRes.end(JSON.stringify(loop.message));
+      }
+      return;
+    }
+  }
   if (route.provider?.type === "grok") {
     const backend = grokBackendFor(route.model);
     if (backend === "responses") {
@@ -833,6 +997,31 @@ async function forwardOpenAIChatCompletions(body, clientReq, clientRes, context)
   const route = resolveConfiguredModel(requestedModel, ["anthropic", "openai-chat", "openai-responses", "grok"], context.client);
   const resolvedModel = route?.upstream_model || resolveModel(requestedModel);
   body = await maybePreprocessImages(body, route, clientReq, context);
+
+  const canUseGatewaySearch = Boolean(route?.provider)
+    && route.provider?.type !== "grok";
+  const injectedSearch = canUseGatewaySearch
+    ? maybeInjectGatewayWebSearch(body, {
+      endpoints: GATEWAY_CONFIG.clients?.[context.client]?.endpoints || [],
+      secrets: GATEWAY_SECRETS,
+      officialRoute: false,
+      format: route.provider?.type === "anthropic" ? "anthropic" : (
+        route.provider?.type === "openai-responses" ? "responses" : "chat"
+      ),
+    })
+    : { body, injected: false, selected: null, reason: "ineligible" };
+  body = injectedSearch.body;
+  if (injectedSearch.injected) {
+    logInfo("gateway_web_search_injected", {
+      request_id: context.requestId,
+      client: context.client,
+      provider: injectedSearch.selected?.providerId || null,
+      endpoint_id: injectedSearch.selected?.endpoint?.id || null,
+      model: requestedModel || null,
+      protocol: "openai_chat",
+    });
+  }
+
   const upstreamBody =
     route?.provider?.type === "anthropic"
       ? openAIChatToAnthropic(body, resolvedModel)
@@ -852,7 +1041,225 @@ async function forwardOpenAIChatCompletions(body, clientReq, clientRes, context)
     resolved_model: resolvedModel || null,
     provider: route?.provider?.id || null,
     stream: Boolean(body.stream),
+    gateway_web_search: Boolean(injectedSearch.injected),
   });
+
+  if (injectedSearch.selected && route?.provider) {
+    if (route.provider.type === "openai-chat") {
+      const loop = await runGatewayWebSearchChatLoop({
+        body: withoutStreamFlag({ ...body, model: resolvedModel }),
+        selected: injectedSearch.selected,
+        maxLoops: gatewayWebSearchMaxLoops(),
+        onSearch: (event) => logInfo("gateway_web_search", {
+          request_id: context.requestId,
+          client: context.client,
+          chat_model: requestedModel || null,
+          protocol: "openai_chat",
+          ...event,
+        }),
+        fetchCompletion: async (loopBody) => {
+          let upstream = await fetchConfiguredOpenAI(
+            route.provider,
+            "/v1/chat/completions",
+            { ...loopBody, model: resolvedModel, stream: false },
+            clientReq,
+          );
+          upstream = await maybeRetryAfterImageError({
+            upstream,
+            originalBody: body,
+            route,
+            clientReq,
+            context,
+            fetchAgain: (retryBody) => fetchConfiguredOpenAI(
+              route.provider,
+              "/v1/chat/completions",
+              { ...withoutStreamFlag(retryBody), model: resolvedModel, stream: false },
+              clientReq,
+            ),
+          });
+          if (!upstream.ok) {
+            await sendUpstreamError(upstream, clientRes);
+            return null;
+          }
+          return upstream.json();
+        },
+      });
+      if (!loop.completion) return;
+      logInfo("openai_chat_response", {
+        request_id: context.requestId,
+        client: context.client,
+        status: 200,
+        provider: route.provider.id || null,
+        translated_to: null,
+        gateway_web_search_loops: loop.loops,
+        gateway_web_search_stop: loop.stopReason,
+        client_stream: Boolean(body.stream),
+      });
+      if (body.stream) {
+        streamFinalChatCompletion(clientRes, loop.completion, requestedModel);
+      } else {
+        clientRes.writeHead(200, {
+          "Content-Type": "application/json; charset=utf-8",
+          "Access-Control-Allow-Origin": "*",
+        });
+        clientRes.end(JSON.stringify(loop.completion));
+      }
+      return;
+    }
+
+    if (route.provider.type === "anthropic") {
+      const loop = await runGatewayWebSearchAnthropicLoop({
+        body: withoutStreamFlag(openAIChatToAnthropic(body, resolvedModel)),
+        selected: injectedSearch.selected,
+        maxLoops: gatewayWebSearchMaxLoops(),
+        onSearch: (event) => logInfo("gateway_web_search", {
+          request_id: context.requestId,
+          client: context.client,
+          chat_model: requestedModel || null,
+          protocol: "openai_chat",
+          ...event,
+        }),
+        fetchMessage: async (loopBody) => {
+          let upstream = await fetchConfiguredAnthropic(
+            route.provider,
+            { ...loopBody, stream: false },
+            clientReq,
+          );
+          upstream = await maybeRetryAfterImageError({
+            upstream,
+            originalBody: body,
+            route,
+            clientReq,
+            context,
+            fetchAgain: (retryBody) => fetchConfiguredAnthropic(
+              route.provider,
+              withoutStreamFlag(openAIChatToAnthropic(retryBody, resolvedModel)),
+              clientReq,
+            ),
+          });
+          if (!upstream.ok) {
+            await sendUpstreamError(upstream, clientRes);
+            return null;
+          }
+          return upstream.json();
+        },
+      });
+      if (!loop.message) return;
+      const completion = anthropicToOpenAIChatResponse(loop.message, requestedModel);
+      logInfo("openai_chat_response", {
+        request_id: context.requestId,
+        client: context.client,
+        status: 200,
+        provider: route.provider.id || null,
+        translated_to: "anthropic_messages",
+        gateway_web_search_loops: loop.loops,
+        gateway_web_search_stop: loop.stopReason,
+        client_stream: Boolean(body.stream),
+      });
+      if (body.stream) {
+        streamFinalChatCompletion(clientRes, completion, requestedModel);
+      } else {
+        clientRes.writeHead(200, {
+          "Content-Type": "application/json; charset=utf-8",
+          "Access-Control-Allow-Origin": "*",
+        });
+        clientRes.end(JSON.stringify(completion));
+      }
+      return;
+    }
+
+    if (route.provider.type === "openai-responses") {
+      const loop = await runGatewayWebSearchResponsesLoop({
+        body: withoutStreamFlag(openAIChatCompletionsToResponses(body, resolvedModel)),
+        selected: injectedSearch.selected,
+        maxLoops: gatewayWebSearchMaxLoops(),
+        onSearch: (event) => logInfo("gateway_web_search", {
+          request_id: context.requestId,
+          client: context.client,
+          chat_model: requestedModel || null,
+          protocol: "openai_chat",
+          ...event,
+        }),
+        fetchResponse: async (loopBody) => {
+          let upstream = await fetchConfiguredOpenAI(
+            route.provider,
+            "/responses",
+            { ...loopBody, model: resolvedModel, stream: false },
+            clientReq,
+          );
+          upstream = await maybeRetryAfterImageError({
+            upstream,
+            originalBody: body,
+            route,
+            clientReq,
+            context,
+            fetchAgain: (retryBody) => fetchConfiguredOpenAI(
+              route.provider,
+              "/responses",
+              withoutStreamFlag(openAIChatCompletionsToResponses(retryBody, resolvedModel)),
+              clientReq,
+            ),
+          });
+          if (!upstream.ok) {
+            await sendUpstreamError(upstream, clientRes);
+            return null;
+          }
+          const contentType = upstream.headers.get("content-type") || "";
+          if (contentType.includes("text/event-stream")) {
+            return collectResponsesStream(upstream.body, requestedModel);
+          }
+          return upstream.json();
+        },
+      });
+      if (!loop.response) return;
+      const responseObj = loop.response;
+      const textOut = responseObj.output_text
+        || (Array.isArray(responseObj.output)
+          ? responseObj.output
+            .filter((item) => item?.type === "message")
+            .flatMap((item) => item.content || [])
+            .filter((part) => part?.type === "output_text")
+            .map((part) => part.text || "")
+            .join("")
+          : "");
+      const completion = {
+        id: responseObj.id || `chatcmpl_${Date.now()}`,
+        object: "chat.completion",
+        created: Math.floor(Date.now() / 1000),
+        model: requestedModel || resolvedModel,
+        choices: [{
+          index: 0,
+          message: { role: "assistant", content: textOut || null },
+          finish_reason: "stop",
+        }],
+        usage: {
+          prompt_tokens: responseObj.usage?.input_tokens || 0,
+          completion_tokens: responseObj.usage?.output_tokens || 0,
+          total_tokens: (responseObj.usage?.input_tokens || 0) + (responseObj.usage?.output_tokens || 0),
+        },
+      };
+      logInfo("openai_chat_response", {
+        request_id: context.requestId,
+        client: context.client,
+        status: 200,
+        provider: route.provider.id || null,
+        translated_to: "responses",
+        gateway_web_search_loops: loop.loops,
+        gateway_web_search_stop: loop.stopReason,
+        client_stream: Boolean(body.stream),
+      });
+      if (body.stream) {
+        streamFinalChatCompletion(clientRes, completion, requestedModel);
+      } else {
+        clientRes.writeHead(200, {
+          "Content-Type": "application/json; charset=utf-8",
+          "Access-Control-Allow-Origin": "*",
+        });
+        clientRes.end(JSON.stringify(completion));
+      }
+      return;
+    }
+  }
 
   if (route?.provider?.type === "grok") {
     const backend = grokBackendFor(resolvedModel);
@@ -1089,6 +1496,25 @@ async function forwardResolvedCodexResponse({
   const resolvedModel = route?.upstream_model || resolveModel(requestedModel);
   body = await maybePreprocessImages(body, route, clientReq, context);
   body = promoteAdditionalTools(body);
+
+  const searchEndpoints = GATEWAY_CONFIG.clients?.[context.client]?.endpoints || [];
+  const injectedSearch = maybeInjectGatewayWebSearch(body, {
+    endpoints: searchEndpoints,
+    secrets: GATEWAY_SECRETS,
+    officialRoute: false,
+    format: "responses",
+  });
+  body = injectedSearch.body;
+  if (injectedSearch.injected) {
+    logInfo("gateway_web_search_injected", {
+      request_id: context.requestId,
+      client: context.client,
+      provider: injectedSearch.selected?.providerId || null,
+      endpoint_id: injectedSearch.selected?.endpoint?.id || null,
+      model: requestedModel || null,
+    });
+  }
+
   const responseToolKinds = collectResponseToolKinds(body.tools);
   const upstreamBody = route?.provider?.type === "anthropic"
     ? openAIResponsesToAnthropic(body, resolvedModel)
@@ -1107,6 +1533,7 @@ async function forwardResolvedCodexResponse({
     provider: route?.provider?.id || null,
     stream: Boolean(body.stream),
     route: route?.provider?.id || "volcengine",
+    gateway_web_search: Boolean(injectedSearch.injected),
   });
 
   if (route?.provider?.type === "grok") {
@@ -1178,6 +1605,81 @@ async function forwardResolvedCodexResponse({
   }
 
   if (route?.provider?.type === "openai-chat") {
+    if (injectedSearch.selected) {
+      const loop = await runGatewayWebSearchResponsesLoop({
+        body: withoutStreamFlag(body),
+        selected: injectedSearch.selected,
+        maxLoops: gatewayWebSearchMaxLoops(),
+        signal,
+        onSearch: (event) => logInfo("gateway_web_search", {
+          request_id: context.requestId,
+          client: context.client,
+          chat_model: requestedModel || null,
+          ...event,
+        }),
+        fetchResponse: async (loopBody) => {
+          const chatRequest = responsesRequestToChat(loopBody, resolvedModel);
+          let upstream = await fetchConfiguredOpenAI(
+            route.provider,
+            "/v1/chat/completions",
+            chatRequest.body,
+            clientReq,
+            signal,
+            context.client !== "codex",
+          );
+          upstream = await maybeRetryAfterImageError({
+            upstream,
+            originalBody: loopBody,
+            route,
+            clientReq,
+            context,
+            fetchAgain: async (retryBody) => {
+              const retryRequest = responsesRequestToChat(retryBody, resolvedModel);
+              return fetchConfiguredOpenAI(
+                route.provider,
+                "/v1/chat/completions",
+                retryRequest.body,
+                clientReq,
+                signal,
+                context.client !== "codex",
+              );
+            },
+          });
+          if (!upstream.ok) {
+            await sendUpstreamError(upstream, clientRes);
+            return null;
+          }
+          const completion = await upstream.json();
+          return chatCompletionToResponse({
+            completion,
+            model: requestedModel,
+            toolKinds: chatRequest.toolKinds,
+          });
+        },
+      });
+      if (!loop.response) return;
+      logInfo("openai_responses_response", {
+        request_id: context.requestId,
+        client: context.client,
+        status: 200,
+        provider: route.provider.id || null,
+        translated_to: "chat_completions",
+        gateway_web_search_loops: loop.loops,
+        gateway_web_search_stop: loop.stopReason,
+        client_stream: Boolean(body.stream),
+      });
+      if (body.stream) {
+        streamFinalResponsesObject(clientRes, loop.response, requestedModel);
+      } else {
+        clientRes.writeHead(200, {
+          "Content-Type": "application/json; charset=utf-8",
+          "Access-Control-Allow-Origin": "*",
+        });
+        clientRes.end(JSON.stringify(loop.response));
+      }
+      return;
+    }
+
     const chatRequest = responsesRequestToChat(body, resolvedModel);
     let upstream = await fetchConfiguredOpenAI(
       route.provider,
@@ -1240,6 +1742,71 @@ async function forwardResolvedCodexResponse({
   }
 
   if (route?.provider?.type === "anthropic") {
+    if (injectedSearch.selected) {
+      const loop = await runGatewayWebSearchAnthropicLoop({
+        body: withoutStreamFlag(openAIResponsesToAnthropic(body, resolvedModel)),
+        selected: injectedSearch.selected,
+        maxLoops: gatewayWebSearchMaxLoops(),
+        signal,
+        onSearch: (event) => logInfo("gateway_web_search", {
+          request_id: context.requestId,
+          client: context.client,
+          chat_model: requestedModel || null,
+          ...event,
+        }),
+        fetchMessage: async (loopBody) => {
+          let upstream = await fetchConfiguredAnthropic(
+            route.provider,
+            { ...loopBody, stream: false },
+            clientReq,
+          );
+          upstream = await maybeRetryAfterImageError({
+            upstream,
+            originalBody: body,
+            route,
+            clientReq,
+            context,
+            fetchAgain: (retryBody) => fetchConfiguredAnthropic(
+              route.provider,
+              withoutStreamFlag(openAIResponsesToAnthropic(retryBody, resolvedModel)),
+              clientReq,
+            ),
+          });
+          if (!upstream.ok) {
+            await sendUpstreamError(upstream, clientRes);
+            return null;
+          }
+          return upstream.json();
+        },
+      });
+      if (!loop.message) return;
+      const payload = anthropicToOpenAIResponse(
+        loop.message,
+        requestedModel,
+        responseToolKinds,
+      );
+      logInfo("openai_responses_response", {
+        request_id: context.requestId,
+        client: context.client,
+        status: 200,
+        provider: route.provider.id || null,
+        translated_to: "anthropic_messages",
+        gateway_web_search_loops: loop.loops,
+        gateway_web_search_stop: loop.stopReason,
+        client_stream: Boolean(body.stream),
+      });
+      if (body.stream) {
+        streamFinalResponsesObject(clientRes, payload, requestedModel);
+      } else {
+        clientRes.writeHead(200, {
+          "Content-Type": "application/json; charset=utf-8",
+          "Access-Control-Allow-Origin": "*",
+        });
+        clientRes.end(JSON.stringify(payload));
+      }
+      return;
+    }
+
     let upstream = await fetchConfiguredAnthropic(
       route.provider,
       upstreamBody,
@@ -1288,6 +1855,78 @@ async function forwardResolvedCodexResponse({
         "Access-Control-Allow-Origin": "*",
       });
       clientRes.end(JSON.stringify(payload));
+    }
+    return;
+  }
+
+  // Third-party Responses: optional gateway-owned web_search loop.
+  // Internal rounds are non-stream; client stream receives only the final answer.
+  if (injectedSearch.selected && route?.provider) {
+    const loop = await runGatewayWebSearchResponsesLoop({
+      body: withoutStreamFlag(body),
+      selected: injectedSearch.selected,
+      maxLoops: gatewayWebSearchMaxLoops(),
+      signal,
+      onSearch: (event) => logInfo("gateway_web_search", {
+        request_id: context.requestId,
+        client: context.client,
+        chat_model: requestedModel || null,
+        ...event,
+      }),
+      fetchResponse: async (loopBody) => {
+        let upstream = await fetchConfiguredOpenAI(
+          route.provider,
+          "/responses",
+          { ...loopBody, model: resolvedModel, stream: false },
+          clientReq,
+          signal,
+          context.client !== "codex",
+        );
+        upstream = await maybeRetryAfterImageError({
+          upstream,
+          originalBody: loopBody,
+          route,
+          clientReq,
+          context,
+          fetchAgain: (retryBody) => fetchConfiguredOpenAI(
+            route.provider,
+            "/responses",
+            { ...retryBody, model: resolvedModel, stream: false },
+            clientReq,
+            signal,
+            context.client !== "codex",
+          ),
+        });
+        if (!upstream.ok) {
+          await sendUpstreamError(upstream, clientRes);
+          return null;
+        }
+        const contentType = upstream.headers.get("content-type") || "";
+        if (contentType.includes("text/event-stream")) {
+          return collectResponsesStream(upstream.body, requestedModel);
+        }
+        return upstream.json();
+      },
+    });
+    if (!loop.response) return;
+    logInfo("openai_responses_response", {
+      request_id: context.requestId,
+      client: context.client,
+      status: 200,
+      provider: route.provider.id || null,
+      translated_to: null,
+      gateway_web_search_loops: loop.loops,
+      gateway_web_search_stop: loop.stopReason,
+      client_stream: Boolean(body.stream),
+    });
+    if (body.stream) {
+      streamFinalResponsesObject(clientRes, loop.response, requestedModel);
+    } else {
+      clientRes.writeHead(200, {
+        "Content-Type": "application/json; charset=utf-8",
+        "Access-Control-Allow-Origin": "*",
+      });
+      clientRes.end(JSON.stringify(loop.response));
     }
     return;
   }
@@ -3820,7 +4459,7 @@ function resolveConfiguredModel(requestedModel, allowedTypes = [], client = null
   for (const c of clientsToCheck) {
     const allEndpoints = GATEWAY_CONFIG.clients?.[c]?.endpoints || [];
     const endpoints = allEndpoints.filter(ep =>
-      ep.purpose !== "vision_fallback" && hasConfiguredApiKey(ep)
+      ep.purpose !== "vision_fallback" && ep.purpose !== "web_search" && hasConfiguredApiKey(ep)
     );
     
     // Find the default endpoint first
@@ -4322,6 +4961,133 @@ async function streamAnthropicAsOpenAIResponse(
     clientRes.end();
   }
   logInfo("openai_responses_stream_complete", { request_id: requestId });
+}
+
+function responsesSseHeadersLocal() {
+  return {
+    "Content-Type": "text/event-stream; charset=utf-8",
+    "Cache-Control": "no-cache, no-transform",
+    Connection: "keep-alive",
+    "Access-Control-Allow-Origin": "*",
+  };
+}
+
+function streamFinalResponsesObject(clientRes, response, requestedModel) {
+  clientRes.writeHead(200, responsesSseHeadersLocal());
+  const writer = new ResponsesWriter({
+    model: requestedModel || response?.model || "custom-model",
+    responseId: response?.id || `resp_${Date.now()}`,
+    emit(event, payload) {
+      clientRes.write(`event: ${event}\n`);
+      clientRes.write(`data: ${JSON.stringify(payload)}\n\n`);
+    },
+  });
+  try {
+    writer.created();
+    const text = response?.output_text
+      || (Array.isArray(response?.output)
+        ? response.output
+          .filter((item) => item?.type === "message")
+          .flatMap((item) => item.content || [])
+          .filter((part) => part?.type === "output_text")
+          .map((part) => part.text || "")
+          .join("")
+        : "");
+    if (text) writer.textDelta(text);
+    writer.completed(response?.usage || {});
+  } catch (error) {
+    writer.failed({
+      code: error.code || "gateway_web_search_stream_error",
+      message: error.message || "Failed to stream final response.",
+    });
+  } finally {
+    clientRes.end();
+  }
+}
+
+function streamFinalChatCompletion(clientRes, completion, requestedModel) {
+  clientRes.writeHead(200, {
+    "Content-Type": "text/event-stream; charset=utf-8",
+    "Cache-Control": "no-cache, no-transform",
+    Connection: "keep-alive",
+    "Access-Control-Allow-Origin": "*",
+  });
+  const id = completion?.id || `chatcmpl_${Date.now()}`;
+  const created = completion?.created || Math.floor(Date.now() / 1000);
+  const model = requestedModel || completion?.model || "custom-model";
+  const message = completion?.choices?.[0]?.message || {};
+  const content = typeof message.content === "string" ? message.content : "";
+  writeOpenAISse(clientRes, {
+    id,
+    object: "chat.completion.chunk",
+    created,
+    model,
+    choices: [{ index: 0, delta: { role: "assistant" }, finish_reason: null }],
+  });
+  if (content) {
+    writeOpenAISse(clientRes, {
+      id,
+      object: "chat.completion.chunk",
+      created,
+      model,
+      choices: [{ index: 0, delta: { content }, finish_reason: null }],
+    });
+  }
+  writeOpenAISse(clientRes, {
+    id,
+    object: "chat.completion.chunk",
+    created,
+    model,
+    choices: [{ index: 0, delta: {}, finish_reason: "stop" }],
+  });
+  clientRes.write("data: [DONE]\n\n");
+  clientRes.end();
+}
+
+function streamFinalAnthropicMessage(clientRes, message, requestedModel) {
+  clientRes.writeHead(200, {
+    "Content-Type": "text/event-stream; charset=utf-8",
+    "Cache-Control": "no-cache, no-transform",
+    Connection: "keep-alive",
+    "Access-Control-Allow-Origin": "*",
+  });
+  const msg = {
+    id: message?.id || `msg_${Date.now()}`,
+    type: "message",
+    role: "assistant",
+    model: requestedModel || message?.model || "custom-model",
+    content: [],
+    stop_reason: null,
+    stop_sequence: null,
+    usage: message?.usage || { input_tokens: 0, output_tokens: 0 },
+  };
+  writeAnthropicSse(clientRes, "message_start", { type: "message_start", message: msg });
+  const text = Array.isArray(message?.content)
+    ? message.content.filter((b) => b?.type === "text").map((b) => b.text || "").join("")
+    : "";
+  if (text) {
+    writeAnthropicSse(clientRes, "content_block_start", {
+      type: "content_block_start",
+      index: 0,
+      content_block: { type: "text", text: "" },
+    });
+    writeAnthropicSse(clientRes, "content_block_delta", {
+      type: "content_block_delta",
+      index: 0,
+      delta: { type: "text_delta", text },
+    });
+    writeAnthropicSse(clientRes, "content_block_stop", {
+      type: "content_block_stop",
+      index: 0,
+    });
+  }
+  writeAnthropicSse(clientRes, "message_delta", {
+    type: "message_delta",
+    delta: { stop_reason: "end_turn", stop_sequence: null },
+    usage: { output_tokens: message?.usage?.output_tokens || 0 },
+  });
+  writeAnthropicSse(clientRes, "message_stop", { type: "message_stop" });
+  clientRes.end();
 }
 
 async function sendChatUpstreamAsResponses({
@@ -5675,7 +6441,7 @@ function reloadGatewayConfig({ reloadFiles = true } = {}) {
     ...(GATEWAY_CONFIG.clients?.desktop?.endpoints || []),
     ...(GATEWAY_CONFIG.clients?.claude?.endpoints || []),
     ...(GATEWAY_CONFIG.clients?.codex?.endpoints || [])
-  ].filter((endpoint) => endpoint?.purpose !== "vision_fallback");
+  ].filter((endpoint) => endpoint?.purpose !== "vision_fallback" && endpoint?.purpose !== "web_search");
   EXPOSED_MODELS = [...new Set(_endpoints.flatMap(ep => [
     ...(ep.models || []),
     ...Object.keys(ep.model_mapping || {})

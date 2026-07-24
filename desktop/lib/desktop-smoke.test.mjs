@@ -113,6 +113,8 @@ test("each client can add an ordinary configured vision fallback node", async ()
   assert.match(html, /addVisionFallbackEndpoint\('desktop'\)/);
   assert.match(html, /addVisionFallbackEndpoint\('codex'\)/);
   assert.match(html, /purpose:\s*'vision_fallback'/);
+  assert.match(html, /addWebSearchEndpoint/);
+  assert.match(html, /purpose:\s*'web_search'/);
   assert.match(html, /vision_fallback_enabled:\s*true/);
   assert.match(html, /视觉兜底模型/);
   assert.match(html, /vision_model/);
