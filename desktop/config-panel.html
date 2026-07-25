@@ -437,6 +437,14 @@
             outline-offset: 2px;
         }
 
+        .node-card.is-disabled {
+            opacity: 0.6;
+        }
+
+        .node-card.is-disabled:hover {
+            opacity: 0.85;
+        }
+
         .node-card-top {
             display: flex;
             justify-content: space-between;
@@ -1921,6 +1929,7 @@ experimental_bearer_token = "dummy"</pre>
             const isVisionFallback = ep.purpose === 'vision_fallback';
             const isWebSearch = ep.purpose === 'web_search';
             const isCapabilityNode = isVisionFallback || isWebSearch;
+            const isDisabled = ep.enabled === false;
             const name = escapeHtml(ep.name || `节点 ${index + 1}`);
             const type = escapeHtml(typeLabel(ep.type));
             const url = escapeHtml(shortUrl(ep.base_url));
@@ -1936,18 +1945,27 @@ experimental_bearer_token = "dummy"</pre>
             const defaultClass = ep.is_default ? 'node-card-action is-default' : 'node-card-action';
 
             return `
-                <div class="node-card" id="ep-${client}-${index}" role="button" tabindex="0"
+                <div class="node-card ${isDisabled ? 'is-disabled' : ''}" id="ep-${client}-${index}" role="button" tabindex="0"
                      onclick="openEndpoint('${client}', ${index})"
                      onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();openEndpoint('${client}', ${index});}">
                     <div class="node-card-top">
                         <div class="node-card-title">${name}</div>
                         <div class="node-card-actions" onclick="event.stopPropagation()">
-                            ${isCapabilityNode ? '' : `<label class="node-card-switch" title="${ep.expose_models ? '从模型列表隐藏此节点' : '在模型列表展示此节点'}">
+                            ${isCapabilityNode ? `<label class="node-card-switch" title="${(!isDisabled) ? '禁用此节点' : '启用此节点'}">
+                                <input type="checkbox" ${!isDisabled ? 'checked' : ''}
+                                    onchange="toggleEndpointEnabled(event, '${client}', ${index}, this)">
+                                <span class="node-card-switch-track" aria-hidden="true"></span>
+                            </label>` : `<label class="node-card-switch" title="${ep.expose_models ? '从模型列表隐藏此节点' : '在模型列表展示此节点'}">
                                 <input type="checkbox" ${ep.expose_models ? 'checked' : ''}
                                     onchange="toggleEndpointExposure(event, '${client}', ${index}, this)">
                                 <span class="node-card-switch-track" aria-hidden="true"></span>
                             </label>`}
-                            ${isCapabilityNode ? '' : `<button type="button" class="${defaultClass}" title="${defaultTitle}"
+                            ${isCapabilityNode ? (isWebSearch ? `<button type="button" class="${defaultClass}" title="${ep.is_default ? '当前默认联网搜索节点' : '设为默认联网搜索节点'}"
+                                onclick="event.stopPropagation(); setAsDefaultWebSearch('${client}', ${index})">
+                                <svg width="14" height="14" viewBox="0 0 24 24" fill="${ep.is_default ? 'currentColor' : 'none'}" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                                    <polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"></polygon>
+                                </svg>
+                            </button>` : '') : `<button type="button" class="${defaultClass}" title="${defaultTitle}"
                                 onclick="event.stopPropagation(); setAsDefault('${client}', ${index})">
                                 <svg width="14" height="14" viewBox="0 0 24 24" fill="${ep.is_default ? 'currentColor' : 'none'}" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
                                     <polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"></polygon>
@@ -1968,6 +1986,7 @@ experimental_bearer_token = "dummy"</pre>
                             ${isVisionFallback ? '<span class="badge badge-default">视觉兜底</span>' : ''}
                             ${isWebSearch ? '<span class="badge badge-default">联网搜索</span>' : ''}
                             ${ep.is_default ? '<span class="badge badge-default">默认</span>' : ''}
+                            ${isDisabled ? '<span class="badge" style="background: var(--input-bg); color: var(--text-secondary);">已禁用</span>' : ''}
                         </div>
                         <div class="node-card-row">
                             <span class="mono" title="${escapeHtml(isWebSearch ? (ep.provider || 'tavily') : (ep.base_url || ''))}">${isWebSearch ? escapeHtml(ep.provider || 'tavily') : url}</span>
@@ -1980,8 +1999,8 @@ experimental_bearer_token = "dummy"</pre>
                         </div>
                     </div>
                     <div class="node-card-footer">
-                        <span>${isWebSearch
-                            ? `${escapeHtml(ep.provider || 'tavily')}${ep.enabled === false ? ' · 已关闭' : ' · 已启用'}`
+                        <span>${isCapabilityNode
+                            ? `${escapeHtml(isWebSearch ? (ep.provider || 'tavily') : (ep.vision_model || '视觉兜底'))}${isDisabled ? ' · 已禁用' : ' · 已启用'}`
                             : `${models.length} 模型 · ${mappingCount} 映射`}</span>
                         <span class="node-card-cta">打开配置 →</span>
                     </div>
@@ -2736,6 +2755,24 @@ experimental_bearer_token = "dummy"</pre>
             });
             if (!saved) {
                 endpoint.expose_models = previous;
+                render();
+            }
+        }
+
+        window.toggleEndpointEnabled = async function(event, client, index, input) {
+            event.stopPropagation();
+            const endpoint = config.clients?.[client]?.endpoints?.[index];
+            if (!endpoint || !input) return;
+            const previous = endpoint.enabled !== false;
+            endpoint.enabled = input.checked;
+            render();
+            const saved = await saveConfig({
+                button: input,
+                client,
+                scope: 'enabled',
+            });
+            if (!saved) {
+                endpoint.enabled = previous;
                 render();
             }
         }
