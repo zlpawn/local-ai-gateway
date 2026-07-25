@@ -484,3 +484,20 @@ test("withoutStreamFlag forces non-stream internal rounds", () => {
   assert.equal(withoutStreamFlag({ stream: true, model: "glm-5.2" }).stream, false);
   assert.equal(withoutStreamFlag({ model: "glm-5.2" }).stream, false);
 });
+
+test("appendGatewayWebSearchResultsToResponsesBody generates custom_tool_call_output when original item is custom_tool_call", () => {
+  const body = { input: [] };
+  const response = {
+    output: [{ type: "custom_tool_call", id: "ctc_1", call_id: "call_1", name: "web_search", input: "{\"query\":\"test\"}" }],
+  };
+  const executedCalls = [{
+    call_id: "call_1",
+    output: "search result text",
+    item: { type: "custom_tool_call", id: "ctc_1", call_id: "call_1", name: "web_search" },
+  }];
+  const result = appendGatewayWebSearchResultsToResponsesBody(body, response, executedCalls);
+  const toolResultItem = result.input.find((i) => i.type === "custom_tool_call_output");
+  assert.ok(toolResultItem, "Should output item with type custom_tool_call_output");
+  assert.equal(toolResultItem.call_id, "call_1");
+  assert.equal(toolResultItem.output, "search result text");
+});

@@ -742,6 +742,7 @@ async function forwardAnthropicMessages(body, clientReq, clientRes, context) {
         body: chatBody,
         selected: injectedSearch.selected,
         maxLoops: gatewayWebSearchMaxLoops(),
+        signal,
         onSearch: (event) => logInfo("gateway_web_search", {
           request_id: context.requestId,
           client: context.client,
@@ -755,6 +756,8 @@ async function forwardAnthropicMessages(body, clientReq, clientRes, context) {
             "/v1/chat/completions",
             { ...loopBody, stream: false },
             clientReq,
+            signal,
+            context.client !== "codex",
           );
           upstream = await maybeRetryAfterImageError({
             upstream,
@@ -770,6 +773,8 @@ async function forwardAnthropicMessages(body, clientReq, clientRes, context) {
                 stream: false,
               },
               clientReq,
+              signal,
+              context.client !== "codex",
             ),
           });
           if (!upstream.ok) {
@@ -808,6 +813,7 @@ async function forwardAnthropicMessages(body, clientReq, clientRes, context) {
         body: withoutStreamFlag(body),
         selected: injectedSearch.selected,
         maxLoops: gatewayWebSearchMaxLoops(),
+        signal,
         onSearch: (event) => logInfo("gateway_web_search", {
           request_id: context.requestId,
           client: context.client,
@@ -820,6 +826,7 @@ async function forwardAnthropicMessages(body, clientReq, clientRes, context) {
             route.provider,
             { ...loopBody, model: route.model, stream: false },
             clientReq,
+            signal,
           );
           upstream = await maybeRetryAfterImageError({
             upstream,
@@ -831,6 +838,7 @@ async function forwardAnthropicMessages(body, clientReq, clientRes, context) {
               route.provider,
               { ...withoutStreamFlag(retryBody), model: route.model, stream: false },
               clientReq,
+              signal,
             ),
           });
           if (!upstream.ok) {
@@ -1050,6 +1058,7 @@ async function forwardOpenAIChatCompletions(body, clientReq, clientRes, context)
         body: withoutStreamFlag({ ...body, model: resolvedModel }),
         selected: injectedSearch.selected,
         maxLoops: gatewayWebSearchMaxLoops(),
+        signal,
         onSearch: (event) => logInfo("gateway_web_search", {
           request_id: context.requestId,
           client: context.client,
@@ -1063,6 +1072,8 @@ async function forwardOpenAIChatCompletions(body, clientReq, clientRes, context)
             "/v1/chat/completions",
             { ...loopBody, model: resolvedModel, stream: false },
             clientReq,
+            signal,
+            context.client !== "codex",
           );
           upstream = await maybeRetryAfterImageError({
             upstream,
@@ -1075,6 +1086,8 @@ async function forwardOpenAIChatCompletions(body, clientReq, clientRes, context)
               "/v1/chat/completions",
               { ...withoutStreamFlag(retryBody), model: resolvedModel, stream: false },
               clientReq,
+              signal,
+              context.client !== "codex",
             ),
           });
           if (!upstream.ok) {
@@ -1112,6 +1125,7 @@ async function forwardOpenAIChatCompletions(body, clientReq, clientRes, context)
         body: withoutStreamFlag(openAIChatToAnthropic(body, resolvedModel)),
         selected: injectedSearch.selected,
         maxLoops: gatewayWebSearchMaxLoops(),
+        signal,
         onSearch: (event) => logInfo("gateway_web_search", {
           request_id: context.requestId,
           client: context.client,
@@ -1124,6 +1138,7 @@ async function forwardOpenAIChatCompletions(body, clientReq, clientRes, context)
             route.provider,
             { ...loopBody, stream: false },
             clientReq,
+            signal,
           );
           upstream = await maybeRetryAfterImageError({
             upstream,
@@ -1135,6 +1150,7 @@ async function forwardOpenAIChatCompletions(body, clientReq, clientRes, context)
               route.provider,
               withoutStreamFlag(openAIChatToAnthropic(retryBody, resolvedModel)),
               clientReq,
+              signal,
             ),
           });
           if (!upstream.ok) {
@@ -1173,6 +1189,7 @@ async function forwardOpenAIChatCompletions(body, clientReq, clientRes, context)
         body: withoutStreamFlag(openAIChatCompletionsToResponses(body, resolvedModel)),
         selected: injectedSearch.selected,
         maxLoops: gatewayWebSearchMaxLoops(),
+        signal,
         onSearch: (event) => logInfo("gateway_web_search", {
           request_id: context.requestId,
           client: context.client,
@@ -1186,6 +1203,8 @@ async function forwardOpenAIChatCompletions(body, clientReq, clientRes, context)
             "/responses",
             { ...loopBody, model: resolvedModel, stream: false },
             clientReq,
+            signal,
+            context.client !== "codex",
           );
           upstream = await maybeRetryAfterImageError({
             upstream,
@@ -1198,6 +1217,8 @@ async function forwardOpenAIChatCompletions(body, clientReq, clientRes, context)
               "/responses",
               withoutStreamFlag(openAIChatCompletionsToResponses(retryBody, resolvedModel)),
               clientReq,
+              signal,
+              context.client !== "codex",
             ),
           });
           if (!upstream.ok) {
@@ -1759,6 +1780,7 @@ async function forwardResolvedCodexResponse({
             route.provider,
             { ...loopBody, stream: false },
             clientReq,
+            signal,
           );
           upstream = await maybeRetryAfterImageError({
             upstream,
@@ -1770,6 +1792,7 @@ async function forwardResolvedCodexResponse({
               route.provider,
               withoutStreamFlag(openAIResponsesToAnthropic(retryBody, resolvedModel)),
               clientReq,
+              signal,
             ),
           });
           if (!upstream.ok) {
@@ -5387,6 +5410,16 @@ function responsesSseHeaders() {
 }
 
 async function sendUpstreamError(upstream, clientRes) {
+  if (clientRes.headersSent) {
+    try {
+      const errText = await upstream.text();
+      clientRes.write(`\n\nevent: error\ndata: ${JSON.stringify({ error: errText })}\n\n`);
+    } catch {
+      // ignore socket write errors
+    }
+    clientRes.end();
+    return;
+  }
   clientRes.writeHead(upstream.status, responseHeaders(upstream.headers));
   clientRes.end(await upstream.text());
 }

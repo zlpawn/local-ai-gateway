@@ -123,6 +123,25 @@
     "codex": {
       "endpoints": [
         {
+          "id": "ep_bb7bce83-60f5-402f-abc4-0546081f65cf",
+          "name": "联网搜索节点",
+          "purpose": "web_search",
+          "provider": "tavily",
+          "enabled": true,
+          "is_default": true,
+          "auth": "bearer",
+          "options": {
+            "search_depth": "basic",
+            "max_results": 5,
+            "topic": "general",
+            "include_answer": false,
+            "include_raw_content": false,
+            "country": "china"
+          },
+          "models": [],
+          "model_mapping": {}
+        },
+        {
           "id": "ep_e679b525-ab58-452f-912c-179efd2e8865",
           "name": "视觉兜底节点",
           "purpose": "vision_fallback",
@@ -202,21 +221,5 @@
         }
       ]
     }
-  },
-  "sessionSync": {
-    "enabled": false,
-    "targets": {
-      "antigravity": false,
-      "claude": false,
-      "codex": false
-    },
-    "grokImagineTargets": {
-      "antigravity": false,
-      "claude": false,
-      "codex": false
-    },
-    "dateRange": null,
-    "summaryMode": "rule",
-    "summaryModel": "grok-4.5"
   }
 }
