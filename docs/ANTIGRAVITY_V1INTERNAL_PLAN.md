@@ -360,7 +360,7 @@ gateway 对接点:
 |---|---|---|---|---|
 | 0 - 准备 | 已完成 | 方案文档、worktree、分支 `feat/antigravity-v1internal` | commit 1e78a59 已 push | main 已合并(c95db7c),desktop 已废弃 |
 | 1 - OAuth 与 token | 已完成(代码) | lib/antigravity/: constants.mjs, token-store.mjs, oauth.mjs, oauth-callback-server.mjs, cli.mjs, index.mjs;gateway-service.mjs 接入 antigravity 子命令;.gitignore 加 antigravity.secrets.json | token-store 8 测试 + cli 3 测试全过;全量 node --check 通过 | 端到端 OAuth 登录验证待用户填 client_id/secret 后执行 `local-ai-gateway antigravity login`;sessionId 算法修正见下 |
-| 2 - 单次 generateContent | 未开始 | | | |
+| 2 - 单次 generateContent | 已完成(代码) | lib/antigravity/: session-id.mjs(64位 FNV,BigInt)、upstream.mjs(call_v1_internal/loadCodeAssist/generateContent/streamGenerateContent,端点 fallback+403降级+完整指纹 headers)、request-builder.mjs(Phase 2 最小版,单轮文本无 tools/identity) | session-id 4 测试(含空串=offset basis 精确 vector)+ upstream 8 测试全过;全部 23 测试通过;全量 node --check 干净 | generateContent 端到端验证待 Phase 3(需 17.5K antigravity identity systemInstruction,无 identity 可能被 Google 拒);loadCodeAssist 端到端验证待用户 login 后执行 |
 | 3 - 流式与转换 | 未开始 | | | |
 | 4 - 路由与目录 | 未开始 | | | |
 | 5 - 测试与健壮性 | 未开始 | | | |
@@ -369,4 +369,4 @@ gateway 对接点:
 >
 > sessionId 算法修正(Phase 2 用):AG `proxy/common/session.rs` 实为 **64 位 FNV**,非 32 位 hex。offset basis `0xCBF29CE484222325`(i64 有符号 `-3750763034362895579`),prime `1099511628211`,每字节先 `wrapping_mul` 后 `xor`,输出十进制有符号字符串。第 5/8 节的"FNV-1a / fnv1a-hex"描述待 Phase 2 实现时更正。
 >
-当前接力起点:**Phase 2**(session-id + upstream loadCodeAssist + 单次 generateContent)。
+当前接力起点:**Phase 3**(request-builder 完整版:systemInstruction identity 注入 + tools/contents 映射;response-streamer:SSE 转换)。Phase 2 端到端验证(loadCodeAssist + generateContent)需用户先 `local-ai-gateway antigravity login` 拿 token,可在 Phase 3 完成后一起验证。
