@@ -2256,6 +2256,16 @@ experimental_bearer_token = "dummy"</pre>
                 xtermFit = new FitAddon.FitAddon();
                 xtermTerm.loadAddon(xtermFit);
                 xtermTerm.open(document.getElementById('xterm-container'));
+                // Wheel boundary passthrough: let xterm scroll its own buffer, but when the
+                // viewport is at the top/bottom of the scrollback, release the wheel to the
+                // page so the browser scrolls instead of fighting the terminal.
+                const xtermHost = document.getElementById('xterm-container');
+                xtermHost.addEventListener('wheel', function(e) {
+                    const buf = xtermTerm.buffer.active;
+                    const atTop = buf.viewportY <= 0;
+                    const atBottom = buf.viewportY >= buf.baseY;
+                    if ((e.deltaY < 0 && atTop) || (e.deltaY > 0 && atBottom)) e.stopImmediatePropagation();
+                }, { capture: true, passive: true });
                 xtermTerm.onData(function(d) {
                     if (currentInstallWs && currentInstallWs.readyState === 1) currentInstallWs.send(d);
                 });
