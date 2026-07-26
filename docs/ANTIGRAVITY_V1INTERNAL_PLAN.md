@@ -184,22 +184,25 @@ Headers:
 ```
 {
   request: {
-    systemInstruction: { parts: [{ text }] },      // instructions + antigravity identity(~17.5K)
+    systemInstruction: { role:"user", parts:[{text:identity},{text:instructions}] },  // 短 identity stub(~330字符) + 保留的 Codex instructions
     tools: { functionDeclarations: [...] },         // Codex tools 扁平化 + 按 name 排序
     toolConfig: { ... },
     generationConfig: { temperature, maxOutputTokens, topP, thinkingConfig: { thinkingBudget } },
-    sessionId: 'fnv1a-hex',                         // FNV-1a(account_id)
+    sessionId: '<64位FNV十进制有符号串>',                  // FNV-64(account_id),见 session-id.mjs
     contents: [ { role, parts } ]                   // Codex input[] 映射
   },
   project: 'cloudaicompanion-project-id',
-  userAgent: 'antigravity',                         // 动态仿真,见 wrapper.rs:780
-  requestId: '<uuid>'
+  model: 'gemini-3-pro',
+  userAgent: 'antigravity',
+  requestType: 'agent',
+  requestId: 'agent/antigravity/<sid前8位>/<消息数>',
+  enabledCreditTypes: ['GOOGLE_ONE_AI']
 }
 ```
 
 字段映射(`request_transform.md`):
 
-- Codex `instructions` -> sanitize(清动态值)-> + antigravity identity -> `systemInstruction.parts[].text`
+- Codex `instructions` -> 原样保留(不 sanitize,对齐 AG openai/request.rs:1102)-> 前置 antigravity identity -> `systemInstruction.parts[].text`
 - Codex `input[]` message -> `contents[role=user/model].parts[text / inlineData]`
 - Codex `function_call` -> `contents[role=model].parts[functionCall:{name,args,id}]`
 - Codex `function_call_output` -> `contents[role=user].parts[functionResponse:{name,response,id}]`
@@ -207,7 +210,7 @@ Headers:
 - `temperature` / `max_tokens` / `top_p` -> `generationConfig`
 - `thinking` -> `generationConfig.thinkingConfig.thinkingBudget`
 
-systemInstruction 中的 antigravity identity:从 AG `wrapper.rs` 提取,逐字复刻(约 17.5K tokens)。这是请求被 Google 后端识别为 Antigravity 的关键,必须 1:1,缺一字段即被拒或行为异常。抽成 `system-prompt.mjs` 常量。
+antigravity identity(修正):AG `wrapper.rs:694-702` 实为**短 stub**(~330字符,4行:"You are Antigravity...**Proactiveness**"),**非 17.5K**。所谓"~17,500 tokens"是 AG `openai/request.rs:1240` 对**组装后 systemInstruction 整块**(identity + 保留的调用方 instructions)规模的描述,以调用方 instructions 为主。Codex `instructions` 按 `openai/request.rs:1102` 逐字保留,不覆盖不摘要。identity 抽成 `system-prompt.mjs` 常量,与 `wrapper.rs` 1:1。
 
 参考:AG `src-tauri/src/proxy/mappers/gemini/wrapper.rs`、`request_transform.md`、`proxy/common/session.rs`(derive_session_id)。
 
@@ -360,13 +363,17 @@ gateway 对接点:
 |---|---|---|---|---|
 | 0 - 准备 | 已完成 | 方案文档、worktree、分支 `feat/antigravity-v1internal` | commit 1e78a59 已 push | main 已合并(c95db7c),desktop 已废弃 |
 | 1 - OAuth 与 token | 已完成(代码) | lib/antigravity/: constants.mjs, token-store.mjs, oauth.mjs, oauth-callback-server.mjs, cli.mjs, index.mjs;gateway-service.mjs 接入 antigravity 子命令;.gitignore 加 antigravity.secrets.json | token-store 8 测试 + cli 3 测试全过;全量 node --check 通过 | 端到端 OAuth 登录验证待用户填 client_id/secret 后执行 `local-ai-gateway antigravity login`;sessionId 算法修正见下 |
-| 2 - 单次 generateContent | 已完成(代码) | lib/antigravity/: session-id.mjs(64位 FNV,BigInt)、upstream.mjs(call_v1_internal/loadCodeAssist/generateContent/streamGenerateContent,端点 fallback+403降级+完整指纹 headers)、request-builder.mjs(Phase 2 最小版,单轮文本无 tools/identity) | session-id 4 测试(含空串=offset basis 精确 vector)+ upstream 8 测试全过;全部 23 测试通过;全量 node --check 干净 | generateContent 端到端验证待 Phase 3(需 17.5K antigravity identity systemInstruction,无 identity 可能被 Google 拒);loadCodeAssist 端到端验证待用户 login 后执行 |
-| 3 - 流式与转换 | 未开始 | | | |
+| 2 - 单次 generateContent | 已完成(代码) | lib/antigravity/: session-id.mjs(64位 FNV,BigInt)、upstream.mjs(call_v1_internal/loadCodeAssist/generateContent/streamGenerateContent,端点 fallback+403降级+完整指纹 headers)、request-builder.mjs(Phase 2 最小版,单轮文本无 tools/identity) | session-id 4 测试(含空串=offset basis 精确 vector)+ upstream 8 测试全过;全部 23 测试通过;全量 node --check 干净 | generateContent 端到端验证待 Phase 4 路由打通(identity 已在 Phase 3 修正为短 stub,见下);loadCodeAssist 端到端验证待用户 login 后执行 |
+| 3 - 流式与转换 | 已完成(代码) | lib/antigravity/: system-prompt.mjs(antigravity identity 短 stub 1:1)、request-builder.mjs 完整版(instructions 保留+identity 前置、input[]->contents 角色映射、function_call/output->functionCall/Response 含 call_id->name 预扫描、tools->functionDeclarations 排序、generationConfig 映射、外层 project/model/userAgent/requestType/requestId/enabledCreditTypes、内层字段顺序稳定前缀在前)、response-streamer.mjs(v1internal SSE 解 response 包裹->Codex responses 事件,复用 ResponsesWriter);index.mjs 导出更新 | system-prompt 3 测试 + request-builder 10 测试 + response-streamer 5 测试全过;全部 41 antigravity 测试通过;全量 165 测试通过;全量 node --check 干净 | **关键修正见下**:identity 非 17.5K,实为 ~330 字符 stub;端到端验证待 Phase 4 路由打通后连同 loadCodeAssist+generateContent 一起验证(需用户 login) |
 | 4 - 路由与目录 | 未开始 | | | |
 | 5 - 测试与健壮性 | 未开始 | | | |
 
 > Phase 1 偏离记录:方案原写"验证 token 调通 loadCodeAssist",实际 Phase 1 用 getUserInfo 验证 token 有效(更轻量);loadCodeAssist 完整实现移到 Phase 2(随 upstream 一起)。
 >
-> sessionId 算法修正(Phase 2 用):AG `proxy/common/session.rs` 实为 **64 位 FNV**,非 32 位 hex。offset basis `0xCBF29CE484222325`(i64 有符号 `-3750763034362895579`),prime `1099511628211`,每字节先 `wrapping_mul` 后 `xor`,输出十进制有符号字符串。第 5/8 节的"FNV-1a / fnv1a-hex"描述待 Phase 2 实现时更正。
+> sessionId 算法修正(Phase 2 已落实):AG `proxy/common/session.rs` 实为 **64 位 FNV**,非 32 位 hex。offset basis `0xCBF29CE484222325`(i64 有符号 `-3750763034362895579`),prime `1099511628211`,每字节先 `wrapping_mul` 后 `xor`,输出十进制有符号字符串。第 5/8 节的"FNV-1a / fnv1a-hex"描述已在 Phase 3 更正。
 >
-当前接力起点:**Phase 3**(request-builder 完整版:systemInstruction identity 注入 + tools/contents 映射;response-streamer:SSE 转换)。Phase 2 端到端验证(loadCodeAssist + generateContent)需用户先 `local-ai-gateway antigravity login` 拿 token,可在 Phase 3 完成后一起验证。
+> Phase 3 偏离记录(重要):方案原称 antigravity identity "~17.5K tokens,必须 1:1",经核实 **AG `wrapper.rs:694-702` 实为 ~330 字符短 stub**(4 行:"You are Antigravity...**Proactiveness**")。所谓 ~17,500 tokens 是 AG `openai/request.rs:1240` 对**组装后 systemInstruction 整块**(identity + 保留的调用方 instructions)规模的描述,以调用方 instructions 为主。Codex `instructions` 按 `openai/request.rs:1102` 逐字保留、不覆盖不摘要。本阶段 identity 抽成 `system-prompt.mjs` 与 wrapper.rs 1:1。
+>
+> Phase 3 其他实现决策:(1) 模型/工具名保持原样,**未**做 AG 的 `local_shell_call`->`shell` 重命名(我们同时控制声明与调用,名称一致即可;如 Google 后端要求保留名,Phase 5 再加);(2) thinking 签名(thoughtSignature)暂不注入,仅当 Codex 显式带 `thinking.budget_tokens` 时设 `thinkingConfig.thinkingBudget`;gemini-3 thinking 模型的 functionCall 签名需求留待 Phase 5;(3) response-streamer 假设 functionCall 在单帧内完整(Gemini 常见行为),跨帧分片累积留待 Phase 5;(4) requestId 用 AG `openai/request.rs:1253` 格式 `agent/antigravity/<sid前8位>/<消息数>`(非 wrapper.rs 的 `agent/<ts>/<hex>`,因输入是 Codex/OpenAI 形态)。
+>
+当前接力起点:**Phase 4**(server.js 路由 + 模型目录集成)。端到端验证(loadCodeAssist + generateContent + 流式)需用户先 `local-ai-gateway antigravity login` 拿 token,Phase 4 路由打通后可一起验证(测试用 8789 端口)。
