@@ -1,4 +1,4 @@
-﻿# Antigravity v1internal 上游集成技术方案
+# Antigravity v1internal 上游集成技术方案
 
 > 分支:`feat/antigravity-v1internal`  worktree:`.worktrees/antigravity-v1internal`
 > 目标读者:负责实施的模型 / 工程师。本文提供架构、模块契约、关键实现值与实施步骤,可直接照做。
@@ -359,10 +359,14 @@ gateway 对接点:
 | Phase | 状态 | 完成内容 | 验证 | 备注 |
 |---|---|---|---|---|
 | 0 - 准备 | 已完成 | 方案文档、worktree、分支 `feat/antigravity-v1internal` | commit 1e78a59 已 push | main 已合并(c95db7c),desktop 已废弃 |
-| 1 - OAuth 与 token | 进行中 | | | 起点:lib/antigravity/ 的 OAuth + token-store + session-id + CLI login |
+| 1 - OAuth 与 token | 已完成(代码) | lib/antigravity/: constants.mjs, token-store.mjs, oauth.mjs, oauth-callback-server.mjs, cli.mjs, index.mjs;gateway-service.mjs 接入 antigravity 子命令;.gitignore 加 antigravity.secrets.json | token-store 8 测试 + cli 3 测试全过;全量 node --check 通过 | 端到端 OAuth 登录验证待用户填 client_id/secret 后执行 `local-ai-gateway antigravity login`;sessionId 算法修正见下 |
 | 2 - 单次 generateContent | 未开始 | | | |
 | 3 - 流式与转换 | 未开始 | | | |
 | 4 - 路由与目录 | 未开始 | | | |
 | 5 - 测试与健壮性 | 未开始 | | | |
 
-当前接力起点:**Phase 1**。
+> Phase 1 偏离记录:方案原写"验证 token 调通 loadCodeAssist",实际 Phase 1 用 getUserInfo 验证 token 有效(更轻量);loadCodeAssist 完整实现移到 Phase 2(随 upstream 一起)。
+>
+> sessionId 算法修正(Phase 2 用):AG `proxy/common/session.rs` 实为 **64 位 FNV**,非 32 位 hex。offset basis `0xCBF29CE484222325`(i64 有符号 `-3750763034362895579`),prime `1099511628211`,每字节先 `wrapping_mul` 后 `xor`,输出十进制有符号字符串。第 5/8 节的"FNV-1a / fnv1a-hex"描述待 Phase 2 实现时更正。
+>
+当前接力起点:**Phase 2**(session-id + upstream loadCodeAssist + 单次 generateContent)。
