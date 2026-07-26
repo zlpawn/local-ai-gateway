@@ -2,6 +2,7 @@
 
 > 分支:`feat/antigravity-v1internal`  worktree:`.worktrees/antigravity-v1internal`
 > 目标读者:负责实施的模型 / 工程师。本文提供架构、模块契约、关键实现值与实施步骤,可直接照做。
+> 接力执行:先读第 17 节(协作约定)与第 18 节(实施进度),确认当前 Phase 后从下一阶段继续。
 
 ## 1. 目标
 
@@ -326,3 +327,29 @@ gateway 对接点:
 - cloudaicompanionProject 示例:`concrete-vortex-1jlsj`(实际值由 `loadCodeAssist` 返回)
 - 本机 Antigravity language_server 端口 6046/6045:本方案不依赖,仅背景
 - Antigravity 应用自带的 token 在 Windows Credential Manager `gemini:antigravity`:本方案用独立 `token_path` 存储,互不冲突
+## 17. 协作与接力约定
+
+本方案支持多模型接力实施,遵循以下约定:
+
+1. 分支隔离:所有代码改动只在 `feat/antigravity-v1internal` 分支进行,不修改 `main`,不向 `main` 合并或推送(除非用户明确指示)。worktree 路径 `.worktrees/antigravity-v1internal`。
+
+2. 阶段同步:每完成一个 Phase(见第 13 节),执行者必须更新第 18 节"实施进度",记录:新增/修改文件清单、验证结果、偏离方案的设计决策与原因、下一阶段起点与注意事项;随后 commit + push 到当前分支。
+
+3. 接力执行:新模型接手时,先读第 17、18 节,确认当前 Phase 与已完成内容,从下一 Phase 继续,不重做已完成阶段。
+
+4. commit 规范:每个 Phase 提交信息以 `phase N:` 开头,便于追溯。
+
+5. 遵守隔离:接力实施仍须遵守第 2.1 节,对 server.js 等既有文件只做增量分支式扩展。
+
+## 18. 实施进度
+
+| Phase | 状态 | 完成内容 | 验证 | 备注 |
+|---|---|---|---|---|
+| 0 - 准备 | 已完成 | 方案文档、worktree、分支 `feat/antigravity-v1internal` | commit 1e78a59 已 push | main 已合并(c95db7c),desktop 已废弃 |
+| 1 - OAuth 与 token | 进行中 | | | 起点:lib/antigravity/ 的 OAuth + token-store + session-id + CLI login |
+| 2 - 单次 generateContent | 未开始 | | | |
+| 3 - 流式与转换 | 未开始 | | | |
+| 4 - 路由与目录 | 未开始 | | | |
+| 5 - 测试与健壮性 | 未开始 | | | |
+
+当前接力起点:**Phase 1**。
