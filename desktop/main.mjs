@@ -1,3 +1,14 @@
+/**
+ * @deprecated Electron desktop shell.
+ *
+ * The Electron app is a thin host that starts the local gateway and loads the
+ * shared web config page at /config. New work should target the web UI and
+ * CLI (npm start / local-ai-gateway), not this shell.
+ *
+ * Planned removal: after the web-only workflow is the documented default.
+ * Do not remove desktop/config-panel.html, clients.desktop, or /desktop
+ * routing as part of retiring this shell.
+ */
 import { app, BrowserWindow, dialog } from "electron";
 import fs from "node:fs/promises";
 import fsSync from "node:fs";

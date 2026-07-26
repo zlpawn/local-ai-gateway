@@ -1,3 +1,9 @@
+/**
+ * @deprecated Electron shell tests.
+ *
+ * These cover the Electron host and packaging helpers. Web config coverage
+ * should live outside this shell once removal begins.
+ */
 import test from "node:test";
 import assert from "node:assert/strict";
 import { readFile } from "node:fs/promises";

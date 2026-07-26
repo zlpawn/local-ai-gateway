@@ -1,3 +1,9 @@
+/**
+ * @deprecated Electron shell helper.
+ *
+ * Process helpers used only by the Electron desktop app. Prefer
+ * lib/cli/gateway-service.mjs and the web config page for ongoing work.
+ */
 import { spawn } from "node:child_process";
 import fs from "node:fs/promises";
 import fsSync from "node:fs";

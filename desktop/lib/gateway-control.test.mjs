@@ -1,3 +1,8 @@
+/**
+ * @deprecated Electron shell helper tests.
+ *
+ * Process-control tests for the Electron host only.
+ */
 import test from "node:test";
 import assert from "node:assert/strict";
 import fs from "node:fs/promises";

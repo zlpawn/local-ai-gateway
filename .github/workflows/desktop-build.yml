@@ -1,3 +1,7 @@
+# DEPRECATED: Electron desktop shell build workflow.
+# Prefer the web config page (/config) and CLI for new work.
+# Do not treat this workflow as the primary release path while the shell is being retired.
+
 name: Desktop Build
 
 on:

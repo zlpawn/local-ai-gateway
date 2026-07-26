@@ -1,3 +1,9 @@
+/**
+ * @deprecated Electron shell smoke helper.
+ *
+ * Packaged Electron smoke coverage only. Keep web config tests separate when
+ * the Electron shell is removed.
+ */
 import { spawn } from "node:child_process";
 import fs from "node:fs";
 import net from "node:net";

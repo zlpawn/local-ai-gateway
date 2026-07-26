@@ -1,3 +1,9 @@
+/**
+ * @deprecated Electron shell smoke entrypoint.
+ *
+ * Runs packaged Electron smoke coverage only. Prefer web/CLI checks for the
+ * supported runtime path.
+ */
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 
