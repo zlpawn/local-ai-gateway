@@ -424,11 +424,29 @@ function collectGroupedModelsFromConfig(config) {
   if (reqPath === "/v1/sync/status" && req.method === "GET") {
     if (!checkLocalAuth(req, res)) return;
     const daemonStatus = globalWatcherDaemon ? globalWatcherDaemon.status() : { isRunning: false };
+    const sessionTargets = {
+      antigravity: GATEWAY_CONFIG.sessionSync?.targets?.antigravity ?? false,
+      claude: GATEWAY_CONFIG.sessionSync?.targets?.claude ?? false,
+      codex: GATEWAY_CONFIG.sessionSync?.targets?.codex ?? false,
+    };
+    const grokImagineTargets = {
+      antigravity: GATEWAY_CONFIG.sessionSync?.grokImagineTargets?.antigravity ?? false,
+      claude: GATEWAY_CONFIG.sessionSync?.grokImagineTargets?.claude ?? false,
+      codex: GATEWAY_CONFIG.sessionSync?.grokImagineTargets?.codex ?? false,
+    };
+    const skillMounts = {
+      ...(GATEWAY_CONFIG.sessionSync?.skillMounts || {}),
+      "session-sync": sessionTargets,
+      "grok-imagine": grokImagineTargets,
+    };
     const symlinkStatus = SkillInstaller.getSymlinkStatus(os.homedir(), "session-sync");
     const grokImagineSymlinkStatus = SkillInstaller.getSymlinkStatus(os.homedir(), "grok-imagine");
     const isCentralInstalled = SkillInstaller.isInstalled("session-sync");
     const isGrokImagineInstalled = SkillInstaller.isInstalled("grok-imagine");
     const groupedModels = collectGroupedModelsFromConfig(GATEWAY_CONFIG);
+    const skillLibrary = SkillInstaller.buildLibrarySnapshot({
+      mounts: skillMounts,
+    });
     sendJson(res, 200, {
       success: true,
       enabled: Boolean(GATEWAY_CONFIG.sessionSync?.enabled),
@@ -438,22 +456,16 @@ function collectGroupedModelsFromConfig(config) {
       centralSkillFile: SkillInstaller.getCentralSkillFile("session-sync"),
       grokImagineSkillFile: SkillInstaller.getCentralSkillFile("grok-imagine"),
       dateRange: GATEWAY_CONFIG.sessionSync?.dateRange || null,
-      summaryMode: GATEWAY_CONFIG.sessionSync?.summaryMode || 'rule',
-      summaryModel: GATEWAY_CONFIG.sessionSync?.summaryModel || '',
+      summaryMode: GATEWAY_CONFIG.sessionSync?.summaryMode || "rule",
+      summaryModel: GATEWAY_CONFIG.sessionSync?.summaryModel || "",
       availableModels: EXPOSED_MODELS,
       groupedModels,
       symlinks: symlinkStatus,
       grokImagineSymlinks: grokImagineSymlinkStatus,
-      targets: {
-        antigravity: GATEWAY_CONFIG.sessionSync?.targets?.antigravity ?? false,
-        claude: GATEWAY_CONFIG.sessionSync?.targets?.claude ?? false,
-        codex: GATEWAY_CONFIG.sessionSync?.targets?.codex ?? false
-      },
-      grokImagineTargets: {
-        antigravity: GATEWAY_CONFIG.sessionSync?.grokImagineTargets?.antigravity ?? false,
-        claude: GATEWAY_CONFIG.sessionSync?.grokImagineTargets?.claude ?? false,
-        codex: GATEWAY_CONFIG.sessionSync?.grokImagineTargets?.codex ?? false
-      }
+      targets: sessionTargets,
+      grokImagineTargets,
+      skillMounts,
+      skillLibrary,
     });
     return;
   }
@@ -463,21 +475,32 @@ function collectGroupedModelsFromConfig(config) {
     try {
       const payload = JSON.parse(await readText(req));
       const enabled = Boolean(payload.enabled);
-      const targets = {
-        antigravity: Boolean(payload.targets?.antigravity),
-        claude: Boolean(payload.targets?.claude),
-        codex: Boolean(payload.targets?.codex)
-      };
-      const grokImagineTargets = {
-        antigravity: Boolean(payload.grokImagineTargets?.antigravity),
-        claude: Boolean(payload.grokImagineTargets?.claude),
-        codex: Boolean(payload.grokImagineTargets?.codex)
+      const targets = SkillInstaller.normalizeToolMap(payload.targets);
+      const grokImagineTargets = SkillInstaller.normalizeToolMap(payload.grokImagineTargets);
+      const incomingSkillMounts = payload.skillMounts && typeof payload.skillMounts === "object"
+        ? payload.skillMounts
+        : {};
+      const skillMounts = {
+        ...(GATEWAY_CONFIG.sessionSync?.skillMounts || {}),
+        ...Object.fromEntries(
+          Object.entries(incomingSkillMounts).map(([name, value]) => [name, SkillInstaller.normalizeToolMap(value)]),
+        ),
+        "session-sync": targets,
+        "grok-imagine": grokImagineTargets,
       };
       const dateRange = payload.dateRange || null;
-      const summaryMode = payload.summaryMode || 'rule';
-      const summaryModel = payload.summaryModel || '';
+      const summaryMode = payload.summaryMode || "rule";
+      const summaryModel = payload.summaryModel || "";
 
-      GATEWAY_CONFIG.sessionSync = { enabled, targets, grokImagineTargets, dateRange, summaryMode, summaryModel };
+      GATEWAY_CONFIG.sessionSync = {
+        enabled,
+        targets,
+        grokImagineTargets,
+        skillMounts,
+        dateRange,
+        summaryMode,
+        summaryModel,
+      };
       saveGatewayState({
         configPath: GATEWAY_CONFIG_FILE,
         secretsPath: GATEWAY_SECRETS_FILE,
@@ -485,25 +508,36 @@ function collectGroupedModelsFromConfig(config) {
         officialCodexIds: OFFICIAL_CODEX_MODEL_IDS,
       });
 
-      // Always process Grok Imagine Skill symlinks according to user selection
-      SkillInstaller.installBaseSkill(SkillInstaller.getCentralSkillDir("grok-imagine"), "grok-imagine");
-      SkillInstaller.updateSymlinks(grokImagineTargets, os.homedir(), null, "grok-imagine");
+      // Materialize managed skills and apply mount map.
+      SkillInstaller.ensureManagedSkills();
+      for (const [skillName, mountTargets] of Object.entries(skillMounts)) {
+        if (skillName === "session-sync" && !enabled) {
+          SkillInstaller.updateSymlinks(
+            { antigravity: false, claude: false, codex: false },
+            os.homedir(),
+            null,
+            skillName,
+          );
+          continue;
+        }
+        SkillInstaller.updateSymlinks(mountTargets, os.homedir(), null, skillName);
+      }
 
       if (enabled) {
-        SkillInstaller.installBaseSkill(SkillInstaller.getCentralSkillDir("session-sync"), "session-sync");
-        SkillInstaller.updateSymlinks(targets, os.homedir(), null, "session-sync");
         if (!globalWatcherDaemon) {
-          globalWatcherDaemon = new SessionWatcherDaemon({ dateRange, summaryMode, summaryModel, listenPort: LISTEN_PORT });
+          globalWatcherDaemon = new SessionWatcherDaemon({
+            dateRange,
+            summaryMode,
+            summaryModel,
+            listenPort: LISTEN_PORT,
+          });
         } else {
           globalWatcherDaemon.setDateRange(dateRange);
           globalWatcherDaemon.setSummaryOptions(summaryMode, summaryModel, LISTEN_PORT);
         }
         globalWatcherDaemon.start();
-      } else {
-        if (globalWatcherDaemon) {
-          globalWatcherDaemon.stop();
-        }
-        SkillInstaller.updateSymlinks({ antigravity: false, claude: false, codex: false });
+      } else if (globalWatcherDaemon) {
+        globalWatcherDaemon.stop();
       }
 
       sendJson(res, 200, {
@@ -512,7 +546,141 @@ function collectGroupedModelsFromConfig(config) {
         dateRange,
         summaryMode,
         summaryModel,
-        symlinks: SkillInstaller.getSymlinkStatus()
+        targets,
+        grokImagineTargets,
+        skillMounts,
+        symlinks: SkillInstaller.getSymlinkStatus(os.homedir(), "session-sync"),
+        grokImagineSymlinks: SkillInstaller.getSymlinkStatus(os.homedir(), "grok-imagine"),
+        skillLibrary: SkillInstaller.buildLibrarySnapshot({ mounts: skillMounts }),
+      });
+    } catch (err) {
+      sendJson(res, 500, { error: err.message });
+    }
+    return;
+  }
+
+  if (reqPath === "/v1/skills/library" && req.method === "GET") {
+    if (!checkLocalAuth(req, res)) return;
+    const query = String(url.searchParams.get("q") || "").trim();
+    const category = String(url.searchParams.get("category") || "all").trim() || "all";
+    const scope = String(url.searchParams.get("scope") || "all").trim() || "all";
+    const sessionTargets = {
+      antigravity: GATEWAY_CONFIG.sessionSync?.targets?.antigravity ?? false,
+      claude: GATEWAY_CONFIG.sessionSync?.targets?.claude ?? false,
+      codex: GATEWAY_CONFIG.sessionSync?.targets?.codex ?? false,
+    };
+    const grokImagineTargets = {
+      antigravity: GATEWAY_CONFIG.sessionSync?.grokImagineTargets?.antigravity ?? false,
+      claude: GATEWAY_CONFIG.sessionSync?.grokImagineTargets?.claude ?? false,
+      codex: GATEWAY_CONFIG.sessionSync?.grokImagineTargets?.codex ?? false,
+    };
+    const skillMounts = {
+      ...(GATEWAY_CONFIG.sessionSync?.skillMounts || {}),
+      "session-sync": sessionTargets,
+      "grok-imagine": grokImagineTargets,
+    };
+    const library = SkillInstaller.buildLibrarySnapshot({
+      query,
+      category,
+      scope,
+    });
+    sendJson(res, 200, {
+      success: true,
+      ...library,
+      // kept for compatibility with older clients; library UI no longer uses mount state
+      skillMounts,
+    });
+    return;
+  }
+
+  if (reqPath === "/v1/skills/promote" && req.method === "POST") {
+    if (!checkLocalAuth(req, res)) return;
+    try {
+      const payload = JSON.parse(await readText(req));
+      const skillName = String(payload.skill || payload.name || "").trim();
+      if (!skillName) {
+        sendJson(res, 400, { error: "skill is required" });
+        return;
+      }
+
+      const result = SkillInstaller.promoteLocalSkillToManaged(skillName, {
+        title: payload.title,
+        summary: payload.summary,
+        category: payload.category,
+        icon: payload.icon,
+        tags: payload.tags,
+        featured: Boolean(payload.featured),
+      });
+
+      sendJson(res, 200, {
+        success: true,
+        ...result,
+        skillLibrary: SkillInstaller.buildLibrarySnapshot({}),
+      });
+    } catch (err) {
+      sendJson(res, 400, { error: err.message || String(err) });
+    }
+    return;
+  }
+
+  if (reqPath === "/v1/skills/mount" && req.method === "POST") {
+    if (!checkLocalAuth(req, res)) return;
+    try {
+      const payload = JSON.parse(await readText(req));
+      const skillName = String(payload.skill || payload.name || "").trim();
+      if (!skillName) {
+        sendJson(res, 400, { error: "skill is required" });
+        return;
+      }
+
+      const targets = SkillInstaller.normalizeToolMap(payload.targets);
+      const current = {
+        ...(GATEWAY_CONFIG.sessionSync || {}),
+      };
+      const skillMounts = {
+        ...(current.skillMounts || {}),
+        [skillName]: targets,
+      };
+
+      if (skillName === "session-sync") {
+        current.targets = targets;
+      }
+      if (skillName === "grok-imagine") {
+        current.grokImagineTargets = targets;
+      }
+
+      // Keep session-sync mounts disabled when daemon is off.
+      if (skillName === "session-sync" && !current.enabled) {
+        skillMounts["session-sync"] = SkillInstaller.emptyToolMap(false);
+        current.targets = SkillInstaller.emptyToolMap(false);
+      }
+
+      current.skillMounts = skillMounts;
+      GATEWAY_CONFIG.sessionSync = current;
+      saveGatewayState({
+        configPath: GATEWAY_CONFIG_FILE,
+        secretsPath: GATEWAY_SECRETS_FILE,
+        config: GATEWAY_CONFIG,
+        officialCodexIds: OFFICIAL_CODEX_MODEL_IDS,
+      });
+
+      if (SkillInstaller.getManagedSkill(skillName)) {
+        SkillInstaller.installBaseSkill(SkillInstaller.getCentralSkillDir(skillName), skillName);
+      }
+
+      const effectiveTargets =
+        skillName === "session-sync" && !current.enabled
+          ? SkillInstaller.emptyToolMap(false)
+          : targets;
+      const results = SkillInstaller.updateSymlinks(effectiveTargets, os.homedir(), null, skillName);
+
+      sendJson(res, 200, {
+        success: true,
+        skill: skillName,
+        targets: effectiveTargets,
+        results,
+        skillMounts: current.skillMounts,
+        skillLibrary: SkillInstaller.buildLibrarySnapshot({ mounts: current.skillMounts }),
       });
     } catch (err) {
       sendJson(res, 500, { error: err.message });

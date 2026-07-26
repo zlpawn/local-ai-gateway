@@ -96,7 +96,7 @@ test("Grok Imagine Skill - SkillInstaller installation & symlink status", () => 
   const newStatus = SkillInstaller.getSymlinkStatus(tmpHome, skillName);
   assert.equal(newStatus.antigravity, true);
   assert.equal(newStatus.claude, true);
-  assert.equal(newStatus.codex, false);
+  assert.equal(newStatus.codex, true);
 
   fs.rmSync(tmpHome, { recursive: true, force: true });
 });

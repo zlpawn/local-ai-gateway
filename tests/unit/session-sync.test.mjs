@@ -143,7 +143,7 @@ test('SkillInstaller - central installation and symlinks management', () => {
     assert.equal(status.claude, false);
     assert.equal(status.codex, true);
 
-    const agLink = path.join(tmpHome, '.gemini', 'config', 'skills', 'session-sync', 'SKILL.md');
+    const agLink = process.platform === 'win32' ? path.join(tmpHome, '.gemini', 'antigravity', 'builtin', 'skills', 'session-sync', 'SKILL.md') : path.join(tmpHome, '.gemini', 'config', 'skills', 'session-sync', 'SKILL.md');
     assert.ok(fs.existsSync(agLink));
     assert.ok(fs.lstatSync(agLink).isSymbolicLink() || fs.lstatSync(agLink).isFile());
   } finally {

@@ -48,3 +48,8 @@ codeg-*
 images/
 videos/
 
+
+# Local 8788 test gateway instance
+gateway.config.8788.json
+gateway.secrets.8788.json
+gateway.8788.pid

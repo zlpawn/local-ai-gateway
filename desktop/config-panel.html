@@ -1194,6 +1194,250 @@
         @keyframes toastExit {
             to { transform: translateY(10px) scale(0.95); opacity: 0; }
         }
+
+        /* Skills library */
+        .skills-toolbar {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 12px;
+            align-items: center;
+            margin-bottom: 16px;
+        }
+        .skills-search {
+            flex: 1 1 240px;
+            min-width: 200px;
+            height: 36px;
+            border: 1px solid var(--border-color);
+            border-radius: var(--radius-md);
+            background: var(--input-bg);
+            color: var(--text-primary);
+            padding: 0 12px;
+            font-size: 13px;
+        }
+        .skills-search:focus {
+            outline: none;
+            border-color: var(--text-secondary);
+            background: var(--input-focus-bg);
+        }
+        .skills-filters {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 8px;
+            margin-bottom: 18px;
+        }
+        .skills-filter-chip {
+            border: 1px solid var(--border-color);
+            background: transparent;
+            color: var(--text-secondary);
+            border-radius: 999px;
+            padding: 6px 12px;
+            font-size: 12px;
+            cursor: pointer;
+            transition: all var(--transition-fast);
+        }
+        .skills-filter-chip:hover {
+            background: var(--surface-hover);
+            color: var(--text-primary);
+        }
+        .skills-filter-chip.active {
+            background: var(--text-primary);
+            color: var(--bg-color);
+            border-color: var(--text-primary);
+        }
+        .skills-layout {
+            display: grid;
+            grid-template-columns: minmax(0, 1.2fr) minmax(280px, 0.8fr);
+            gap: 16px;
+            align-items: start;
+        }
+        @media (max-width: 1100px) {
+            .skills-layout {
+                grid-template-columns: 1fr;
+            }
+        }
+        .skills-list {
+            display: flex;
+            flex-direction: column;
+            gap: 10px;
+            max-height: calc(100vh - 260px);
+            overflow: auto;
+            padding-right: 4px;
+        }
+        .skill-card {
+            border: 1px solid var(--border-color);
+            border-radius: var(--radius-md);
+            background: var(--surface);
+            padding: 14px 16px;
+            cursor: pointer;
+            transition: border-color var(--transition-fast), background var(--transition-fast), box-shadow var(--transition-fast);
+        }
+        .skill-card:hover {
+            background: var(--surface-hover);
+        }
+        .skill-card.active {
+            border-color: var(--text-primary);
+            box-shadow: inset 2px 0 0 var(--text-primary);
+        }
+        .skill-card-top {
+            display: flex;
+            align-items: flex-start;
+            justify-content: space-between;
+            gap: 12px;
+        }
+        .skill-card-title {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            min-width: 0;
+        }
+        .skill-card-icon {
+            width: 34px;
+            height: 34px;
+            border-radius: 10px;
+            background: var(--input-bg);
+            border: 1px solid var(--border-color);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 16px;
+            flex: 0 0 auto;
+        }
+        .skill-card-name {
+            font-size: 14px;
+            font-weight: 600;
+            color: var(--text-primary);
+            line-height: 1.3;
+        }
+        .skill-card-id {
+            font-family: var(--font-mono);
+            font-size: 11px;
+            color: var(--text-secondary);
+            margin-top: 2px;
+        }
+        .skill-card-summary {
+            margin-top: 10px;
+            font-size: 12.5px;
+            color: var(--text-secondary);
+            line-height: 1.5;
+            display: -webkit-box;
+            -webkit-line-clamp: 2;
+            -webkit-box-orient: vertical;
+            overflow: hidden;
+        }
+        .skill-card-meta {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 6px;
+            margin-top: 10px;
+        }
+        .skill-pill {
+            font-size: 11px;
+            border-radius: 999px;
+            padding: 2px 8px;
+            border: 1px solid var(--border-color);
+            color: var(--text-secondary);
+            background: var(--input-bg);
+        }
+        .skill-pill.mounted,
+        .skill-pill.installed {
+            color: var(--success);
+            border-color: rgba(16, 185, 129, 0.35);
+        }
+        .skill-pill.missing {
+            color: var(--text-secondary);
+            border-color: var(--border-color);
+        }
+        .skill-pill.managed {
+            color: var(--text-primary);
+        }
+        .skill-detail {
+            border: 1px solid var(--border-color);
+            border-radius: var(--radius-md);
+            background: var(--surface);
+            padding: 18px;
+            position: sticky;
+            top: 12px;
+            min-height: 320px;
+        }
+        .skill-detail-empty {
+            color: var(--text-secondary);
+            font-size: 13px;
+            line-height: 1.6;
+        }
+        .skill-detail-header {
+            display: flex;
+            align-items: flex-start;
+            gap: 12px;
+            margin-bottom: 14px;
+        }
+        .skill-detail-header h3 {
+            margin: 0;
+            font-size: 18px;
+            color: var(--text-primary);
+        }
+        .skill-detail-summary {
+            font-size: 13px;
+            color: var(--text-secondary);
+            line-height: 1.6;
+            margin-bottom: 16px;
+        }
+        .skill-mount-list {
+            display: flex;
+            flex-direction: column;
+            gap: 10px;
+        }
+        .skill-mount-row {
+            display: flex;
+            align-items: flex-start;
+            justify-content: space-between;
+            gap: 12px;
+            border: 1px solid var(--border-color);
+            border-radius: var(--radius-md);
+            padding: 12px;
+            background: var(--input-bg);
+        }
+        .skill-mount-row.disabled {
+            opacity: 0.55;
+        }
+        .skill-mount-main {
+            display: flex;
+            align-items: flex-start;
+            gap: 10px;
+            min-width: 0;
+            flex: 1 1 auto;
+        }
+        .skill-mount-copy {
+            min-width: 0;
+            flex: 1 1 auto;
+        }
+        .skill-path-wrap {
+            display: block;
+            margin-top: 3px;
+            white-space: normal;
+            overflow-wrap: anywhere;
+            word-break: break-word;
+            line-height: 1.45;
+        }
+        .skill-status-pill {
+            flex: 0 0 auto;
+            align-self: flex-start;
+            white-space: nowrap;
+        }
+        .skill-detail-actions {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 8px;
+            margin-top: 16px;
+        }
+        .skills-empty {
+            border: 1px dashed var(--border-color);
+            border-radius: var(--radius-md);
+            padding: 28px 18px;
+            text-align: center;
+            color: var(--text-secondary);
+            font-size: 13px;
+        }
+
     </style>
     <script>
         // Prevent FOUC by setting theme early
@@ -1531,80 +1775,38 @@ experimental_bearer_token = "dummy"</pre>
                 <div class="section-header">
                     <div>
                         <h2>预置技能库 (Agent Skills)</h2>
-                        <p>一键扩展 AI 助手的能力，支持跨软件安装与系统软链接（Symlink）管理。</p>
+                        <p>按分类浏览与搜索本地技能；目录中存在即已安装，常用技能置顶，不把上百个 skill 一次性摊开。</p>
                     </div>
-                    <button class="btn btn-primary" onclick="saveSyncConfig('skills')">
-                        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z"></path><polyline points="17 21 17 13 7 13 7 21"></polyline><polyline points="7 3 7 8 15 8"></polyline></svg>
-                        保存技能挂载配置
+                    <button class="btn" title="重新扫描 ~/.agents/skills 并刷新列表" onclick="refreshSkillsLibrary(true)">
+                        刷新技能库
                     </button>
                 </div>
 
                 <div class="usage-guide">
-                    <h3>💡 Agent Skill 体系说明</h3>
-                    <p>预置技能存储于网关中央目录：<code class="path-pill">~/.agents/skills/</code>。</p>
-                    <p>勾选下方目标软件后，系统会自动创建系统软链接挂载给对应的 Agent 客户端，零配置开箱即用。</p>
+                    <h3>💡 使用原则</h3>
+                    <p>统一中央目录：<code class="path-pill">~/.agents/skills/</code>。目录里有这个 skill，就算已安装；不再区分“已挂载 / 未挂载”。</p>
+                    <p>网关托管技能可由网关写入中央目录；本地技能则直接放进同一目录即可被发现。右上角“刷新技能库”会重新扫描中央目录并刷新列表。</p>
                 </div>
 
-                <div style="margin-top: 24px; display: flex; flex-direction: column; gap: 20px;">
-                    <!-- Skill Card 1: Grok Imagine -->
-                    <div class="model-slots-panel">
-                        <div class="model-slots-header" style="display: flex; align-items: center; justify-content: space-between;">
-                            <div>
-                                <h3 style="font-size: 16px; font-weight: 600; color: var(--text-primary); display: flex; align-items: center; gap: 8px;">
-                                    🎨 Grok 多模态视觉生成技能 (grok-imagine)
-                                </h3>
-                                <p style="font-size: 13px; color: var(--text-secondary); margin-top: 2px;">
-                                    自动调用本地 <code class="path-pill">~/.grok/auth.json</code> 订阅 Token，支持文生图、图生图、文生视频、图生视频与多参考图合成。
-                                </p>
-                            </div>
-                        </div>
-                        <div style="padding: 16px; display: flex; flex-direction: column; gap: 12px;">
-                            <div style="font-size: 12px; font-weight: 600; color: var(--text-secondary); margin-bottom: 4px;">选择要开启安装该 Skill 的目标软件：</div>
-                            <div class="sync-tool-card" id="grok-card-antigravity">
-                                <div style="display: flex; align-items: center; gap: 12px;">
-                                    <div style="width: 32px; height: 32px; border-radius: var(--radius-md); background: var(--input-bg); display: flex; align-items: center; justify-content: center; font-weight: 700; font-size: 14px; color: #10a37f;">G</div>
-                                    <div>
-                                        <div style="font-weight: 600; font-size: 14px; color: var(--text-primary);">Google Antigravity</div>
-                                        <div class="path-pill" style="margin-top: 2px;">~/.gemini/config/skills/grok-imagine</div>
-                                    </div>
-                                </div>
-                                <label style="display: flex; align-items: center; gap: 8px; cursor: pointer;">
-                                    <input type="checkbox" id="grok-target-antigravity" style="width: 16px; height: 16px; cursor: pointer;">
-                                    <span style="font-size: 13px;">安装/创建软链接</span>
-                                </label>
-                            </div>
+                <div class="skills-toolbar">
+                    <input id="skills-search-input" class="skills-search" type="search" placeholder="搜索技能名、用途、标签..." oninput="onSkillsSearchInput(this.value)" />
+                    <button class="skills-filter-chip" data-scope="all" onclick="setSkillsScope('all')">全部 0</button>
+                    <button class="skills-filter-chip" data-scope="installed" onclick="setSkillsScope('installed')">已安装 0</button>
+                    <button class="skills-filter-chip" data-scope="managed" onclick="setSkillsScope('managed')">网关托管 0</button>
+                    <button class="skills-filter-chip" data-scope="local" onclick="setSkillsScope('local')">本地发现 0</button>
+                    <button class="skills-filter-chip" data-scope="missing" onclick="setSkillsScope('missing')">未安装托管 0</button>
+                </div>
 
-                            <div class="sync-tool-card" id="grok-card-claude">
-                                <div style="display: flex; align-items: center; gap: 12px;">
-                                    <div style="width: 32px; height: 32px; border-radius: var(--radius-md); background: var(--input-bg); display: flex; align-items: center; justify-content: center; font-weight: 700; font-size: 14px; color: #d97706;">C</div>
-                                    <div>
-                                        <div style="font-weight: 600; font-size: 14px; color: var(--text-primary);">Claude Code / Desktop</div>
-                                        <div class="path-pill" style="margin-top: 2px;">~/.claude/skills/grok-imagine</div>
-                                    </div>
-                                </div>
-                                <label style="display: flex; align-items: center; gap: 8px; cursor: pointer;">
-                                    <input type="checkbox" id="grok-target-claude" style="width: 16px; height: 16px; cursor: pointer;">
-                                    <span style="font-size: 13px;">安装/创建软链接</span>
-                                </label>
-                            </div>
+                <div id="skills-category-filters" class="skills-filters"></div>
 
-                            <div class="sync-tool-card" id="grok-card-codex">
-                                <div style="display: flex; align-items: center; gap: 12px;">
-                                    <div style="width: 32px; height: 32px; border-radius: var(--radius-md); background: var(--input-bg); display: flex; align-items: center; justify-content: center; font-weight: 700; font-size: 14px; color: #2563eb;">O</div>
-                                    <div>
-                                        <div style="font-weight: 600; font-size: 14px; color: var(--text-primary);">OpenAI Codex</div>
-                                        <div class="path-pill" style="margin-top: 2px;">~/.codex/skills/grok-imagine</div>
-                                    </div>
-                                </div>
-                                <label style="display: flex; align-items: center; gap: 8px; cursor: pointer;">
-                                    <input type="checkbox" id="grok-target-codex" style="width: 16px; height: 16px; cursor: pointer;">
-                                    <span style="font-size: 13px;">安装/创建软链接</span>
-                                </label>
-                            </div>
-                        </div>
-                    </div>
+                <div class="skills-layout">
+                    <div id="skills-list" class="skills-list"></div>
+                    <aside id="skills-detail" class="skill-detail">
+                        <div class="skill-detail-empty">从左侧选择一个技能，查看安装状态与说明。</div>
+                    </aside>
                 </div>
             </section>
+
         </main>
     </div>
 
@@ -1757,6 +1959,273 @@ experimental_bearer_token = "dummy"</pre>
             }
         }
 
+
+        // ---- Skills library state ----
+        let skillsLibraryState = {
+            loaded: false,
+            loading: false,
+            query: "",
+            category: "all",
+            scope: "all",
+            selectedSkill: "grok-imagine",
+            stats: { total: 0, installed: 0, managed: 0, local: 0, missing: 0, filtered: 0 },
+            categories: [],
+            skills: [],
+            allSkills: [],
+            tools: {},
+            root: "",
+            managedRoot: "",
+        };
+        let skillsSearchTimer = null;
+
+        function getSkillByName(name) {
+            return (skillsLibraryState.allSkills || skillsLibraryState.skills || [])
+                .find((item) => item.name === name) || null;
+        }
+
+        function updateSkillsScopeChips() {
+            const s = skillsLibraryState.stats || {};
+            const labels = {
+                all: `全部 ${s.total || 0}`,
+                installed: `已安装 ${s.installed || s.mounted || 0}`,
+                managed: `网关托管 ${s.managed || 0}`,
+                local: `本地发现 ${s.local || 0}`,
+                missing: `未安装托管 ${s.missing || 0}`,
+            };
+            document.querySelectorAll('.skills-filter-chip[data-scope]').forEach((el) => {
+                const scope = el.getAttribute('data-scope');
+                el.classList.toggle('active', scope === skillsLibraryState.scope);
+                if (labels[scope]) el.textContent = labels[scope];
+            });
+        }
+
+        function renderSkillsCategories() {
+            const host = document.getElementById('skills-category-filters');
+            if (!host) return;
+            const cats = skillsLibraryState.categories || [];
+            const chips = [
+                { id: 'all', label: '全部分类', count: skillsLibraryState.stats?.total || 0 },
+                ...cats,
+            ];
+            host.innerHTML = chips.map((cat) => `
+                <button class="skills-filter-chip ${skillsLibraryState.category === cat.id ? 'active' : ''}"
+                        onclick="setSkillsCategory('${cat.id}')">
+                    ${escapeHtml(cat.label || cat.id)}${typeof cat.count === 'number' ? ` (${cat.count})` : ''}
+                </button>
+            `).join('');
+        }
+
+        function renderSkillsList() {
+            const host = document.getElementById('skills-list');
+            if (!host) return;
+            const skills = skillsLibraryState.skills || [];
+            if (!skills.length) {
+                host.innerHTML = `<div class="skills-empty">没有匹配的技能。试试清空搜索，或切换到“全部 / 已安装 / 本地发现”。</div>`;
+                return;
+            }
+            host.innerHTML = skills.map((skill) => {
+                const active = skill.name === skillsLibraryState.selectedSkill;
+                return `
+                    <article class="skill-card ${active ? 'active' : ''}" onclick="selectSkill('${escapeHtml(skill.name)}')">
+                        <div class="skill-card-top">
+                            <div class="skill-card-title">
+                                <div class="skill-card-icon">${escapeHtml(skill.icon || '🧩')}</div>
+                                <div style="min-width:0;">
+                                    <div class="skill-card-name">${escapeHtml(skill.title || skill.name)}</div>
+                                    <div class="skill-card-id">${escapeHtml(skill.name)}</div>
+                                </div>
+                            </div>
+                        </div>
+                        <div class="skill-card-summary">${escapeHtml(skill.summary || skill.description || '')}</div>
+                        <div class="skill-card-meta">
+                            <span class="skill-pill">${escapeHtml(skill.categoryLabel || skill.category || '其他')}</span>
+                            ${skill.managed ? '<span class="skill-pill managed">网关托管</span>' : '<span class="skill-pill">本地发现</span>'}
+                            <span class="skill-pill ${skill.installed ? 'installed' : 'missing'}">${skill.installed ? '已安装' : '未安装'}</span>
+                        </div>
+                    </article>
+                `;
+            }).join('');
+        }
+
+        function renderSkillDetail() {
+            const host = document.getElementById('skills-detail');
+            if (!host) return;
+            const skill = getSkillByName(skillsLibraryState.selectedSkill);
+            if (!skill) {
+                host.innerHTML = `<div class="skill-detail-empty">从左侧选择一个技能，查看安装状态与说明。</div>`;
+                return;
+            }
+
+            const tools = skill.tools || skillsLibraryState.tools || {};
+            const clientRows = Object.entries(tools).map(([tool, meta]) => `
+                <div class="skill-mount-row">
+                    <div class="skill-mount-main">
+                        <div style="width:28px;height:28px;border-radius:8px;background:var(--input-bg);border:1px solid var(--border-color);display:flex;align-items:center;justify-content:center;font-weight:700;font-size:12px;flex:0 0 auto;color:${escapeHtml(meta.color || 'var(--text-primary)')};">
+                            ${escapeHtml(meta.short || tool.slice(0,1).toUpperCase())}
+                        </div>
+                        <div class="skill-mount-copy">
+                            <div style="font-size:13px;font-weight:600;color:var(--text-primary);">${escapeHtml(meta.label || tool)}</div>
+                            <code class="path-pill skill-path-wrap">${escapeHtml(meta.path || '')}</code>
+                        </div>
+                    </div>
+                    <span class="skill-pill skill-status-pill ${skill.installed ? 'installed' : 'missing'}">${skill.installed ? '可用' : '未安装'}</span>
+                </div>
+            `).join('');
+
+            const actions = [];
+            if (skill.managed && !skill.installed) {
+                actions.push(`<button class="btn btn-primary" onclick="installManagedSkill('${escapeHtml(skill.name)}')">安装到中央目录</button>`);
+            }
+            if (skill.canPromote || (skill.installed && !skill.managed)) {
+                actions.push(`<button class="btn" onclick="promoteLocalSkillToManaged('${escapeHtml(skill.name)}')">转为网关托管</button>`);
+            }
+
+            host.innerHTML = `
+                <div class="skill-detail-header">
+                    <div class="skill-card-icon" style="width:42px;height:42px;font-size:20px;">${escapeHtml(skill.icon || '🧩')}</div>
+                    <div>
+                        <h3>${escapeHtml(skill.title || skill.name)}</h3>
+                        <div class="skill-card-id">${escapeHtml(skill.name)}</div>
+                    </div>
+                </div>
+                <div class="skill-detail-summary">${escapeHtml(skill.summary || skill.description || '')}</div>
+                <div class="skill-card-meta" style="margin-bottom:14px;">
+                    <span class="skill-pill">${escapeHtml(skill.categoryLabel || '其他')}</span>
+                    ${skill.managed ? '<span class="skill-pill managed">网关托管</span>' : '<span class="skill-pill">本地发现</span>'}
+                    <span class="skill-pill ${skill.installed ? 'installed' : 'missing'}">${skill.installed ? '已安装' : '未安装'}</span>
+                    ${skill.hasScripts ? '<span class="skill-pill">含 scripts</span>' : ''}
+                </div>
+                <div class="usage-guide" style="margin-bottom:12px;">
+                    <p>安装判定只看中央目录是否存在该 skill：</p>
+                    <p><code class="path-pill skill-path-wrap">${escapeHtml(skill.path || skill.skillDir || '')}</code></p>
+                    ${skill.managed ? `<p style="margin-top:8px;">项目托管源目录：</p><p><code class="path-pill skill-path-wrap">${escapeHtml(skill.projectSourceDir || (skillsLibraryState.managedRoot ? `${skillsLibraryState.managedRoot}/${skill.name}` : `lib/skills/${skill.name}`))}</code></p>` : ''}
+                </div>
+                <div style="font-size:12px;font-weight:600;color:var(--text-secondary);margin-bottom:8px;">客户端读取路径（参考）</div>
+                <div class="skill-mount-list">${clientRows || '<div class="skill-detail-empty">暂无路径信息</div>'}</div>
+                ${actions.length ? `<div class="skill-detail-actions">${actions.join('')}</div>` : ''}
+            `;
+        }
+
+        function renderSkillsLibrary() {
+            updateSkillsScopeChips();
+            renderSkillsCategories();
+            renderSkillsList();
+            renderSkillDetail();
+        }
+
+        async function refreshSkillsLibrary(force = false) {
+            if (skillsLibraryState.loading) return;
+            if (skillsLibraryState.loaded && !force) {
+                renderSkillsLibrary();
+                return;
+            }
+            skillsLibraryState.loading = true;
+            try {
+                const params = new URLSearchParams({
+                    q: skillsLibraryState.query || '',
+                    category: skillsLibraryState.category || 'all',
+                    scope: skillsLibraryState.scope || 'all',
+                });
+                const res = await fetch(`/v1/skills/library?${params.toString()}`);
+                const data = await res.json();
+                if (!data.success) throw new Error(data.error || '加载失败');
+
+                skillsLibraryState.loaded = true;
+                skillsLibraryState.stats = data.stats || {};
+                skillsLibraryState.categories = data.categories || [];
+                skillsLibraryState.skills = data.skills || [];
+                skillsLibraryState.allSkills = data.allSkills || data.skills || [];
+                skillsLibraryState.tools = data.tools || {};
+                skillsLibraryState.root = data.root || '';
+                skillsLibraryState.managedRoot = data.managedRoot || '';
+
+                if (!getSkillByName(skillsLibraryState.selectedSkill)) {
+                    skillsLibraryState.selectedSkill = skillsLibraryState.skills[0]?.name || skillsLibraryState.allSkills[0]?.name || '';
+                }
+                renderSkillsLibrary();
+            } catch (err) {
+                console.warn('加载技能库失败', err);
+                showToast('加载技能库失败: ' + err.message, 'danger');
+            } finally {
+                skillsLibraryState.loading = false;
+            }
+        }
+
+        function onSkillsSearchInput(value) {
+            skillsLibraryState.query = value || '';
+            if (skillsSearchTimer) clearTimeout(skillsSearchTimer);
+            skillsSearchTimer = setTimeout(() => {
+                refreshSkillsLibrary(true);
+            }, 200);
+        }
+
+        window.setSkillsScope = function(scope) {
+            skillsLibraryState.scope = scope || 'all';
+            refreshSkillsLibrary(true);
+        };
+
+        window.setSkillsCategory = function(category) {
+            skillsLibraryState.category = category || 'all';
+            refreshSkillsLibrary(true);
+        };
+
+        window.selectSkill = function(name) {
+            skillsLibraryState.selectedSkill = name;
+            renderSkillsList();
+            renderSkillDetail();
+        };
+
+        window.installManagedSkill = async function(skillName) {
+            try {
+                const res = await fetch('/v1/skills/mount', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        skill: skillName,
+                        targets: { antigravity: false, claude: false, codex: true },
+                    }),
+                });
+                const data = await res.json();
+                if (!data.success) throw new Error(data.error || '安装失败');
+                await refreshSkillsLibrary(true);
+                showToast(`已安装 ${skillName}`, 'success');
+                return true;
+            } catch (err) {
+                showToast(`安装失败: ${err.message}`, 'danger');
+                await refreshSkillsLibrary(true);
+                return false;
+            }
+        };
+
+        window.promoteLocalSkillToManaged = async function(skillName) {
+            const name = String(skillName || '').trim();
+            if (!name) return false;
+            const ok = confirm(
+                `确认把本地 skill「${name}」转成网关托管？\n\n` +
+                `会写入项目托管源目录 lib/skills/${name}/，` +
+                `并加入 managed-catalog.json，后续可像 grok-imagine / session-sync 一样由网关安装分发。`
+            );
+            if (!ok) return false;
+            try {
+                const res = await fetch('/v1/skills/promote', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ skill: name }),
+                });
+                const data = await res.json();
+                if (!data.success) throw new Error(data.error || '转换失败');
+                skillsLibraryState.selectedSkill = name;
+                await refreshSkillsLibrary(true);
+                showToast(`已将 ${name} 转为网关托管`, 'success');
+                return true;
+            } catch (err) {
+                showToast(`转换失败: ${err.message}`, 'danger');
+                await refreshSkillsLibrary(true);
+                return false;
+            }
+        };
+
+
         async function loadSyncStatus() {
             try {
                 const res = await fetch('/v1/sync/status');
@@ -1855,9 +2324,9 @@ experimental_bearer_token = "dummy"</pre>
                 codex: document.getElementById('sync-target-codex').checked
             };
             const grokImagineTargets = {
-                antigravity: document.getElementById('grok-target-antigravity').checked,
-                claude: document.getElementById('grok-target-claude').checked,
-                codex: document.getElementById('grok-target-codex').checked
+                antigravity: Boolean(document.getElementById('grok-target-antigravity')?.checked),
+                claude: Boolean(document.getElementById('grok-target-claude')?.checked),
+                codex: Boolean(document.getElementById('grok-target-codex')?.checked)
             };
             const startDate = document.getElementById('sync-start-date').value || null;
             const endDate = document.getElementById('sync-end-date').value || null;
@@ -1888,6 +2357,11 @@ experimental_bearer_token = "dummy"</pre>
                         showToast('🎨 预置技能 (Agent Skills) 挂载设置已成功保存并同步！', 'success');
                     } else {
                         showToast('🔄 会话同步设置、时间范围与摘要模式已成功保存并应用！', 'success');
+                    }
+                    // Keep skills library mount state aligned with session-sync settings.
+                    skillsLibraryState.loaded = false;
+                    if (activeClient === 'skills') {
+                        refreshSkillsLibrary(true);
                     }
                 } else {
                     showToast('保存设置失败: ' + (data.error || '未知错误'), 'danger');
@@ -2395,6 +2869,10 @@ experimental_bearer_token = "dummy"</pre>
 
             render();
 
+            if (tabId === 'skills') {
+                refreshSkillsLibrary(false);
+            }
+
             // Scroll to top
             document.querySelector('.content-area').scrollTop = 0;
         }
@@ -2735,8 +3213,11 @@ experimental_bearer_token = "dummy"</pre>
         window.saveCurrentConfig = async function() {
             const btn = document.getElementById('save-btn');
             if (!btn) return;
-            if (activeClient === 'sync' || activeClient === 'skills') {
-                await saveSyncConfig(activeClient);
+            if (activeClient === 'sync') {
+                await saveSyncConfig('sync');
+            } else if (activeClient === 'skills') {
+                await refreshSkillsLibrary(true);
+                showToast('技能挂载已是即时生效，当前库已刷新', 'success');
             } else {
                 await saveConfig({ button: btn, client: activeClient, scope: 'global' });
             }
