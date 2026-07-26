@@ -38,6 +38,9 @@ import {
 import { syncClaudeCodeSettings } from "./lib/config/claude-code-settings.mjs";
 import { SkillInstaller } from "./lib/session-sync/skill-installer.mjs";
 import { SessionWatcherDaemon } from "./lib/session-sync/watcher-daemon.mjs";
+import { WebSocketServer } from "ws";
+import * as nodePty from "node-pty";
+import { InstallHistory } from "./lib/skills/install-history.mjs";
 import {
   collectImages,
   containsImages,
@@ -227,6 +230,107 @@ if (startupClaude3pSync?.updated) {
 } else if (startupClaude3pSync?.reason && startupClaude3pSync.reason !== "disabled") {
   console.log(`Claude Desktop 3p sync skipped: ${startupClaude3pSync.reason}`);
 }
+
+// --- Skills install: interactive PTY over WebSocket ---
+const ptySessions = new Map(); // recordId -> { pty, ws, beforeNames }
+
+function startPtyForRecord(recordId) {
+  const record = InstallHistory.get(recordId);
+  if (!record || record.status !== "running") return false;
+  if (ptySessions.has(recordId)) return true;
+
+  const homeDir = os.homedir();
+  const beforeNames = [...SkillInstaller.scanDiscoveryRoots(homeDir).keys()];
+
+  const isWin = process.platform === "win32";
+  const file = isWin ? "cmd.exe" : "/bin/sh";
+  const args = isWin ? ["/c", record.command] : ["-c", record.command];
+
+  let pty;
+  try {
+    pty = nodePty.spawn(file, args, {
+      name: "xterm-color",
+      cols: 100,
+      rows: 30,
+      cwd: homeDir,
+      env: { ...process.env, FORCE_COLOR: "0" },
+    });
+  } catch (err) {
+    InstallHistory.finish(recordId, { exitCode: -1, skillName: record.skillName });
+    return false;
+  }
+
+  const session = { pty, ws: null, beforeNames };
+  ptySessions.set(recordId, session);
+
+  pty.onData((data) => {
+    const sess = ptySessions.get(recordId);
+    if (sess?.ws && sess.ws.readyState === 1) {
+      sess.ws.send(data);
+    }
+  });
+
+  pty.onExit(({ exitCode }) => {
+    const sess = ptySessions.get(recordId);
+    // Infer skill name from a discovery diff if the user did not provide one.
+    let skillName = record.skillName;
+    if (!skillName) {
+      try {
+        const after = SkillInstaller.scanDiscoveryRoots(homeDir);
+        const before = new Set(beforeNames);
+        for (const name of after.keys()) {
+          if (!before.has(name)) { skillName = name; break; }
+        }
+      } catch {
+        // ignore
+      }
+    }
+    const finished = InstallHistory.finish(recordId, { exitCode, skillName });
+    if (sess?.ws && sess.ws.readyState === 1) {
+      sess.ws.send(JSON.stringify({ type: "exit", exitCode, skillName: finished?.skillName || null }));
+      sess.ws.close();
+    }
+    ptySessions.delete(recordId);
+  });
+
+  return true;
+}
+
+const wsServer = new WebSocketServer({ noServer: true });
+server.on("upgrade", (req, socket, head) => {
+  const url = new URL(req.url || "/", "http://localhost");
+  if (url.pathname !== "/v1/skills/pty") {
+    socket.destroy();
+    return;
+  }
+  const recordId = url.searchParams.get("recordId");
+  if (!recordId) {
+    socket.destroy();
+    return;
+  }
+  wsServer.handleUpgrade(req, socket, head, (ws) => {
+    if (!startPtyForRecord(recordId)) {
+      ws.close();
+      return;
+    }
+    const session = ptySessions.get(recordId);
+    session.ws = ws;
+    ws.on("message", (msg) => {
+      try {
+        pty.write(typeof msg === "string" ? msg : msg.toString());
+      } catch {
+        // pty may be gone
+      }
+    });
+    ws.on("close", () => {
+      const sess = ptySessions.get(recordId);
+      if (sess?.pty) {
+        try { sess.pty.kill(); } catch {}
+      }
+    });
+  });
+});
+// --- end skills install PTY ---
 
 server.listen(LISTEN_PORT, LISTEN_HOST, () => {
   const host = LISTEN_HOST === "0.0.0.0" ? "127.0.0.1" : LISTEN_HOST;
@@ -707,6 +811,105 @@ function collectGroupedModelsFromConfig(config) {
     } catch (err) {
       sendJson(res, 500, { error: err.message });
     }
+    return;
+  }
+
+
+  // --- Skills: unify to central ---
+  if (reqPath === "/v1/skills/unify" && req.method === "POST") {
+    if (!checkLocalAuth(req, res)) return;
+    try {
+      const payload = JSON.parse(await readText(req) || "{}");
+      const skillName = String(payload.skill || payload.name || "").trim();
+      if (!skillName) { sendJson(res, 400, { error: "skill is required" }); return; }
+      const result = SkillInstaller.unifySkillToCentral(skillName, {
+        overwrite: Boolean(payload.overwrite),
+      });
+      sendJson(res, 200, {
+        success: true,
+        ...result,
+        skillLibrary: SkillInstaller.buildLibrarySnapshot({}),
+      });
+    } catch (err) {
+      sendJson(res, 400, { error: err.message || String(err) });
+    }
+    return;
+  }
+
+  if (reqPath === "/v1/skills/unify-all" && req.method === "POST") {
+    if (!checkLocalAuth(req, res)) return;
+    try {
+      const result = SkillInstaller.unifyAllToCentral({});
+      sendJson(res, 200, {
+        success: true,
+        ...result,
+        skillLibrary: SkillInstaller.buildLibrarySnapshot({}),
+      });
+    } catch (err) {
+      sendJson(res, 500, { error: err.message || String(err) });
+    }
+    return;
+  }
+
+  // --- Skills: install history (gateway-driven installs) ---
+  if (reqPath === "/v1/skills/install-history" && req.method === "GET") {
+    if (!checkLocalAuth(req, res)) return;
+    try {
+      sendJson(res, 200, {
+        success: true,
+        records: InstallHistory.list(),
+        filePath: InstallHistory.filePath(),
+      });
+    } catch (err) {
+      sendJson(res, 500, { error: err.message || String(err) });
+    }
+    return;
+  }
+
+  if (reqPath === "/v1/skills/install-history" && req.method === "DELETE") {
+    if (!checkLocalAuth(req, res)) return;
+    try {
+      const id = String(url.searchParams.get("id") || "").trim();
+      if (!id) { sendJson(res, 400, { error: "id is required" }); return; }
+      const removed = InstallHistory.remove(id);
+      sendJson(res, 200, { success: true, removed, records: InstallHistory.list() });
+    } catch (err) {
+      sendJson(res, 500, { error: err.message || String(err) });
+    }
+    return;
+  }
+
+  if (reqPath === "/v1/skills/install" && req.method === "POST") {
+    if (!checkLocalAuth(req, res)) return;
+    try {
+      const payload = JSON.parse(await readText(req) || "{}");
+      const command = String(payload.command || "").trim();
+      const skillName = payload.skillName ? String(payload.skillName).trim() : "";
+      if (!command) { sendJson(res, 400, { error: "command is required" }); return; }
+      const record = InstallHistory.create({ command, skillName });
+      sendJson(res, 200, { success: true, record });
+    } catch (err) {
+      sendJson(res, 400, { error: err.message || String(err) });
+    }
+    return;
+  }
+
+  // --- xterm static assets (served locally, no CDN) ---
+  if (reqPath.startsWith("/xterm/") && req.method === "GET") {
+    const seg = reqPath.slice("/xterm/".length);
+    const candidates = {
+      "xterm.css": ["@xterm/xterm", "css", "xterm.css"],
+      "xterm.js": ["@xterm/xterm", "lib", "xterm.js"],
+      "addon-fit.js": ["@xterm/addon-fit", "lib", "addon-fit.js"],
+    };
+    const parts = candidates[seg];
+    if (!parts) { sendJson(res, 404, { error: "not found" }); return; }
+    const filePath = path.join(PROJECT_ROOT, "node_modules", ...parts);
+    if (!fs.existsSync(filePath)) { sendJson(res, 404, { error: "asset missing" }); return; }
+    const ext = path.extname(filePath).toLowerCase();
+    const typeMap = { ".css": "text/css; charset=utf-8", ".js": "text/javascript; charset=utf-8" };
+    res.writeHead(200, { "Content-Type": typeMap[ext] || "application/octet-stream" });
+    res.end(fs.readFileSync(filePath));
     return;
   }
 
