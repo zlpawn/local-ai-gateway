@@ -5007,16 +5007,52 @@ function streamFinalResponsesObject(clientRes, response, requestedModel) {
   });
   try {
     writer.created();
-    const text = response?.output_text
-      || (Array.isArray(response?.output)
-        ? response.output
-          .filter((item) => item?.type === "message")
-          .flatMap((item) => item.content || [])
-          .filter((part) => part?.type === "output_text")
-          .map((part) => part.text || "")
-          .join("")
-        : "");
-    if (text) writer.textDelta(text);
+    if (Array.isArray(response?.output) && response.output.length > 0) {
+      let toolIndex = 0;
+      for (const item of response.output) {
+        if (!item || typeof item !== "object") continue;
+        if (item.type === "reasoning") {
+          const reasoningText = Array.isArray(item.summary)
+            ? item.summary.map((s) => s?.text || "").join("")
+            : (item.text || "");
+          if (reasoningText) writer.reasoningDelta(reasoningText);
+        } else if (item.type === "message") {
+          const text = Array.isArray(item.content)
+            ? item.content
+              .filter((part) => part?.type === "output_text")
+              .map((part) => part.text || "")
+              .join("")
+            : (item.text || "");
+          if (text) writer.textDelta(text);
+        } else if (item.type === "function_call" || item.type === "custom_tool_call") {
+          const kind = item.type === "custom_tool_call" ? "custom" : "function";
+          const callId = item.call_id || item.id || `call_${Date.now()}_${toolIndex}`;
+          const name = item.name || "";
+          const argsText = kind === "custom"
+            ? (typeof item.input === "string" ? item.input : JSON.stringify(item.input ?? {}))
+            : (typeof item.arguments === "string" ? item.arguments : JSON.stringify(item.arguments ?? {}));
+          
+          writer.functionArgumentsDelta({
+            index: toolIndex,
+            callId,
+            name,
+            delta: argsText,
+            kind,
+          });
+          writer.finishFunction({
+            index: toolIndex,
+            callId,
+            name,
+            argumentsText: argsText,
+            kind,
+          });
+          toolIndex++;
+        }
+      }
+    } else {
+      const text = response?.output_text || "";
+      if (text) writer.textDelta(text);
+    }
     writer.completed(response?.usage || {});
   } catch (error) {
     writer.failed({
