@@ -239,23 +239,36 @@ systemInstruction 中的 antigravity identity:从 AG `wrapper.rs` 提取,逐字�
 
 ## 11. 配置设计
 
-`gateway.config.json` 的 `clients.codex.endpoints[]` 新增:
+gateway.config.json 的 clients.codex.endpoints[] 新增(仅声明模型与能力,不含凭据):
 
-```
 {
   id: 'ep_antigravity',
   name: 'antigravity-subscription',
   type: 'antigravity',
-  auth: 'oauth',
-  token_path: '~/.codex/antigravity-token.json',
   models: ['gemini-3-pro', 'gemini-3-flash'],
   model_mapping: {},
-  capabilities: { input_modalities: ['text', 'image'], reasoning: true, tools: true },
+  capabilities: { input_modalities: ['text','image'], reasoning: true, tools: true },
   is_default: false
 }
-```
 
-OAuth 登录由 CLI(`bin/cli.js`)触发:启动 `oauth-callback-server`,打开浏览器,拿 token 存 `token_path`。
+凭据存储(独立文件,与历史 secrets 完全隔离,零改 prepareState):
+
+- 文件:`antigravity.secrets.json`,与 `gateway.secrets.json` 同目录(即 `path.dirname(GATEWAY_CONFIG_FILE)`);可用环境变量 `ANTIGRAVITY_SECRETS_FILE` 覆盖
+- 格式(JSON 风格与 `gateway.secrets.json` 一致:2 空格缩进、双引号、下划线命名):
+  {
+    "client_id": "...apps.googleuser.test",
+    "client_secret": "FAKESEC-...",
+    "access_token": "ya29...",
+    "refresh_token": "1//...",
+    "expires_at": 1758900000,
+    "account_id": "you@gmail.com"
+  }
+- `client_id` / `client_secret`:登录前手填一次(从 AG-Manager `src-tauri/src/modules/oauth.rs:6-9` 取值)
+- `access_token` / `refresh_token` / `expires_at` / `account_id`:OAuth 登录后 gateway 自动写入;token 刷新时只更新这几个字段(原子写,不动 client 凭据)
+- 加入 `.gitignore`(与 `gateway.secrets.json` 并列),不进 git、不触发 secret 扫描
+- 不复用 `gateway.secrets.json` 的 prepareState 保存机制(该机制重建 secrets 时只保留 `api_keys`,会擦掉 antigravity 顶层字段);antigravity 模块自管读写,与历史 secrets 零交互
+
+OAuth 登录由 CLI(`bin/cli.js`)触发:启动 `oauth-callback-server`,打开浏览器,拿 token 写入 `antigravity.secrets.json`。
 
 ## 12. 关键风险与对策
 
