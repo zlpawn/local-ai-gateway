@@ -1451,6 +1451,63 @@
             gap: 8px;
             margin-top: 16px;
         }
+        .skill-modal-overlay {
+            position: fixed;
+            inset: 0;
+            background: rgba(15, 17, 21, 0.45);
+            backdrop-filter: blur(2px);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            z-index: 9999;
+            opacity: 0;
+            pointer-events: none;
+            transition: opacity var(--transition-fast);
+        }
+        .skill-modal-overlay.open {
+            opacity: 1;
+            pointer-events: auto;
+        }
+        .skill-modal {
+            width: min(440px, calc(100vw - 32px));
+            background: var(--surface);
+            border: 1px solid var(--border-color);
+            border-radius: var(--radius-md);
+            box-shadow: 0 20px 48px rgba(0,0,0,0.22);
+            padding: 22px 22px 18px;
+            transform: translateY(8px);
+            transition: transform var(--transition-fast);
+        }
+        .skill-modal-overlay.open .skill-modal {
+            transform: translateY(0);
+        }
+        .skill-modal-title {
+            font-size: 15px;
+            font-weight: 700;
+            color: var(--text-primary);
+            margin: 0 0 10px;
+        }
+        .skill-modal-body {
+            font-size: 13px;
+            line-height: 1.6;
+            color: var(--text-secondary);
+            white-space: pre-wrap;
+        }
+        .skill-modal-body code {
+            font-family: var(--font-mono);
+            background: var(--input-bg);
+            border: 1px solid var(--border-color);
+            border-radius: var(--radius-sm);
+            padding: 1px 5px;
+            font-size: 12px;
+            color: var(--text-primary);
+        }
+        .skill-modal-actions {
+            display: flex;
+            justify-content: flex-end;
+            gap: 8px;
+            margin-top: 18px;
+        }
         .skills-empty {
             border: 1px dashed var(--border-color);
             border-radius: var(--radius-md);
@@ -1806,8 +1863,7 @@ experimental_bearer_token = "dummy"</pre>
 
                 <div class="usage-guide">
                     <h3>💡 使用原则</h3>
-                    <p>统一中央目录：<code class="path-pill">~/.agents/skills/</code>。目录里有这个 skill，就算已安装；不再区分“已挂载 / 未挂载”。</p>
-                    <p>网关托管技能可由网关写入中央目录；本地技能则直接放进同一目录即可被发现。右上角“刷新技能库”会重新扫描中央目录并刷新列表。</p>
+                    <p>统一中央目录：<code class="path-pill">~/.agents/skills/</code>。网关托管技能可由网关写入中央目录；本地技能则直接放进同一目录即可被发现。右上角“刷新技能库”会重新扫描各技能目录并刷新列表。</p>
                 </div>
 
                 <div class="skills-toolbar">
@@ -1833,7 +1889,18 @@ experimental_bearer_token = "dummy"</pre>
     </div>
 
 
+    <div class="skill-modal-overlay" id="skill-confirm-modal" onclick="if(event.target===this) closeSkillConfirmModal(false)">
+        <div class="skill-modal" role="dialog" aria-modal="true">
+            <h3 class="skill-modal-title" id="skill-confirm-title">确认操作</h3>
+            <div class="skill-modal-body" id="skill-confirm-body"></div>
+            <div class="skill-modal-actions">
+                <button class="btn" onclick="closeSkillConfirmModal(false)">取消</button>
+                <button class="btn btn-primary" id="skill-confirm-ok" onclick="closeSkillConfirmModal(true)">确定</button>
+            </div>
+        </div>
+    </div>
     <div class="toast-container" id="toast-container"></div>
+
 
     <script>
         let config = {
@@ -2084,6 +2151,10 @@ experimental_bearer_token = "dummy"</pre>
             const clientRows = Object.entries(tools).map(([tool, meta]) => {
                 const rootId = rootByClient[tool];
                 const present = rootId ? Boolean(presentIn[rootId]) : Boolean(skill.installed);
+                const isCentral = tool === 'codex';
+                const action = present ? 'unlink' : 'link';
+                const actionLabel = present ? '取消链接' : '链接';
+                const linkBtn = isCentral ? '' : `<button class="btn" style="padding:4px 10px;font-size:12px;flex:0 0 auto;" onclick="linkSkillClient('${escapeHtml(skill.name)}','${tool}','${action}')">${actionLabel}</button>`;
                 return `
                 <div class="skill-mount-row">
                     <div class="skill-mount-main">
@@ -2095,6 +2166,7 @@ experimental_bearer_token = "dummy"</pre>
                             <code class="path-pill skill-path-wrap">${escapeHtml(meta.path || '')}</code>
                         </div>
                     </div>
+                    ${linkBtn}
                     <span class="skill-pill skill-status-pill ${present ? 'installed' : 'missing'}">${present ? '可用' : '未安装'}</span>
                 </div>
                 `;
@@ -2225,13 +2297,30 @@ experimental_bearer_token = "dummy"</pre>
             }
         };
 
+        let skillConfirmResolver = null;
+        function showSkillConfirmModal(title, bodyHtml) {
+            return new Promise((resolve) => {
+                document.getElementById('skill-confirm-title').textContent = title;
+                document.getElementById('skill-confirm-body').innerHTML = bodyHtml;
+                const overlay = document.getElementById('skill-confirm-modal');
+                overlay.classList.add('open');
+                skillConfirmResolver = resolve;
+            });
+        }
+        window.closeSkillConfirmModal = function(ok) {
+            const overlay = document.getElementById('skill-confirm-modal');
+            overlay.classList.remove('open');
+            const resolver = skillConfirmResolver;
+            skillConfirmResolver = null;
+            if (resolver) resolver(ok);
+        };
+
         window.promoteLocalSkillToManaged = async function(skillName) {
             const name = String(skillName || '').trim();
             if (!name) return false;
-            const ok = confirm(
-                `确认把本地 skill「${name}」转成网关托管？\n\n` +
-                `会写入项目托管源目录 lib/skills/${name}/，` +
-                `并加入 managed-catalog.json，后续可像 grok-imagine / session-sync 一样由网关安装分发。`
+            const ok = await showSkillConfirmModal(
+                '转为网关托管',
+                `确认把本地 skill「${name}」转成网关托管？\n\n会写入项目托管源目录 <code>lib/skills/${escapeHtml(name)}/</code>，并加入 <code>managed-catalog.json</code>，后续可像 grok-imagine / session-sync 一样由网关安装分发。`
             );
             if (!ok) return false;
             try {
@@ -2248,6 +2337,25 @@ experimental_bearer_token = "dummy"</pre>
                 return true;
             } catch (err) {
                 showToast(`转换失败: ${err.message}`, 'danger');
+                await refreshSkillsLibrary(true);
+                return false;
+            }
+        };
+
+        window.linkSkillClient = async function(skillName, client, action) {
+            try {
+                const res = await fetch('/v1/skills/link', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ skill: skillName, client, action }),
+                });
+                const data = await res.json();
+                if (!data.success) throw new Error(data.error || '操作失败');
+                await refreshSkillsLibrary(true);
+                showToast(action === 'unlink' ? `已从 ${client} 取消链接 ${skillName}` : `已链接 ${skillName} 到 ${client}`, 'success');
+                return true;
+            } catch (err) {
+                showToast(`操作失败: ${err.message}`, 'danger');
                 await refreshSkillsLibrary(true);
                 return false;
             }

@@ -593,6 +593,29 @@ function collectGroupedModelsFromConfig(config) {
     return;
   }
 
+  if (reqPath === "/v1/skills/link" && req.method === "POST") {
+    if (!checkLocalAuth(req, res)) return;
+    try {
+      const payload = JSON.parse(await readText(req));
+      const skillName = String(payload.skill || payload.name || "").trim();
+      const client = String(payload.client || "").trim();
+      const action = String(payload.action || "link").trim();
+      if (!skillName || !client) {
+        sendJson(res, 400, { error: "skill and client are required" });
+        return;
+      }
+      const result = SkillInstaller.linkSkillToClient(skillName, client, action !== "unlink");
+      sendJson(res, 200, {
+        success: true,
+        ...result,
+        skillLibrary: SkillInstaller.buildLibrarySnapshot({}),
+      });
+    } catch (err) {
+      sendJson(res, 400, { error: err.message || String(err) });
+    }
+    return;
+  }
+
   if (reqPath === "/v1/skills/promote" && req.method === "POST") {
     if (!checkLocalAuth(req, res)) return;
     try {

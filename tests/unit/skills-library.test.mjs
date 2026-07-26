@@ -170,12 +170,12 @@ test("Skill library scans antigravity-only and claude roots with dedup", () => {
   try {
     // central: only grok-imagine ensured (managed). Put a local skill in antigravity dir only.
     const agRoot = SkillInstaller.getAntigravitySkillsRoot(tmpHome);
-    const agDir = path.join(agRoot, "video-to-karpathy-wiki");
+    const agDir = path.join(agRoot, "multiscan-ag-only-skill");
     fs.mkdirSync(agDir, { recursive: true });
     fs.writeFileSync(
       path.join(agDir, "SKILL.md"),
       `---
-name: video-to-karpathy-wiki
+name: multiscan-ag-only-skill
 description: Parse technical videos into dense Karpathy-style wiki notes.
 ---
 
@@ -202,7 +202,7 @@ description: A skill only present under ~/.claude/skills.
 
     const snapshot = SkillInstaller.buildLibrarySnapshot({ homeDir: tmpHome });
 
-    const ag = snapshot.allSkills.find((s) => s.name === "video-to-karpathy-wiki");
+    const ag = snapshot.allSkills.find((s) => s.name === "multiscan-ag-only-skill");
     assert.ok(ag, "antigravity-only skill should be listed");
     assert.equal(ag.installed, true);
     assert.equal(ag.presentIn.central, false);
@@ -221,17 +221,17 @@ description: A skill only present under ~/.claude/skills.
     assert.deepEqual(dupes, []);
 
     // Promote an antigravity-only skill into managed source.
-    const promoted = SkillInstaller.promoteLocalSkillToManaged("video-to-karpathy-wiki", { homeDir: tmpHome });
+    const promoted = SkillInstaller.promoteLocalSkillToManaged("multiscan-ag-only-skill", { homeDir: tmpHome });
     assert.equal(promoted.skill.managed, true);
-    assert.ok(fs.existsSync(path.join(SkillInstaller.MANAGED_SKILLS_ROOT, "video-to-karpathy-wiki", "SKILL.md")));
+    assert.ok(fs.existsSync(path.join(SkillInstaller.MANAGED_SKILLS_ROOT, "multiscan-ag-only-skill", "SKILL.md")));
   } finally {
     // clean promoted artifact so we don't leak into the real project tree
-    const promotedDir = path.join(SkillInstaller.MANAGED_SKILLS_ROOT, "video-to-karpathy-wiki");
+    const promotedDir = path.join(SkillInstaller.MANAGED_SKILLS_ROOT, "multiscan-ag-only-skill");
     if (fs.existsSync(promotedDir)) fs.rmSync(promotedDir, { recursive: true, force: true });
     const cat = SkillInstaller.MANAGED_CATALOG_FILE;
     if (fs.existsSync(cat)) {
       const data = JSON.parse(fs.readFileSync(cat, "utf-8"));
-      const filtered = (data.skills || []).filter((s) => s.name !== "video-to-karpathy-wiki");
+      const filtered = (data.skills || []).filter((s) => s.name !== "multiscan-ag-only-skill");
       if (filtered.length === 0) fs.rmSync(cat, { force: true });
       else fs.writeFileSync(cat, JSON.stringify({ ...data, skills: filtered }, null, 2));
     }
