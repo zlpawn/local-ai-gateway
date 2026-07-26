@@ -234,7 +234,7 @@ if (startupClaude3pSync?.updated) {
 // --- Skills install: interactive PTY over WebSocket ---
 const ptySessions = new Map(); // recordId -> { pty, ws, beforeNames }
 
-function startPtyForRecord(recordId) {
+function startPtyForRecord(recordId, opts = {}) {
   const record = InstallHistory.get(recordId);
   if (!record || record.status !== "running") return false;
   if (ptySessions.has(recordId)) return true;
@@ -246,12 +246,15 @@ function startPtyForRecord(recordId) {
   const file = isWin ? "cmd.exe" : "/bin/sh";
   const args = isWin ? ["/c", record.command] : ["-c", record.command];
 
+  const cols = Number.isFinite(Number(opts.cols)) ? Math.max(20, Math.min(400, Number(opts.cols))) : 100;
+  const rows = Number.isFinite(Number(opts.rows)) ? Math.max(5, Math.min(120, Number(opts.rows))) : 24;
+
   let pty;
   try {
     pty = nodePty.spawn(file, args, {
       name: "xterm-color",
-      cols: 100,
-      rows: 30,
+      cols,
+      rows,
       cwd: homeDir,
       env: { ...process.env, FORCE_COLOR: "0" },
     });
@@ -308,8 +311,10 @@ server.on("upgrade", (req, socket, head) => {
     socket.destroy();
     return;
   }
+  const cols = url.searchParams.get("cols");
+  const rows = url.searchParams.get("rows");
   wsServer.handleUpgrade(req, socket, head, (ws) => {
-    if (!startPtyForRecord(recordId)) {
+    if (!startPtyForRecord(recordId, { cols, rows })) {
       ws.close();
       return;
     }
@@ -317,7 +322,18 @@ server.on("upgrade", (req, socket, head) => {
     session.ws = ws;
     ws.on("message", (msg) => {
       try {
-        pty.write(typeof msg === "string" ? msg : msg.toString());
+        const text = typeof msg === "string" ? msg : msg.toString();
+        // Control frames are JSON with a `type`; raw keystrokes pass through.
+        let ctrl = null;
+        try { ctrl = JSON.parse(text); } catch { /* not JSON -> raw input */ }
+        if (ctrl && ctrl.type === "resize" && session.pty) {
+          const c = Number(ctrl.cols), r = Number(ctrl.rows);
+          if (Number.isFinite(c) && Number.isFinite(r)) {
+            try { session.pty.resize(Math.max(20, Math.min(400, c)), Math.max(5, Math.min(120, r))); } catch {}
+          }
+          return;
+        }
+        session.pty.write(text);
       } catch {
         // pty may be gone
       }

@@ -406,6 +406,16 @@
             transform: none;
         }
 
+        #unify-all-btn {
+            background: #3b82f6;
+            color: #fff;
+            border-color: transparent;
+        }
+        #unify-all-btn:hover:not(:disabled) {
+            background: #2563eb;
+            opacity: 1;
+        }
+
         .btn-danger {
             background: transparent;
             color: var(--text-secondary);
@@ -1934,7 +1944,7 @@ experimental_bearer_token = "dummy"</pre>
                     <button class="skills-filter-chip" data-scope="local" onclick="setSkillsScope('local')">本地发现 0</button>
                     <button class="skills-filter-chip" data-scope="missing" onclick="setSkillsScope('missing')">未安装托管 0</button>
                                     <button class="skills-filter-chip" data-scope="unified-missing" onclick="setSkillsScope('unified-missing')">未统一到中央 0</button>
-                                    <button class="btn" style="padding:4px 10px;font-size:12px;margin-left:auto;" onclick="unifyAllSkills()">一键统一</button>
+                    <button class="btn btn-primary" id="unify-all-btn" style="padding:4px 12px;font-size:12px;" title="把未统一到中央的 skill 复制到 ~/.agents/skills 并软链其他目录" onclick="unifyAllSkills()">一键统一</button>
                 </div>
 
                 <div id="skills-category-filters" class="skills-filters"></div>
@@ -1969,6 +1979,7 @@ experimental_bearer_token = "dummy"</pre>
                 <div class="install-terminal-wrap" id="install-terminal-wrap">
                     <div class="install-terminal-header">
                         <span id="install-terminal-title">安装终端</span>
+                        <span id="install-terminal-hint" style="color:#f59e0b;font-size:11px;margin-left:8px;flex:1;"></span>
                         <button class="btn" onclick="closeInstallTerminal()">关闭</button>
                     </div>
                     <div id="xterm-container"></div>
@@ -2245,6 +2256,14 @@ experimental_bearer_token = "dummy"</pre>
                 xtermFit = new FitAddon.FitAddon();
                 xtermTerm.loadAddon(xtermFit);
                 xtermTerm.open(document.getElementById('xterm-container'));
+                xtermTerm.onData(function(d) {
+                    if (currentInstallWs && currentInstallWs.readyState === 1) currentInstallWs.send(d);
+                });
+                xtermTerm.onResize(function(size) {
+                    if (currentInstallWs && currentInstallWs.readyState === 1) {
+                        currentInstallWs.send(JSON.stringify({ type: 'resize', cols: size.cols, rows: size.rows }));
+                    }
+                });
             }
             xtermTerm.reset();
             try { xtermFit.fit(); } catch (e) {}
@@ -2277,23 +2296,30 @@ experimental_bearer_token = "dummy"</pre>
             if (title) title.textContent = '安装终端 · ' + record.id;
             xtermTerm.writeln('$ ' + cmd);
 
-            const wsUrl = 'ws://' + location.host + '/v1/skills/pty?recordId=' + record.id;
+            const wsUrl = 'ws://' + location.host + '/v1/skills/pty?recordId=' + record.id
+                + '&cols=' + xtermTerm.cols + '&rows=' + xtermTerm.rows;
             const ws = new WebSocket(wsUrl);
             currentInstallWs = ws;
-            ws.onopen = function() { xtermTerm.focus(); };
+            const hint = document.getElementById('install-terminal-hint');
+            if (hint) hint.textContent = '运行中 · 如出现 Ok to proceed? (y) 请输入 y 并回车';
+            ws.onopen = function() {
+                xtermTerm.focus();
+                try { xtermFit.fit(); } catch (e) {}
+                if (ws.readyState === 1) ws.send(JSON.stringify({ type: 'resize', cols: xtermTerm.cols, rows: xtermTerm.rows }));
+            };
             ws.onmessage = function(e) {
                 let parsed = null;
                 if (typeof e.data === 'string') { try { parsed = JSON.parse(e.data); } catch (err) {} }
                 if (parsed && parsed.type === 'exit') {
+                    if (hint) hint.textContent = '';
                     xtermTerm.writeln('\r\n[进程退出 code=' + parsed.exitCode + ']' + (parsed.skillName ? (' 关联 skill: ' + parsed.skillName) : ''));
                     refreshInstallHistory();
                 } else {
                     xtermTerm.write(typeof e.data === 'string' ? e.data : '');
                 }
             };
-            ws.onclose = function() { refreshInstallHistory(); };
+            ws.onclose = function() { if (hint) hint.textContent = ''; refreshInstallHistory(); };
             ws.onerror = function() { xtermTerm.writeln('\r\n[连接错误]'); };
-            xtermTerm.onData(function(d) { if (ws.readyState === 1) ws.send(d); });
             return true;
         }
 
@@ -2362,6 +2388,13 @@ experimental_bearer_token = "dummy"</pre>
                 el.classList.toggle('active', scope === skillsLibraryState.scope);
                 if (labels[scope]) el.textContent = labels[scope];
             });
+            const unifyBtn = document.getElementById('unify-all-btn');
+            if (unifyBtn) {
+                const n = s.unifiedMissing || 0;
+                const show = n > 0 && skillsLibraryState.scope === 'unified-missing';
+                unifyBtn.style.display = show ? '' : 'none';
+                if (show) unifyBtn.textContent = '一键统一 (' + n + ')';
+            }
         }
 
         function renderSkillsCategories() {
@@ -2455,7 +2488,7 @@ experimental_bearer_token = "dummy"</pre>
             if (skill.canPromote || (skill.installed && !skill.managed)) {
                 actions.push(`<button class="btn" onclick="promoteLocalSkillToManaged('${escapeHtml(skill.name)}')">转为网关托管</button>`);
             }
-            if (!presentIn.central && (presentIn.antigravity || presentIn.claude)) {
+            if (!skill.centralReal && skill.installed) {
                 actions.push(`<button class="btn btn-primary" onclick="unifySkillToCentral('${escapeHtml(skill.name)}')">统一到中央目录</button>`);
             }
 
