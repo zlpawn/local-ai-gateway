@@ -2079,7 +2079,12 @@ experimental_bearer_token = "dummy"</pre>
             }
 
             const tools = skill.tools || skillsLibraryState.tools || {};
-            const clientRows = Object.entries(tools).map(([tool, meta]) => `
+            const presentIn = skill.presentIn || {};
+            const rootByClient = { antigravity: 'antigravity', claude: 'claude', codex: 'central' };
+            const clientRows = Object.entries(tools).map(([tool, meta]) => {
+                const rootId = rootByClient[tool];
+                const present = rootId ? Boolean(presentIn[rootId]) : Boolean(skill.installed);
+                return `
                 <div class="skill-mount-row">
                     <div class="skill-mount-main">
                         <div style="width:28px;height:28px;border-radius:8px;background:var(--input-bg);border:1px solid var(--border-color);display:flex;align-items:center;justify-content:center;font-weight:700;font-size:12px;flex:0 0 auto;color:${escapeHtml(meta.color || 'var(--text-primary)')};">
@@ -2090,9 +2095,10 @@ experimental_bearer_token = "dummy"</pre>
                             <code class="path-pill skill-path-wrap">${escapeHtml(meta.path || '')}</code>
                         </div>
                     </div>
-                    <span class="skill-pill skill-status-pill ${skill.installed ? 'installed' : 'missing'}">${skill.installed ? '可用' : '未安装'}</span>
+                    <span class="skill-pill skill-status-pill ${present ? 'installed' : 'missing'}">${present ? '可用' : '未安装'}</span>
                 </div>
-            `).join('');
+                `;
+            }).join('');
 
             const actions = [];
             if (skill.managed && !skill.installed) {
@@ -2119,7 +2125,7 @@ experimental_bearer_token = "dummy"</pre>
                     ${skill.hasScripts ? '<span class="skill-pill">含 scripts</span>' : ''}
                 </div>
                 <div class="usage-guide" style="margin-bottom:12px;">
-                    <p>安装判定只看中央目录是否存在该 skill：</p>
+                    <p>该 skill 的实际读取目录（按 central &gt; antigravity &gt; claude 优先）：</p>
                     <p><code class="path-pill skill-path-wrap">${escapeHtml(skill.path || skill.skillDir || '')}</code></p>
                     ${skill.managed ? `<p style="margin-top:8px;">项目托管源目录：</p><p><code class="path-pill skill-path-wrap">${escapeHtml(skill.projectSourceDir || (skillsLibraryState.managedRoot ? `${skillsLibraryState.managedRoot}/${skill.name}` : `lib/skills/${skill.name}`))}</code></p>` : ''}
                 </div>

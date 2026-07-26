@@ -163,3 +163,78 @@ description: Auto-export Netscape cookies from Chrome for yt-dlp via CDP.
     fs.rmSync(tmpHome, { recursive: true, force: true });
   }
 });
+
+
+test("Skill library scans antigravity-only and claude roots with dedup", () => {
+  const tmpHome = fs.mkdtempSync(path.join(os.tmpdir(), "skill-multiscan-"));
+  try {
+    // central: only grok-imagine ensured (managed). Put a local skill in antigravity dir only.
+    const agRoot = SkillInstaller.getAntigravitySkillsRoot(tmpHome);
+    const agDir = path.join(agRoot, "video-to-karpathy-wiki");
+    fs.mkdirSync(agDir, { recursive: true });
+    fs.writeFileSync(
+      path.join(agDir, "SKILL.md"),
+      `---
+name: video-to-karpathy-wiki
+description: Parse technical videos into dense Karpathy-style wiki notes.
+---
+
+# Video to Karpathy Wiki
+`,
+      "utf-8",
+    );
+
+    // claude root has a different local skill
+    const claudeRoot = path.join(tmpHome, ".claude", "skills");
+    const claudeDir = path.join(claudeRoot, "claude-only-skill");
+    fs.mkdirSync(claudeDir, { recursive: true });
+    fs.writeFileSync(
+      path.join(claudeDir, "SKILL.md"),
+      `---
+name: claude-only-skill
+description: A skill only present under ~/.claude/skills.
+---
+`,
+      "utf-8",
+    );
+
+    SkillInstaller.ensureManagedSkills(tmpHome);
+
+    const snapshot = SkillInstaller.buildLibrarySnapshot({ homeDir: tmpHome });
+
+    const ag = snapshot.allSkills.find((s) => s.name === "video-to-karpathy-wiki");
+    assert.ok(ag, "antigravity-only skill should be listed");
+    assert.equal(ag.installed, true);
+    assert.equal(ag.presentIn.central, false);
+    assert.equal(ag.presentIn.antigravity, true);
+    assert.equal(ag.presentIn.claude, false);
+
+    const cl = snapshot.allSkills.find((s) => s.name === "claude-only-skill");
+    assert.ok(cl, "claude-only skill should be listed");
+    assert.equal(cl.installed, true);
+    assert.equal(cl.presentIn.claude, true);
+    assert.equal(cl.presentIn.central, false);
+
+    // No duplicate entries: each name appears exactly once.
+    const names = snapshot.allSkills.map((s) => s.name);
+    const dupes = names.filter((n, i) => names.indexOf(n) !== i);
+    assert.deepEqual(dupes, []);
+
+    // Promote an antigravity-only skill into managed source.
+    const promoted = SkillInstaller.promoteLocalSkillToManaged("video-to-karpathy-wiki", { homeDir: tmpHome });
+    assert.equal(promoted.skill.managed, true);
+    assert.ok(fs.existsSync(path.join(SkillInstaller.MANAGED_SKILLS_ROOT, "video-to-karpathy-wiki", "SKILL.md")));
+  } finally {
+    // clean promoted artifact so we don't leak into the real project tree
+    const promotedDir = path.join(SkillInstaller.MANAGED_SKILLS_ROOT, "video-to-karpathy-wiki");
+    if (fs.existsSync(promotedDir)) fs.rmSync(promotedDir, { recursive: true, force: true });
+    const cat = SkillInstaller.MANAGED_CATALOG_FILE;
+    if (fs.existsSync(cat)) {
+      const data = JSON.parse(fs.readFileSync(cat, "utf-8"));
+      const filtered = (data.skills || []).filter((s) => s.name !== "video-to-karpathy-wiki");
+      if (filtered.length === 0) fs.rmSync(cat, { force: true });
+      else fs.writeFileSync(cat, JSON.stringify({ ...data, skills: filtered }, null, 2));
+    }
+    fs.rmSync(tmpHome, { recursive: true, force: true });
+  }
+});
