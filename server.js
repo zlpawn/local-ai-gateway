@@ -276,7 +276,6 @@ server.listen(LISTEN_PORT, LISTEN_HOST, () => {
 
   const shouldOpen = !process.env.GATEWAY_NO_OPEN &&
                      !process.env.MOCK_API_KEY &&
-                     !process.env.ELECTRON_RUN_AS_NODE &&
                      process.env.NODE_ENV !== "test";
   if (shouldOpen) {
     const startCmd = 
