@@ -170,69 +170,30 @@ npm run gateway -- stop --test
 Test mode always uses port `8788`, writes runtime files under `.gateway-test`,
 and disables Claude Desktop, Claude Code, and Codex configuration sync.
 
-## Desktop App (Deprecated)
+## Web Config UI
 
-> **Deprecated:** the Electron desktop shell is no longer the preferred way to
-> run or configure the gateway. Prefer the web config page and CLI:
->
-> ```powershell
-> npm start
-> # then open http://127.0.0.1:8787/config
-> ```
->
-> or:
->
-> ```powershell
-> npm run gateway:start
-> ```
->
-> This deprecation applies only to the Electron host
-> (`desktop/main.mjs`, packaging, and smoke helpers). Keep these intact:
->
-> - `desktop/config-panel.html` (web config UI)
-> - `clients.desktop` in `gateway.config.json`
-> - Claude Desktop client routing such as `/desktop/v1/messages`
-
-The Electron app is a thin host for the same web config page served at
-`/config`. It starts the gateway when the app opens, loads
-`http://127.0.0.1:<port>/config`, and stops the gateway when the app exits.
-It does not keep a separate desktop config UI.
-
-Legacy development command:
+The shared web config page lives at `desktop/config-panel.html` and is served at
+`/config` after the gateway starts. Prefer this path over any former desktop shell:
 
 ```powershell
-npm install
-npm run desktop
+npm start
+# then open http://127.0.0.1:8787/config
 ```
 
-Legacy installer commands:
+or:
 
 ```powershell
-npm run desktop:dist
-npm run desktop:dist:win
-npm run desktop:dist:mac
+npm run gateway:start
 ```
 
-The build config emits a Windows NSIS installer on Windows and a macOS dmg on
-macOS. macOS signing/notarization is not configured. The GitHub Actions workflow
-at `.github/workflows/desktop-build.yml` is also deprecated and is not the
-primary release path while the shell is being retired.
+Keep these concepts separate:
 
-When used, the Electron app keeps its local `.env`, `gateway.config.json`, and
-logs in Electron's user data directory, not in the repository root. The config
-is still created by saving the shared web config page.
+- `desktop/config-panel.html`: web configuration UI
+- `clients.desktop` in `gateway.config.json`: Claude Desktop client endpoints
+- `/desktop/...` routes: Claude Desktop request prefix / client identity
 
-Legacy desktop checks:
-
-```powershell
-npm run desktop:check
-npm run desktop:test
-npm run desktop:smoke
-```
-
-`desktop:smoke` expects a Windows unpacked build in `dist/win-unpacked`. It
-starts the packaged app on a temporary high port, checks `/health`, exits the
-app, and verifies that the port is released.
+The Electron desktop shell, packaging scripts, and desktop build workflow have
+been removed. Configuration and day-to-day use are web/CLI only.
 
 ## Validate
 

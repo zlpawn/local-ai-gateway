@@ -12,9 +12,6 @@
   "files": [
     "bin",
     "desktop/config-panel.html",
-    "desktop/main.mjs",
-    "desktop/lib/desktop-smoke.mjs",
-    "desktop/lib/gateway-control.mjs",
     "lib",
     "scripts",
     "server.js",
@@ -45,13 +42,6 @@
   "scripts": {
     "init": "node scripts/init-config.mjs",
     "start": "node server.js",
-    "desktop": "node -e \"console.warn('[deprecated] Electron desktop shell is deprecated; prefer npm start and http://127.0.0.1:8787/config')\" && electron desktop/main.mjs",
-    "desktop:check": "node -e \"console.warn('[deprecated] Electron desktop shell is deprecated; prefer npm start and http://127.0.0.1:8787/config')\" && node --check desktop/main.mjs && node --check desktop/lib/gateway-control.mjs && node --check desktop/lib/desktop-smoke.mjs && node --check scripts/smoke-desktop.mjs",
-    "desktop:test": "node -e \"console.warn('[deprecated] Electron desktop shell is deprecated; prefer npm start and http://127.0.0.1:8787/config')\" && node --test desktop/lib/gateway-control.test.mjs desktop/lib/desktop-smoke.test.mjs",
-    "desktop:smoke": "node -e \"console.warn('[deprecated] Electron desktop shell is deprecated; prefer npm start and http://127.0.0.1:8787/config')\" && node scripts/smoke-desktop.mjs",
-    "desktop:dist": "node -e \"console.warn('[deprecated] Electron desktop shell is deprecated; prefer npm start and http://127.0.0.1:8787/config')\" && electron-builder --config electron-builder.yml",
-    "desktop:dist:win": "node -e \"console.warn('[deprecated] Electron desktop shell is deprecated; prefer npm start and http://127.0.0.1:8787/config')\" && electron-builder --config electron-builder.yml --win nsis",
-    "desktop:dist:mac": "node -e \"console.warn('[deprecated] Electron desktop shell is deprecated; prefer npm start and http://127.0.0.1:8787/config')\" && electron-builder --config electron-builder.yml --mac dmg",
     "check": "node --check server.js && node --check scripts/gateway.mjs && node --check scripts/init-config.mjs && node --check bin/cli.js",
     "doctor": "node scripts/doctor.mjs",
     "validate:config": "node scripts/validate-config.mjs",
@@ -61,7 +51,7 @@
     "codex:history:apply": "node scripts/codex-history-unify.mjs --apply",
     "codex:history:restore": "node scripts/codex-history-unify.mjs --restore",
     "test:adapters": "node --test tests/integration/basic-routes.test.mjs tests/integration/protocol-adapters.test.mjs",
-    "test:cli": "node --test tests/unit/gateway-service.test.mjs tests/unit/init-config.test.mjs tests/unit/package-release.test.mjs tests/unit/session-sync.test.mjs tests/integration/gateway-cli.integration.test.mjs",
+    "test:cli": "node --test tests/unit/gateway-service.test.mjs tests/unit/init-config.test.mjs tests/unit/package-release.test.mjs tests/unit/config-panel.test.mjs tests/unit/session-sync.test.mjs tests/integration/gateway-cli.integration.test.mjs",
     "test:sync": "node --test tests/unit/session-sync.test.mjs",
     "sync:status": "node bin/cli.js sync status",
     "sync:install-skill": "node bin/cli.js sync install-skill",
@@ -74,15 +64,12 @@
     "gateway:stop": "node scripts/gateway.mjs stop",
     "gateway:status": "node scripts/gateway.mjs status",
     "gateway:restart": "node scripts/gateway.mjs restart",
-    "release:check": "npm run check && npm run test:cli && npm run test:codex:unit && npm run desktop:test && npm run test:adapters && npm run test:codex:catalog-write && npm run test:codex:integration && npm run test:codex:e2e",
-    "prepublishOnly": "npm run release:check"
+    "release:check": "npm run check && npm run test:cli && npm run test:codex:unit && npm run test:adapters && npm run test:codex:catalog-write && npm run test:codex:integration && npm run test:codex:e2e",
+    "prepublishOnly": "npm run release:check",
+    "test:config-panel": "node --test tests/unit/config-panel.test.mjs"
   },
   "engines": {
     "node": ">=18"
-  },
-  "devDependencies": {
-    "electron": "^31.7.7",
-    "electron-builder": "^24.13.3"
   },
   "dependencies": {
     "https-proxy-agent": "^7.0.6"
