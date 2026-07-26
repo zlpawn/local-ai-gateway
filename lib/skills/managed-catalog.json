@@ -1,0 +1,20 @@
+{
+  "version": 1,
+  "updatedAt": "2026-07-26T10:46:57.605Z",
+  "skills": [
+    {
+      "id": "video-to-karpathy-wiki",
+      "name": "video-to-karpathy-wiki",
+      "title": "Video To Karpathy Wiki",
+      "summary": "将技术、架构或系统设计视频（URL 或本地文件）转写、抽帧审计并沉淀为 Karpathy 风格 Wiki。用户要求解析技术视频、制作系统设计视频笔记或归档到知识库时使用。支持 Windows 与 macOS。",
+      "category": "download",
+      "categoryLabel": "下载采集",
+      "icon": "⬇️",
+      "featured": false,
+      "tags": [],
+      "requiresDaemon": false,
+      "promoted": true,
+      "managed": true
+    }
+  ]
+}
