@@ -1377,6 +1377,21 @@
             gap: 12px;
             margin-bottom: 14px;
         }
+        .skill-detail-header-main {
+            flex: 1 1 auto;
+            min-width: 0;
+        }
+        .skill-detail-header-actions {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 8px;
+            margin-left: auto;
+            align-items: center;
+            flex: 0 0 auto;
+        }
+        .skill-detail-header-actions .btn {
+            white-space: nowrap;
+        }
         .skill-detail-header h3 {
             margin: 0;
             font-size: 18px;
@@ -2089,11 +2104,12 @@ experimental_bearer_token = "dummy"</pre>
 
             host.innerHTML = `
                 <div class="skill-detail-header">
-                    <div class="skill-card-icon" style="width:42px;height:42px;font-size:20px;">${escapeHtml(skill.icon || '🧩')}</div>
-                    <div>
+                    <div class="skill-card-icon" style="width:42px;height:42px;font-size:20px;flex:0 0 auto;">${escapeHtml(skill.icon || '🧩')}</div>
+                    <div class="skill-detail-header-main">
                         <h3>${escapeHtml(skill.title || skill.name)}</h3>
                         <div class="skill-card-id">${escapeHtml(skill.name)}</div>
                     </div>
+                    ${actions.length ? `<div class="skill-detail-header-actions">${actions.join('')}</div>` : ''}
                 </div>
                 <div class="skill-detail-summary">${escapeHtml(skill.summary || skill.description || '')}</div>
                 <div class="skill-card-meta" style="margin-bottom:14px;">
@@ -2109,7 +2125,6 @@ experimental_bearer_token = "dummy"</pre>
                 </div>
                 <div style="font-size:12px;font-weight:600;color:var(--text-secondary);margin-bottom:8px;">客户端读取路径（参考）</div>
                 <div class="skill-mount-list">${clientRows || '<div class="skill-detail-empty">暂无路径信息</div>'}</div>
-                ${actions.length ? `<div class="skill-detail-actions">${actions.join('')}</div>` : ''}
             `;
         }
 
