@@ -14,6 +14,29 @@
 - 单进程:全部逻辑以 Node.js ESM 模块形式集成进现有 gateway,不引入额外常驻进程
 - 复用现有 Codex `/v1/responses` 适配层与 `writeCodexModelCatalog` 机制
 - 仅支持 Google 官方 Gemini 模型;不支持 Antigravity 经 Vertex 的 Claude / GPT-OSS
+- 代码独立隔离:antigravity 集成代码独立自包含,与既有 gateway 逻辑解耦,可独立移除,不影响老逻辑(详见 2.1)
+
+### 2.1 隔离与兼容性原则
+
+核心原则:antigravity 集成代码必须独立自包含,与既有 gateway 逻辑解耦,做到可独立移除、出问题可干净回滚、对老逻辑零影响。这是整个集成的硬约束,优先级高于功能完整性。
+
+落实点:
+
+1. 模块独立:全部新逻辑放在新增的 `lib/antigravity/` 目录,自包含;不反向依赖 `lib/codex/` 内部实现,仅在 `/v1/responses` 出口处复用已导出的 `ResponsesWriter` 等公开组件。
+
+2. server.js 最小增量、分支式扩展:只新增分支,不改既有分支。具体:`endpoint.type` 分发处新增 `'antigravity'` 分支转交 `lib/antigravity/`;`writeCodexModelCatalog` 内新增对 `type === 'antigravity'` 的处理。不修改任何既有 type 的处理路径与既有 catalog 写入逻辑。
+
+3. 不污染全局状态:token / project / session 缓存由 antigravity 模块自管(模块级闭包或独立 store),不写入 gateway 共享运行时状态。
+
+4. 配置可选:`clients.codex.endpoints[]` 不含 `type === 'antigravity'` 时,gateway 行为与当前完全一致;不引入任何新的必需环境变量或启动参数。
+
+5. 错误隔离:antigravity 请求失败按现有错误响应格式返回,不抛未捕获异常导致 gateway 崩溃;antigravity 故障不影响其他 endpoint 正常服务。
+
+6. 依赖隔离:不引入新 npm 运行时依赖,仅用 Node 内置模块 + 现有 `https-proxy-agent`。
+
+7. 测试独立:新增 `tests/unit/antigravity-*.test.mjs`、`tests/integration/antigravity-gateway.test.mjs`、`tests/e2e/antigravity-e2e.mjs`,不混入现有 codex 测试套件。
+
+8. 回滚简单:出问题时,移除 `lib/antigravity/` + 撤销 server.js 的几行分发/catalog 增量 + 删除对应 endpoint 配置,即可完全回退,既有逻辑零影响。
 
 ## 3. 总体架构
 
