@@ -1782,7 +1782,7 @@ experimental_bearer_token = "dummy"</pre>
                     </div>
                     <button class="btn btn-primary" onclick="saveSyncConfig()">
                         <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z"></path><polyline points="17 21 17 13 7 13 7 21"></polyline><polyline points="7 3 7 8 15 8"></polyline></svg>
-                        保存同步设置与软链接
+                        保存同步设置
                     </button>
                 </div>
 
@@ -1870,58 +1870,6 @@ experimental_bearer_token = "dummy"</pre>
                         </div>
                     </div>
 
-                    <!-- Symlink Tool Grid for Session Sync -->
-                    <div class="model-slots-panel">
-                        <div class="model-slots-header">
-                            <h3>🔄 会话同步技能 (session-sync) 挂载目标：</h3>
-                        </div>
-                        <div style="padding: 16px; display: flex; flex-direction: column; gap: 12px;">
-                            <!-- Tool 1: Antigravity -->
-                            <div class="sync-tool-card" id="card-antigravity">
-                                <div style="display: flex; align-items: center; gap: 12px;">
-                                    <div style="width: 32px; height: 32px; border-radius: var(--radius-md); background: var(--input-bg); display: flex; align-items: center; justify-content: center; font-weight: 700; font-size: 14px;">G</div>
-                                    <div>
-                                        <div style="font-weight: 600; font-size: 14px; color: var(--text-primary);">Google Antigravity</div>
-                                        <div class="path-pill" style="margin-top: 2px;">~/.gemini/config/skills/session-sync</div>
-                                    </div>
-                                </div>
-                                <label style="display: flex; align-items: center; gap: 8px; cursor: pointer;">
-                                    <input type="checkbox" id="sync-target-antigravity" style="width: 16px; height: 16px; cursor: pointer;">
-                                    <span style="font-size: 13px;">创建软链接</span>
-                                </label>
-                            </div>
-
-                            <!-- Tool 2: Claude -->
-                            <div class="sync-tool-card" id="card-claude">
-                                <div style="display: flex; align-items: center; gap: 12px;">
-                                    <div style="width: 32px; height: 32px; border-radius: var(--radius-md); background: var(--input-bg); display: flex; align-items: center; justify-content: center; font-weight: 700; font-size: 14px;">C</div>
-                                    <div>
-                                        <div style="font-weight: 600; font-size: 14px; color: var(--text-primary);">Claude Code / Desktop</div>
-                                        <div class="path-pill" style="margin-top: 2px;">~/.claude/skills/session-sync</div>
-                                    </div>
-                                </div>
-                                <label style="display: flex; align-items: center; gap: 8px; cursor: pointer;">
-                                    <input type="checkbox" id="sync-target-claude" style="width: 16px; height: 16px; cursor: pointer;">
-                                    <span style="font-size: 13px;">创建软链接</span>
-                                </label>
-                            </div>
-
-                            <!-- Tool 3: Codex -->
-                            <div class="sync-tool-card" id="card-codex">
-                                <div style="display: flex; align-items: center; gap: 12px;">
-                                    <div style="width: 32px; height: 32px; border-radius: var(--radius-md); background: var(--input-bg); display: flex; align-items: center; justify-content: center; font-weight: 700; font-size: 14px;">O</div>
-                                    <div>
-                                        <div style="font-weight: 600; font-size: 14px; color: var(--text-primary);">OpenAI Codex</div>
-                                        <div class="path-pill" style="margin-top: 2px;">~/.codex/skills/session-sync</div>
-                                    </div>
-                                </div>
-                                <label style="display: flex; align-items: center; gap: 8px; cursor: pointer;">
-                                    <input type="checkbox" id="sync-target-codex" style="width: 16px; height: 16px; cursor: pointer;">
-                                    <span style="font-size: 13px;">创建软链接</span>
-                                </label>
-                            </div>
-                        </div>
-                    </div>
                 </div>
             </section>
 
@@ -2022,6 +1970,7 @@ experimental_bearer_token = "dummy"</pre>
         // Craft-style navigation: null = card list, {client,index} = detail editor
         let selectedEndpoint = null;
         let activeClient = 'code';
+        let lastLoadedSyncTargets = { antigravity: true, claude: true, codex: true };
 
         const ENDPOINT_TYPES = [
             { value: "anthropic", label: "Anthropic Messages 协议" },
@@ -2712,6 +2661,13 @@ experimental_bearer_token = "dummy"</pre>
                         const modelSelect = document.getElementById('sync-summary-model');
 
                         if (enableToggle) enableToggle.checked = Boolean(data.enabled);
+                        if (data.targets) {
+                            lastLoadedSyncTargets = {
+                                antigravity: Boolean(data.targets.antigravity),
+                                claude: Boolean(data.targets.claude),
+                                codex: Boolean(data.targets.codex)
+                            };
+                        }
                         if (agTarget) agTarget.checked = Boolean(data.targets?.antigravity ?? data.symlinks?.antigravity);
                         if (claudeTarget) claudeTarget.checked = Boolean(data.targets?.claude ?? data.symlinks?.claude);
                         if (codexTarget) codexTarget.checked = Boolean(data.targets?.codex ?? data.symlinks?.codex);
@@ -2789,9 +2745,9 @@ experimental_bearer_token = "dummy"</pre>
         async function saveSyncConfig(source = 'sync') {
             const enabled = document.getElementById('sync-enable-toggle').checked;
             const targets = {
-                antigravity: document.getElementById('sync-target-antigravity').checked,
-                claude: document.getElementById('sync-target-claude').checked,
-                codex: document.getElementById('sync-target-codex').checked
+                antigravity: document.getElementById('sync-target-antigravity') ? document.getElementById('sync-target-antigravity').checked : Boolean(lastLoadedSyncTargets?.antigravity ?? true),
+                claude: document.getElementById('sync-target-claude') ? document.getElementById('sync-target-claude').checked : Boolean(lastLoadedSyncTargets?.claude ?? true),
+                codex: document.getElementById('sync-target-codex') ? document.getElementById('sync-target-codex').checked : Boolean(lastLoadedSyncTargets?.codex ?? true)
             };
             const grokImagineTargets = {
                 antigravity: Boolean(document.getElementById('grok-target-antigravity')?.checked),

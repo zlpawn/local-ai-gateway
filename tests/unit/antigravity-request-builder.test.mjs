@@ -217,3 +217,34 @@ test("signature cached under a different session is NOT injected", () => {
   const body = build({ input });
   assert.equal(body.request.contents[1].parts[0].thoughtSignature, undefined);
 });
+
+test("request ending with a model turn automatically appends user continuation turn", () => {
+  const body = build({
+    input: [
+      { type: "message", role: "user", content: "q" },
+      { type: "message", role: "assistant", content: "a" },
+    ],
+  });
+  const c = body.request.contents;
+  assert.equal(c.length, 3);
+  assert.equal(c[0].role, "user");
+  assert.equal(c[1].role, "model");
+  assert.equal(c[2].role, "user");
+  assert.equal(c[2].parts[0].text, "Continue");
+});
+
+test("consecutive turns with the same role are merged", () => {
+  const body = build({
+    input: [
+      { type: "message", role: "user", content: "hello" },
+      { type: "message", role: "user", content: "world" },
+    ],
+  });
+  const c = body.request.contents;
+  assert.equal(c.length, 1);
+  assert.equal(c[0].role, "user");
+  assert.equal(c[0].parts.length, 2);
+  assert.equal(c[0].parts[0].text, "hello");
+  assert.equal(c[0].parts[1].text, "world");
+});
+
