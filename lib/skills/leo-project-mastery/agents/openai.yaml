@@ -1,0 +1,4 @@
+interface:
+  display_name: "Leo 项目内化与面试精通"
+  short_description: "从代码还原业务与技术，完成理解、内化和面试深挖。"
+  default_prompt: "Use $leo-project-mastery to help me truly understand this project from code evidence and turn it into interview-ready knowledge."

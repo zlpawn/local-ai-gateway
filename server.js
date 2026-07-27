@@ -27,6 +27,17 @@ import { unifyCodexHistory } from "./lib/codex/history-unify.mjs";
 import { pipeResponsesSsePassthrough } from "./lib/codex/responses-passthrough.mjs";
 import { ResponsesWriter } from "./lib/codex/responses-writer.mjs";
 import {
+  ensureFreshToken as ensureAntigravityToken,
+  loadCodeAssist as loadAntigravityProject,
+  buildGenerateContentRequest as buildAntigravityRequest,
+  grpcGenerateContent as antigravityGenerate,
+  streamGrpcResponses as streamAntigravityResponses,
+  getClientCredentials as getAntigravityCreds,
+  getStoredToken as getAntigravityStoredToken,
+  saveSecrets as saveAntigravitySecrets,
+  computeSessionFingerprint as computeAntigravitySessionFp,
+} from "./lib/antigravity/index.mjs";
+import {
   GatewayConfigError,
   buildClaudeCodeModelRoutes,
   buildClaudeInferenceModels,
@@ -38,6 +49,9 @@ import {
 import { syncClaudeCodeSettings } from "./lib/config/claude-code-settings.mjs";
 import { SkillInstaller } from "./lib/session-sync/skill-installer.mjs";
 import { SessionWatcherDaemon } from "./lib/session-sync/watcher-daemon.mjs";
+import { WebSocketServer } from "ws";
+import * as nodePty from "node-pty";
+import { InstallHistory } from "./lib/skills/install-history.mjs";
 import {
   collectImages,
   containsImages,
@@ -64,6 +78,14 @@ enableNodeEnvProxy();
 const ENV_PORT = intEnv("GATEWAY_PORT", intEnv("PORT", 0));
 const ENV_HOST = process.env.GATEWAY_HOST || process.env.HOST || "";
 const REQUEST_TIMEOUT_MS = intEnv("REQUEST_TIMEOUT_MS", 600000);
+const UPSTREAM_RETRY_COUNT = intEnv("UPSTREAM_RETRY_COUNT", 2);
+const UPSTREAM_RETRY_BACKOFF_MS = intEnv("UPSTREAM_RETRY_BACKOFF_MS", 500);
+// HTTP statuses that indicate a transient upstream overload worth retrying
+// (e.g. Bedrock 503 "Channel Exception", rate limits, overloaded).
+const TRANSIENT_OVERLOAD_STATUSES = new Set([429, 503, 529]);
+function sleep(ms) {
+  return new Promise((resolve) => setTimeout(resolve, ms));
+}
 const GATEWAY_API_KEY = process.env.GATEWAY_API_KEY || "";
 const CONFIGURED_API_KEY_SENTINEL = "all";
 const ARK_API_KEY = process.env.ARK_API_KEY || "";
@@ -160,6 +182,9 @@ let CODEX_CUSTOM_MODELS = CODEX_CATALOG.models.filter(
 let _codexModelsDiscoveryCache = null;
 const VISION_DESCRIPTION_CACHE = new Map();
 
+// --- Antigravity project cache (avoids loadCodeAssist on every request) ---
+let _antigravityProject = null;
+
 // --- Grok CLI subscription provider ---------------------------------------
 // Forwards standard OpenAI requests to the Grok CLI chat proxy
 // (https://cli-chat-proxy.grok.com/v1), authenticating with the local
@@ -227,6 +252,146 @@ if (startupClaude3pSync?.updated) {
 } else if (startupClaude3pSync?.reason && startupClaude3pSync.reason !== "disabled") {
   console.log(`Claude Desktop 3p sync skipped: ${startupClaude3pSync.reason}`);
 }
+
+// --- Skills install: interactive PTY over WebSocket ---
+const ptySessions = new Map(); // recordId -> { pty, ws, beforeNames }
+
+// node-pty ships a prebuilt spawn-helper that npm sometimes extracts without
+// the executable bit: its install scripts only chmod build/Release, but the
+// prebuilds copy we actually load is left 644, so posix_spawnp fails and the
+// install terminal exits with -1. Ensure +x before the first spawn. This is
+// best-effort and must never break startup.
+function ensurePtyHelperExecutable() {
+  try {
+    const indexJs = fileURLToPath(new URL(import.meta.resolve("node-pty")));
+    const helper = path.join(
+      path.dirname(path.dirname(indexJs)),
+      "prebuilds",
+      `${process.platform}-${process.arch}`,
+      "spawn-helper",
+    );
+    const st = fs.statSync(helper);
+    if (!(st.mode & 0o100)) fs.chmodSync(helper, st.mode | 0o111);
+  } catch {
+    // ignore: optional hardening
+  }
+}
+ensurePtyHelperExecutable();
+
+function startPtyForRecord(recordId, opts = {}) {
+  const record = InstallHistory.get(recordId);
+  if (!record || record.status !== "running") return false;
+  if (ptySessions.has(recordId)) return true;
+
+  const homeDir = os.homedir();
+  const beforeNames = [...SkillInstaller.scanDiscoveryRoots(homeDir).keys()];
+
+  const isWin = process.platform === "win32";
+  const file = isWin ? "cmd.exe" : "/bin/sh";
+  const args = isWin ? ["/c", record.command] : ["-c", record.command];
+
+  const cols = Number.isFinite(Number(opts.cols)) ? Math.max(20, Math.min(400, Number(opts.cols))) : 100;
+  const rows = Number.isFinite(Number(opts.rows)) ? Math.max(5, Math.min(120, Number(opts.rows))) : 24;
+
+  let pty;
+  try {
+    pty = nodePty.spawn(file, args, {
+      name: "xterm-color",
+      cols,
+      rows,
+      cwd: homeDir,
+      env: { ...process.env, FORCE_COLOR: "0" },
+    });
+  } catch (err) {
+    console.error("[skills-pty] spawn failed:", err && err.message ? err.message : err);
+    InstallHistory.finish(recordId, { exitCode: -1, skillName: record.skillName });
+    return false;
+  }
+
+  const session = { pty, ws: null, beforeNames };
+  ptySessions.set(recordId, session);
+
+  pty.onData((data) => {
+    const sess = ptySessions.get(recordId);
+    if (sess?.ws && sess.ws.readyState === 1) {
+      sess.ws.send(data);
+    }
+  });
+
+  pty.onExit(({ exitCode }) => {
+    const sess = ptySessions.get(recordId);
+    // Infer skill name from a discovery diff if the user did not provide one.
+    let skillName = record.skillName;
+    if (!skillName) {
+      try {
+        const after = SkillInstaller.scanDiscoveryRoots(homeDir);
+        const before = new Set(beforeNames);
+        for (const name of after.keys()) {
+          if (!before.has(name)) { skillName = name; break; }
+        }
+      } catch {
+        // ignore
+      }
+    }
+    const finished = InstallHistory.finish(recordId, { exitCode, skillName });
+    if (sess?.ws && sess.ws.readyState === 1) {
+      sess.ws.send(JSON.stringify({ type: "exit", exitCode, skillName: finished?.skillName || null }));
+      sess.ws.close();
+    }
+    ptySessions.delete(recordId);
+  });
+
+  return true;
+}
+
+const wsServer = new WebSocketServer({ noServer: true });
+server.on("upgrade", (req, socket, head) => {
+  const url = new URL(req.url || "/", "http://localhost");
+  if (url.pathname !== "/v1/skills/pty") {
+    socket.destroy();
+    return;
+  }
+  const recordId = url.searchParams.get("recordId");
+  if (!recordId) {
+    socket.destroy();
+    return;
+  }
+  const cols = url.searchParams.get("cols");
+  const rows = url.searchParams.get("rows");
+  wsServer.handleUpgrade(req, socket, head, (ws) => {
+    if (!startPtyForRecord(recordId, { cols, rows })) {
+      ws.close();
+      return;
+    }
+    const session = ptySessions.get(recordId);
+    session.ws = ws;
+    ws.on("message", (msg) => {
+      try {
+        const text = typeof msg === "string" ? msg : msg.toString();
+        // Control frames are JSON with a `type`; raw keystrokes pass through.
+        let ctrl = null;
+        try { ctrl = JSON.parse(text); } catch { /* not JSON -> raw input */ }
+        if (ctrl && ctrl.type === "resize" && session.pty) {
+          const c = Number(ctrl.cols), r = Number(ctrl.rows);
+          if (Number.isFinite(c) && Number.isFinite(r)) {
+            try { session.pty.resize(Math.max(20, Math.min(400, c)), Math.max(5, Math.min(120, r))); } catch {}
+          }
+          return;
+        }
+        session.pty.write(text);
+      } catch {
+        // pty may be gone
+      }
+    });
+    ws.on("close", () => {
+      const sess = ptySessions.get(recordId);
+      if (sess?.pty) {
+        try { sess.pty.kill(); } catch {}
+      }
+    });
+  });
+});
+// --- end skills install PTY ---
 
 server.listen(LISTEN_PORT, LISTEN_HOST, () => {
   const host = LISTEN_HOST === "0.0.0.0" ? "127.0.0.1" : LISTEN_HOST;
@@ -604,12 +769,22 @@ function collectGroupedModelsFromConfig(config) {
         return;
       }
       const result = SkillInstaller.linkSkillToClient(skillName, client, action !== "unlink");
+      logInfo("skill_link", {
+        skill: skillName,
+        client,
+        action,
+        linked: Boolean(result.linked),
+        mode: result.mode || "symlink",
+        path: result.path || null,
+        sourceDir: result.sourceDir || null,
+      });
       sendJson(res, 200, {
         success: true,
         ...result,
         skillLibrary: SkillInstaller.buildLibrarySnapshot({}),
       });
     } catch (err) {
+      logError("skill_link", err, {});
       sendJson(res, 400, { error: err.message || String(err) });
     }
     return;
@@ -707,6 +882,105 @@ function collectGroupedModelsFromConfig(config) {
     } catch (err) {
       sendJson(res, 500, { error: err.message });
     }
+    return;
+  }
+
+
+  // --- Skills: unify to central ---
+  if (reqPath === "/v1/skills/unify" && req.method === "POST") {
+    if (!checkLocalAuth(req, res)) return;
+    try {
+      const payload = JSON.parse(await readText(req) || "{}");
+      const skillName = String(payload.skill || payload.name || "").trim();
+      if (!skillName) { sendJson(res, 400, { error: "skill is required" }); return; }
+      const result = SkillInstaller.unifySkillToCentral(skillName, {
+        overwrite: Boolean(payload.overwrite),
+      });
+      sendJson(res, 200, {
+        success: true,
+        ...result,
+        skillLibrary: SkillInstaller.buildLibrarySnapshot({}),
+      });
+    } catch (err) {
+      sendJson(res, 400, { error: err.message || String(err) });
+    }
+    return;
+  }
+
+  if (reqPath === "/v1/skills/unify-all" && req.method === "POST") {
+    if (!checkLocalAuth(req, res)) return;
+    try {
+      const result = SkillInstaller.unifyAllToCentral({});
+      sendJson(res, 200, {
+        success: true,
+        ...result,
+        skillLibrary: SkillInstaller.buildLibrarySnapshot({}),
+      });
+    } catch (err) {
+      sendJson(res, 500, { error: err.message || String(err) });
+    }
+    return;
+  }
+
+  // --- Skills: install history (gateway-driven installs) ---
+  if (reqPath === "/v1/skills/install-history" && req.method === "GET") {
+    if (!checkLocalAuth(req, res)) return;
+    try {
+      sendJson(res, 200, {
+        success: true,
+        records: InstallHistory.list(),
+        filePath: InstallHistory.filePath(),
+      });
+    } catch (err) {
+      sendJson(res, 500, { error: err.message || String(err) });
+    }
+    return;
+  }
+
+  if (reqPath === "/v1/skills/install-history" && req.method === "DELETE") {
+    if (!checkLocalAuth(req, res)) return;
+    try {
+      const id = String(url.searchParams.get("id") || "").trim();
+      if (!id) { sendJson(res, 400, { error: "id is required" }); return; }
+      const removed = InstallHistory.remove(id);
+      sendJson(res, 200, { success: true, removed, records: InstallHistory.list() });
+    } catch (err) {
+      sendJson(res, 500, { error: err.message || String(err) });
+    }
+    return;
+  }
+
+  if (reqPath === "/v1/skills/install" && req.method === "POST") {
+    if (!checkLocalAuth(req, res)) return;
+    try {
+      const payload = JSON.parse(await readText(req) || "{}");
+      const command = String(payload.command || "").trim();
+      const skillName = payload.skillName ? String(payload.skillName).trim() : "";
+      if (!command) { sendJson(res, 400, { error: "command is required" }); return; }
+      const record = InstallHistory.create({ command, skillName });
+      sendJson(res, 200, { success: true, record });
+    } catch (err) {
+      sendJson(res, 400, { error: err.message || String(err) });
+    }
+    return;
+  }
+
+  // --- xterm static assets (served locally, no CDN) ---
+  if (reqPath.startsWith("/xterm/") && req.method === "GET") {
+    const seg = reqPath.slice("/xterm/".length);
+    const candidates = {
+      "xterm.css": ["@xterm/xterm", "css", "xterm.css"],
+      "xterm.js": ["@xterm/xterm", "lib", "xterm.js"],
+      "addon-fit.js": ["@xterm/addon-fit", "lib", "addon-fit.js"],
+    };
+    const parts = candidates[seg];
+    if (!parts) { sendJson(res, 404, { error: "not found" }); return; }
+    const filePath = path.join(PROJECT_ROOT, "node_modules", ...parts);
+    if (!fs.existsSync(filePath)) { sendJson(res, 404, { error: "asset missing" }); return; }
+    const ext = path.extname(filePath).toLowerCase();
+    const typeMap = { ".css": "text/css; charset=utf-8", ".js": "text/javascript; charset=utf-8" };
+    res.writeHead(200, { "Content-Type": typeMap[ext] || "application/octet-stream" });
+    res.end(fs.readFileSync(filePath));
     return;
   }
 
@@ -875,6 +1149,19 @@ function collectGroupedModelsFromConfig(config) {
 }
 
 async function forwardAnthropicMessages(body, clientReq, clientRes, context) {
+  const requestAbort = bindRequestAbort(clientReq, clientRes);
+  const upstreamAbort = createUpstreamAbort(requestAbort.signal);
+  try {
+    await forwardAnthropicMessagesResolved(
+      body, clientReq, clientRes, context, upstreamAbort.signal,
+    );
+  } finally {
+    upstreamAbort.dispose();
+    requestAbort.dispose();
+  }
+}
+
+async function forwardAnthropicMessagesResolved(body, clientReq, clientRes, context, signal) {
   const requestedModel = body.model;
   const route = resolveAnthropicRoute(requestedModel, context.client);
   body = await maybePreprocessImages(body, route, clientReq, context);
@@ -1184,6 +1471,19 @@ async function forwardAnthropicMessages(body, clientReq, clientRes, context) {
 }
 
 async function forwardOpenAIChatCompletions(body, clientReq, clientRes, context) {
+  const requestAbort = bindRequestAbort(clientReq, clientRes);
+  const upstreamAbort = createUpstreamAbort(requestAbort.signal);
+  try {
+    await forwardOpenAIChatCompletionsResolved(
+      body, clientReq, clientRes, context, upstreamAbort.signal,
+    );
+  } finally {
+    upstreamAbort.dispose();
+    requestAbort.dispose();
+  }
+}
+
+async function forwardOpenAIChatCompletionsResolved(body, clientReq, clientRes, context, signal) {
   const requestedModel = body.model;
   if (context.client === "codex" && isOfficialCodexModel(requestedModel)) {
     throw httpError(
@@ -1659,6 +1959,164 @@ function promoteAdditionalTools(body) {
   return { ...body, input: keptInput, tools: merged };
 }
 
+// --- Antigravity v1internal gRPC handler ---
+// Resolves OAuth token + project, builds the v1internal request, and streams
+// the gRPC response through ResponsesWriter as Codex /v1/responses events.
+async function proxyAntigravityResponse(body, clientRes, context, requestedModel, resolvedModel) {
+  let fresh;
+  try {
+    const creds = getAntigravityCreds();
+    fresh = await ensureAntigravityToken({
+      store: { getStoredToken: getAntigravityStoredToken, saveSecrets: saveAntigravitySecrets },
+      clientId: creds.client_id,
+      clientSecret: creds.client_secret,
+    });
+  } catch (err) {
+    sendJson(clientRes, 401, {
+      error: { type: "antigravity_auth_error", message: err?.message || "Antigravity token unavailable. Run: local-ai-gateway antigravity login" },
+    });
+    return;
+  }
+
+  // Resolve proxy: endpoint config takes precedence, then env vars.
+  // Mirrors the Grok provider pattern (server.js grokProxyAgentFor).
+  const endpointProxy = route?.provider?.proxy;
+  const envProxy = process.env.HTTPS_PROXY || process.env.HTTP_PROXY ||
+    process.env.https_proxy || process.env.http_proxy || "";
+  const proxyUrl = endpointProxy || envProxy || null;
+  // Proxy-aware fetch for the REST loadCodeAssist call.
+  const proxyFetch = proxyUrl
+    ? (url, opts) => fetchWithOptionalProxy(url, { ...opts, proxyUrl })
+    : fetch;
+
+  let project;
+  try {
+    project = _antigravityProject || (await loadAntigravityProject({ accessToken: fresh.access_token, fetchImpl: proxyFetch })).project;
+    _antigravityProject = project;
+  } catch (err) {
+    sendJson(clientRes, 502, {
+      error: { type: "antigravity_project_error", message: err?.message || "Failed to resolve Antigravity project" },
+    });
+    return;
+  }
+
+  const antigravityBody = buildAntigravityRequest(body, {
+    project,
+    accountId: fresh.account_id,
+    model: resolvedModel,
+  });
+  // Session fingerprint scopes the thoughtSignature cache to this conversation
+  // (stable across turns). Passed to the streamer so signatures are cached
+  // under the same scope request-builder looks them up under.
+  const antigravitySessionFp = computeAntigravitySessionFp(body.input);
+
+  logInfo("antigravity_request", {
+    request_id: context.requestId,
+    client: context.client,
+    requested_model: requestedModel || null,
+    resolved_model: resolvedModel || null,
+    project,
+    proxy: proxyUrl || null,
+    stream: Boolean(body.stream),
+  });
+
+  if (body.stream) {
+    clientRes.writeHead(200, responsesSseHeaders());
+    const writer = new ResponsesWriter({
+      model: requestedModel || "antigravity",
+      emit(event, payload) {
+        clientRes.write(`event: ${event}\n`);
+        clientRes.write(`data: ${JSON.stringify(payload)}\n\n`);
+      },
+    });
+    let streamError = null;
+    try {
+      const responses = antigravityGenerate({ accessToken: fresh.access_token, body: antigravityBody, proxyUrl });
+      await streamAntigravityResponses(responses, writer, antigravitySessionFp);
+    } catch (err) {
+      streamError = err;
+      if (!clientRes.headersSent) {
+        sendJson(clientRes, 502, { error: { type: "antigravity_error", message: err?.message || String(err) } });
+        return;
+      }
+      writer.failed({ code: "antigravity_error", message: err?.message || String(err) });
+    }
+    clientRes.end();
+    if (streamError) {
+      logError("antigravity_stream_failed", streamError, context);
+    } else {
+      logInfo("antigravity_stream_complete", {
+        request_id: context.requestId,
+        client: context.client,
+        status: 200,
+        model: requestedModel || null,
+      });
+    }
+    return;
+  }
+
+  // Non-streaming: collect events into a response object.
+  const events = [];
+  const writer = new ResponsesWriter({
+    model: requestedModel || "antigravity",
+    emit(_event, payload) { events.push(payload); },
+  });
+  try {
+    const responses = antigravityGenerate({ accessToken: fresh.access_token, body: antigravityBody, proxyUrl });
+    await streamAntigravityResponses(responses, writer, antigravitySessionFp);
+  } catch (err) {
+    sendJson(clientRes, 502, { error: { type: "antigravity_error", message: err?.message || String(err) } });
+    return;
+  }
+  const response = buildResponseFromEvents(events, requestedModel);
+  logInfo("antigravity_response", {
+    request_id: context.requestId,
+    status: 200,
+    model: requestedModel,
+    stream: false,
+  });
+  clientRes.writeHead(200, {
+    "Content-Type": "application/json; charset=utf-8",
+    "Access-Control-Allow-Origin": "*",
+  });
+  clientRes.end(JSON.stringify(response));
+}
+
+// Build a non-streaming /v1/responses object from collected writer events.
+function buildResponseFromEvents(events, requestedModel) {
+  let response = {
+    id: `resp_${Date.now()}`,
+    object: "response",
+    model: requestedModel,
+    status: "completed",
+    output: [],
+    output_text: "",
+    usage: { input_tokens: 0, output_tokens: 0, total_tokens: 0 },
+  };
+  const outputByIndex = new Map();
+  for (const payload of events) {
+    if (payload.type === "response.output_item.done") {
+      outputByIndex.set(payload.output_index, payload.item);
+    }
+    if (payload.type === "response.completed") {
+      response = { ...response, ...payload.response };
+    }
+    if (payload.type === "response.failed") {
+      response = { ...response, ...payload.response, status: "failed" };
+    }
+  }
+  response.output = [...outputByIndex.entries()]
+    .sort(([a], [b]) => a - b)
+    .map(([, item]) => item);
+  response.output_text = response.output
+    .filter((item) => item.type === "message")
+    .flatMap((item) => item.content || [])
+    .filter((part) => part.type === "output_text")
+    .map((part) => part.text || "")
+    .join("");
+  return response;
+}
+
 async function forwardOpenAIResponses(body, clientReq, clientRes, context) {
   const requestAbort = bindRequestAbort(clientReq, clientRes);
   const upstreamAbort = createUpstreamAbort(requestAbort.signal);
@@ -1701,7 +2159,7 @@ async function forwardResolvedCodexResponse({
 
   const route = resolveConfiguredModel(
     requestedModel,
-    ["anthropic", "openai-chat", "openai-responses", "grok"],
+    ["anthropic", "openai-chat", "openai-responses", "grok", "antigravity"],
     context.client,
   );
   const resolvedModel = route?.upstream_model || resolveModel(requestedModel);
@@ -1812,6 +2270,11 @@ async function forwardResolvedCodexResponse({
       clientRes.writeHead(200, { "Content-Type": "application/json; charset=utf-8", "Access-Control-Allow-Origin": "*" });
       clientRes.end(JSON.stringify(response));
     }
+    return;
+  }
+
+  if (route?.provider?.type === "antigravity") {
+    await proxyAntigravityResponse(body, clientRes, context, requestedModel, resolvedModel);
     return;
   }
 
@@ -2494,34 +2957,39 @@ async function fetchConfiguredAnthropic(provider, body, clientReq) {
 
   try {
     try {
-      let res = await fetch(url, {
+      const baseHeaders = {
+        "anthropic-version": clientReq.headers["anthropic-version"] || "2023-06-01",
+        ...(clientReq.headers["anthropic-beta"]
+          ? { "anthropic-beta": clientReq.headers["anthropic-beta"] }
+          : {}),
+      };
+      const bodyStr = JSON.stringify(body);
+      const doFetch = (key) => fetch(url, {
         method: "POST",
-        headers: providerHeaders(provider, upstreamApiKey, {
-          "anthropic-version": clientReq.headers["anthropic-version"] || "2023-06-01",
-          ...(clientReq.headers["anthropic-beta"]
-            ? { "anthropic-beta": clientReq.headers["anthropic-beta"] }
-            : {}),
-        }),
-        body: JSON.stringify(body),
+        headers: providerHeaders(provider, key, baseHeaders),
+        body: bodyStr,
         signal: controller.signal,
       });
 
+      let key = upstreamApiKey;
+      let res = await doFetch(key);
+
+      // Auth fallback: retry once with the configured key on 401/403.
       if (res.status === 401 || res.status === 403) {
         const fallbackKey = getConfiguredProviderApiKey(provider);
         if (fallbackKey && fallbackKey !== upstreamApiKey) {
           logInfo("api_key_fallback", { provider: provider.id, original_status: res.status });
-          res = await fetch(url, {
-            method: "POST",
-            headers: providerHeaders(provider, fallbackKey, {
-              "anthropic-version": clientReq.headers["anthropic-version"] || "2023-06-01",
-              ...(clientReq.headers["anthropic-beta"]
-                ? { "anthropic-beta": clientReq.headers["anthropic-beta"] }
-                : {}),
-            }),
-            body: JSON.stringify(body),
-            signal: controller.signal,
-          });
+          key = fallbackKey;
+          res = await doFetch(key);
         }
+      }
+
+      // Retry transient upstream overload (e.g. Bedrock 503 "Channel Exception")
+      // before surfacing the error to the client.
+      for (let attempt = 0; attempt < UPSTREAM_RETRY_COUNT && TRANSIENT_OVERLOAD_STATUSES.has(res.status); attempt++) {
+        logInfo("upstream_retry", { provider: provider.id, status: res.status, attempt: attempt + 1 });
+        await sleep(UPSTREAM_RETRY_BACKOFF_MS * (attempt + 1));
+        res = await doFetch(key);
       }
 
       return res;
@@ -2589,24 +3057,34 @@ async function fetchConfiguredOpenAI(
 
   try {
     try {
-      let res = await fetch(url, {
+      const bodyStr = JSON.stringify(body);
+      const fetchSignal = signal || controller.signal;
+      const doFetch = (key) => fetch(url, {
         method: "POST",
-        headers: providerHeaders(provider, upstreamApiKey),
-        body: JSON.stringify(body),
-        signal: signal || controller.signal,
+        headers: providerHeaders(provider, key),
+        body: bodyStr,
+        signal: fetchSignal,
       });
 
+      let key = upstreamApiKey;
+      let res = await doFetch(key);
+
+      // Auth fallback: retry once with the configured key on 401/403.
       if (allowAuthFallback && (res.status === 401 || res.status === 403)) {
         const fallbackKey = getConfiguredProviderApiKey(provider);
         if (fallbackKey && fallbackKey !== upstreamApiKey) {
           logInfo("api_key_fallback", { provider: provider.id, original_status: res.status });
-          res = await fetch(url, {
-            method: "POST",
-            headers: providerHeaders(provider, fallbackKey),
-            body: JSON.stringify(body),
-            signal: signal || controller.signal,
-          });
+          key = fallbackKey;
+          res = await doFetch(key);
         }
+      }
+
+      // Retry transient upstream overload (e.g. Bedrock 503 "Channel Exception")
+      // before surfacing the error to the client.
+      for (let attempt = 0; attempt < UPSTREAM_RETRY_COUNT && TRANSIENT_OVERLOAD_STATUSES.has(res.status); attempt++) {
+        logInfo("upstream_retry", { provider: provider.id, status: res.status, attempt: attempt + 1 });
+        await sleep(UPSTREAM_RETRY_BACKOFF_MS * (attempt + 1));
+        res = await doFetch(key);
       }
 
       return res;
@@ -4632,6 +5110,7 @@ function resolveAnthropicRoute(requestedModel, client) {
 function hasConfiguredApiKey(ep) {
   if (ep.type === "official" || ep.name === "official") return true;
   if (ep.type === "grok") return grokHasCredentials(ep);
+  if (ep.type === "antigravity") return true; // OAuth-based, no API key needed
   if (getEndpointApiKey(ep, GATEWAY_SECRETS)) return true;
   if (!ep.api_key) return false;
   if (ep.api_key.startsWith("env:")) {
@@ -5311,28 +5790,77 @@ function streamFinalAnthropicMessage(clientRes, message, requestedModel) {
     usage: message?.usage || { input_tokens: 0, output_tokens: 0 },
   };
   writeAnthropicSse(clientRes, "message_start", { type: "message_start", message: msg });
-  const text = Array.isArray(message?.content)
-    ? message.content.filter((b) => b?.type === "text").map((b) => b.text || "").join("")
-    : "";
-  if (text) {
-    writeAnthropicSse(clientRes, "content_block_start", {
-      type: "content_block_start",
-      index: 0,
-      content_block: { type: "text", text: "" },
-    });
-    writeAnthropicSse(clientRes, "content_block_delta", {
-      type: "content_block_delta",
-      index: 0,
-      delta: { type: "text_delta", text },
-    });
+  // Stream every content block (text, tool_use, thinking, ...) so tool calls
+  // and other non-text blocks reach the client instead of being dropped.
+  const blocks = Array.isArray(message?.content) ? message.content : [];
+  blocks.forEach((block, index) => {
+    if (!block || typeof block !== "object") return;
+    if (block.type === "text") {
+      writeAnthropicSse(clientRes, "content_block_start", {
+        type: "content_block_start",
+        index,
+        content_block: { type: "text", text: "" },
+      });
+      writeAnthropicSse(clientRes, "content_block_delta", {
+        type: "content_block_delta",
+        index,
+        delta: { type: "text_delta", text: block.text || "" },
+      });
+    } else if (block.type === "tool_use") {
+      writeAnthropicSse(clientRes, "content_block_start", {
+        type: "content_block_start",
+        index,
+        content_block: {
+          type: "tool_use",
+          id: block.id || `toolu_${Date.now()}`,
+          name: block.name || "tool",
+          input: {},
+        },
+      });
+      writeAnthropicSse(clientRes, "content_block_delta", {
+        type: "content_block_delta",
+        index,
+        delta: { type: "input_json_delta", partial_json: JSON.stringify(block.input ?? {}) },
+      });
+    } else if (block.type === "thinking") {
+      writeAnthropicSse(clientRes, "content_block_start", {
+        type: "content_block_start",
+        index,
+        content_block: { type: "thinking", thinking: "", signature: "" },
+      });
+      if (block.thinking) {
+        writeAnthropicSse(clientRes, "content_block_delta", {
+          type: "content_block_delta",
+          index,
+          delta: { type: "thinking_delta", thinking: block.thinking },
+        });
+      }
+      if (block.signature) {
+        writeAnthropicSse(clientRes, "content_block_delta", {
+          type: "content_block_delta",
+          index,
+          delta: { type: "signature_delta", signature: block.signature },
+        });
+      }
+    } else {
+      // Pass through other block types (e.g. redacted_thinking) as-is.
+      writeAnthropicSse(clientRes, "content_block_start", {
+        type: "content_block_start",
+        index,
+        content_block: block,
+      });
+    }
     writeAnthropicSse(clientRes, "content_block_stop", {
       type: "content_block_stop",
-      index: 0,
+      index,
     });
-  }
+  });
   writeAnthropicSse(clientRes, "message_delta", {
     type: "message_delta",
-    delta: { stop_reason: "end_turn", stop_sequence: null },
+    delta: {
+      stop_reason: message?.stop_reason || "end_turn",
+      stop_sequence: message?.stop_sequence ?? null,
+    },
     usage: { output_tokens: message?.usage?.output_tokens || 0 },
   });
   writeAnthropicSse(clientRes, "message_stop", { type: "message_stop" });

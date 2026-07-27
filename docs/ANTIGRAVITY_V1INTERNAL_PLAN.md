@@ -50,8 +50,8 @@ Codex -> POST /v1/responses (server.js:835)
        -> ensureFreshToken (oauth + token-store)
        -> loadCodeAssist (拿 cloudaicompanionProject,缓存)
        -> request-builder: Codex responses -> v1internal generateContent body
-       -> upstream: POST cloudcode-pa.googleapis.com/v1internal:streamGenerateContent?alt=sse
-       -> response-streamer: v1internal SSE -> Codex responses 事件
+       -> grpc.mjs: gRPC PredictionService/GenerateContent (daily-cloudcode-pa.googleapis.com)
+       -> response-streamer: v1internal gRPC -> Codex responses 事件
        -> ResponsesWriter (复用 lib/codex/responses-writer.mjs)
 ```
 
@@ -376,7 +376,33 @@ gateway 对接点:
 >
 > Phase 3 其他实现决策:(1) 模型/工具名保持原样,**未**做 AG 的 `local_shell_call`->`shell` 重命名(我们同时控制声明与调用,名称一致即可;如 Google 后端要求保留名,Phase 5 再加);(2) thinking 签名(thoughtSignature)暂不注入,仅当 Codex 显式带 `thinking.budget_tokens` 时设 `thinkingConfig.thinkingBudget`;gemini-3 thinking 模型的 functionCall 签名需求留待 Phase 5;(3) response-streamer 假设 functionCall 在单帧内完整(Gemini 常见行为),跨帧分片累积留待 Phase 5;(4) requestId 用 AG `openai/request.rs:1253` 格式 `agent/antigravity/<sid前8位>/<消息数>`(非 wrapper.rs 的 `agent/<ts>/<hex>`,因输入是 Codex/OpenAI 形态)。
 >
-当前接力起点:**Phase 4**(server.js 路由 + 模型目录集成)。端到端验证(loadCodeAssist + generateContent + 流式)需用户先 `local-ai-gateway antigravity login` 拿 token;Phase 1-3 的链路已可用 `scripts/antigravity-smoke.mjs` 直接验证(见第 19 节),Phase 4 路由打通后再做 Codex 列表级端到端(测试用 8789 端口)。
+> **gRPC 切换(2026-07-27,重要)**:REST `v1internal:streamGenerateContent` 对订阅用户返回 403 SERVICE_DISABLED(cloudaicompanion 项目未启用 Cloud Code Private API,`gcpManaged: false`)。官方 Antigravity IDE 实际使用 gRPC(`google.internal.cloud.code.v1internal.PredictionService/GenerateContent`),不走 REST。已从 IDE `language_server` 二进制提取完整 proto 定义,确认服务输入类型是 `v1internal.GenerateContentRequest`(包装器:project/request/model/userAgent/requestType/enabledCreditTypes),而非扁平的 `aiplatform.master.GenerateContentRequest`。
+>
+> 新增 `lib/antigravity/proto-codec.mjs`(手写 protobuf 编解码,零外部依赖)和 `lib/antigravity/grpc.mjs`(HTTP/2 gRPC 传输,支持 HTTP CONNECT 代理隧道)。`response-streamer.mjs` 重构为共享 `processResponseData()`,新增 `streamGrpcResponses()` 入口。`loadCodeAssist` 保持 REST(该端点不受 API 启用限制)。smoke test 已切换到 gRPC 路径并验证通过(gemini-pro-agent + gemini-3-flash)。
+>
+> 代理注意:Node.js `http2.connect` 不读 `http_proxy`/`https_proxy` 环境变量,`grpc.mjs` 手动通过 HTTP CONNECT 建立隧道。无代理环境自动直连。
+>
+**Phase 4 已完成(2026-07-27)**:server.js 路由 + 模型目录集成已完成。新增 `proxyAntigravityResponse()` 函数(server.js),在 `forwardResolvedCodexResponse` 中添加 `antigravity` 分支(流式 + 非流式)。`model-catalog.mjs` 和 `config-validation.mjs` 已添加 `antigravity` 到支持类型。`hasConfiguredApiKey` 对 antigravity 类型返回 true(OAuth 鉴权,无 API key)。`gateway.config.json` 已添加 antigravity 端点(models: gemini-pro-agent, gemini-3-flash, gemini-3-flash-agent)。
+
+端到端验证通过(gateway 端口 8789):
+- 非流式:POST /v1/responses + x-gateway-client: codex + model=gemini-pro-agent -> 200 JSON,response.output_text + usage
+- 流式:同上 + stream=true -> SSE 事件链 created->output_item.added->text.delta->output_item.done->completed
+
+**Phase 5 已完成(2026-07-27)**:测试与健壮性。
+
+新增测试:
+- `tests/unit/antigravity-grpc-streamer.test.mjs`(6 测试):gRPC 响应流处理(text/functionCall/thought/terminal finish/raw frames)
+- `tests/unit/antigravity-proto-codec.test.mjs` 扩展(13 测试):编码/解码 round-trip、多 candidate、traceId、functionCall 解码、空输入边界
+- `tests/integration/antigravity-gateway.test.mjs`(3 测试):mock gRPC + REST 服务器,验证非流式/流式/gRPC 错误 502
+
+可测试性改造(生产代码最小改动):
+- `grpc.mjs`:`ANTIGRAVITY_GRPC_HOST`/`ANTIGRAVITY_GRPC_PORT`/`ANTIGRAVITY_GRPC_INSECURE` 环境变量,支持 mock 服务器
+- `constants.mjs`:`ANTIGRAVITY_REST_BASE_URL` 环境变量,支持 mock loadCodeAssist
+- gRPC 客户端同时检查 response headers 和 trailers 中的 grpc-status(修复无数据错误响应的检测)
+
+测试统计:188 单元测试 + 3 antigravity 集成测试 + 28 其他集成测试,全部通过。smoke test 真实 API 验证通过。
+
+集成方案不再需要改动。所有 5 个 Phase 已完成。
 
 > 本机状态(2026-07-27):`antigravity.secrets.json` 已在本机 worktree 预填好 client_id/secret(取自 AG `oauth.rs:6-7`),但该文件 .gitignore 不进 git,**换台机器需重新创建**(见第 19.1 节)。本机尚未执行 `antigravity login`(无 token),待用户在测试机上登录。
 

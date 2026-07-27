@@ -1,30 +1,30 @@
 #!/usr/bin/env node
-// Antigravity v1internal LIVE smoke test.
+// Antigravity v1internal LIVE smoke test (gRPC).
 //
-// Hits the REAL Google v1internal API on your Antigravity subscription.
+// Hits the REAL Google v1internal PredictionService via gRPC.
 // Requires a logged-in token: run `node bin/cli.js antigravity login` first.
 // This is NOT part of the unit test suite (no mocks) - run it manually.
 //
 // Usage:
-//   node scripts/antigravity-smoke.mjs                 # default model gemini-3-pro-preview
+//   node scripts/antigravity-smoke.mjs                 # default model gemini-pro-agent
 //   node scripts/antigravity-smoke.mjs gemini-3-flash  # pick a model
 //
-// Verifies the full Phase 1-3 chain end-to-end:
+// Verifies the full chain end-to-end:
 //   OAuth refresh -> loadCodeAssist (project) -> buildGenerateContentRequest
-//   -> streamGenerateContent -> streamResponses (Codex events printed live).
+//   -> gRPC GenerateContent -> streamGrpcResponses (Codex events printed live).
 import {
   ensureFreshToken,
   loadCodeAssist,
-  streamGenerateContent,
+  grpcGenerateContent,
   buildGenerateContentRequest,
-  streamResponses,
+  streamGrpcResponses,
   getClientCredentials,
   getStoredToken,
   saveSecrets,
 } from "../lib/antigravity/index.mjs";
 import { ResponsesWriter } from "../lib/codex/responses-writer.mjs";
 
-const MODEL = process.argv[2] || "gemini-3-pro-preview";
+const MODEL = process.argv[2] || "gemini-pro-agent";
 
 async function main() {
   const creds = getClientCredentials();
@@ -52,7 +52,7 @@ async function main() {
   const { project } = await loadCodeAssist({ accessToken: fresh.access_token });
   console.log(`[smoke]      project=${project}`);
 
-  console.log("[smoke] 3/4  buildGenerateContentRequest + streamGenerateContent...");
+  console.log("[smoke] 3/4  buildGenerateContentRequest + gRPC GenerateContent...");
   const body = buildGenerateContentRequest(
     {
       model: MODEL,
@@ -67,13 +67,10 @@ async function main() {
     },
     { project, accountId: fresh.account_id, model: MODEL },
   );
-  const readable = await streamGenerateContent({
-    accessToken: fresh.access_token,
-    project,
-    body,
-  });
 
-  console.log("[smoke] 4/4  streamResponses (live output below):");
+  const responses = grpcGenerateContent({ accessToken: fresh.access_token, body });
+
+  console.log("[smoke] 4/4  streamGrpcResponses (live output below):");
   const seen = [];
   const writer = new ResponsesWriter({
     model: MODEL,
@@ -82,14 +79,14 @@ async function main() {
       if (event === "response.output_text.delta") process.stdout.write(data.delta);
     },
   });
-  await streamResponses(readable, writer);
+  await streamGrpcResponses(responses, writer);
   process.stdout.write("\n");
 
   const hasText = seen.includes("response.output_text.delta");
   const hasCompleted = seen.includes("response.completed");
   console.log(`[smoke] events: ${seen.join(", ")}`);
   if (hasText && hasCompleted) {
-    console.log("[smoke] DONE - v1internal path works end-to-end.");
+    console.log("[smoke] DONE - gRPC v1internal path works end-to-end.");
   } else {
     console.error("[smoke] INCOMPLETE - expected output_text.delta + completed.");
     process.exit(2);

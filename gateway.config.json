@@ -30,6 +30,22 @@
           "model_mapping": {},
           "id": "ep_0017ac99-bf2d-4a7a-a70e-5f049c88054e",
           "is_default": true
+        },
+        {
+          "id": "ep_b7fae282-6bdd-4525-ac22-d1500cf86a95",
+          "name": "tavily-search",
+          "purpose": "web_search",
+          "provider": "tavily",
+          "enabled": true,
+          "is_default": true,
+          "options": {
+            "search_depth": "basic",
+            "max_results": 5,
+            "topic": "general",
+            "include_answer": false,
+            "include_raw_content": false,
+            "country": "china"
+          }
         }
       ],
       "model_slots": {
@@ -41,6 +57,17 @@
     },
     "desktop": {
       "endpoints": [
+        {
+          "id": "ep_396943be-f876-40a9-9c31-6b56c0d8545b",
+          "name": "ait",
+          "type": "anthropic",
+          "base_url": "https://openapi-ait.ke.com",
+          "auth": "bearer",
+          "models": [],
+          "model_mapping": {
+            "claude-opus-5": "claude-opus-5"
+          }
+        },
         {
           "id": "ep_7093ea70-ffff-4602-8a9f-c5006fc233d8",
           "name": "视觉兜底节点",
@@ -117,11 +144,47 @@
           },
           "is_default": false,
           "id": "ep_69d5336b-018f-473d-8104-8589d343ae60"
+        },
+        {
+          "id": "ep_cb36897f-65eb-4671-964f-330709340c57",
+          "name": "tavily-search",
+          "purpose": "web_search",
+          "provider": "tavily",
+          "enabled": true,
+          "is_default": true,
+          "options": {
+            "search_depth": "basic",
+            "max_results": 5,
+            "topic": "general",
+            "include_answer": false,
+            "include_raw_content": false,
+            "country": "china"
+          }
         }
       ]
     },
     "codex": {
       "endpoints": [
+        {
+          "id": "ep_3a82b850-9c20-4484-a206-0bfb79c5e9c3",
+          "name": "ait",
+          "type": "openai-chat",
+          "base_url": "https://openapi-ait.ke.com",
+          "auth": "bearer",
+          "models": [
+            "claude-opus-5",
+            "claude-opus-4-8"
+          ],
+          "model_mapping": {},
+          "capabilities": {
+            "input_modalities": [
+              "text",
+              "image"
+            ],
+            "reasoning": true,
+            "tools": true
+          }
+        },
         {
           "id": "ep_bb7bce83-60f5-402f-abc4-0546081f65cf",
           "name": "联网搜索节点",
@@ -218,6 +281,26 @@
               "image": false
             }
           }
+        },
+        {
+          "id": "ep_antigravity",
+          "name": "Antigravity",
+          "type": "antigravity",
+          "models": [
+            "gemini-3.6-flash-high",
+            "gemini-3.6-flash-medium",
+            "gemini-3.6-flash-low"
+          ],
+          "model_mapping": {},
+          "capabilities": {
+            "input_modalities": [
+              "text",
+              "image"
+            ],
+            "reasoning": true,
+            "tools": true
+          },
+          "proxy": "http://127.0.0.1:7897"
         }
       ]
     }

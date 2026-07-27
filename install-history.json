@@ -1,0 +1,24 @@
+{
+  "version": 1,
+  "records": [
+    {
+      "id": "r_ms2m5zcj_zhbn9l",
+      "skillName": "frontend-design",
+      "command": "npx -y skills add anthropics/skills --skill frontend-design",
+      "startedAt": "2026-07-27T02:34:38.515Z",
+      "finishedAt": "2026-07-27T02:34:57.637Z",
+      "exitCode": 0,
+      "status": "success"
+    },
+    {
+      "id": "r_ms2lk3ol_qgf91u",
+      "skillName": "frontend-design",
+      "command": "npx -y skills add anthropics/skills --skill frontend-design",
+      "startedAt": "2026-07-27T02:17:37.701Z",
+      "finishedAt": "2026-07-27T02:17:37.811Z",
+      "exitCode": -1,
+      "status": "failed"
+    }
+  ],
+  "updatedAt": "2026-07-27T02:34:57.637Z"
+}

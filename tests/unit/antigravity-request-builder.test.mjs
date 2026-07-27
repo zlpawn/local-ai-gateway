@@ -155,3 +155,65 @@ test("image input -> inlineData from data URL", () => {
   assert.equal(parts[1].inlineData.mimeType, "image/png");
   assert.equal(parts[1].inlineData.data, "QUJD");
 });
+// ── thoughtSignature injection (multi-turn tool calls) ──
+import {
+  cacheSignature,
+  computeSessionFingerprint,
+  _clearSignatureCache,
+} from "../../lib/antigravity/signature-cache.mjs";
+
+const LONG_SIG = "x".repeat(120); // above MIN_LENGTH (50)
+
+// Cache a signature under the SAME session fingerprint request-builder will
+// derive from the input, then verify it is re-injected onto the functionCall part.
+function cacheForInput(input, callId) {
+  cacheSignature(computeSessionFingerprint(input), callId, LONG_SIG);
+}
+
+test("function_call part re-injects cached thoughtSignature by call_id", () => {
+  _clearSignatureCache();
+  const input = [
+    { type: "message", role: "user", content: "run it" },
+    { type: "function_call", name: "shell", arguments: "{\"command\":\"echo hi\"}", call_id: "call_sig_1" },
+    { type: "function_call_output", call_id: "call_sig_1", output: "hi" },
+  ];
+  cacheForInput(input, "call_sig_1");
+  const body = build({ input });
+  const modelTurn = body.request.contents[1];
+  assert.equal(modelTurn.parts[0].thoughtSignature, LONG_SIG);
+});
+
+test("custom_tool_call part also re-injects cached thoughtSignature", () => {
+  _clearSignatureCache();
+  const input = [
+    { type: "custom_tool_call", name: "apply_patch", input: "p", call_id: "call_sig_2" },
+    { type: "custom_tool_call_output", call_id: "call_sig_2", output: "ok" },
+  ];
+  cacheForInput(input, "call_sig_2");
+  const body = build({ input });
+  assert.equal(body.request.contents[0].parts[0].thoughtSignature, LONG_SIG);
+});
+
+test("no cached signature => functionCall part has no thoughtSignature", () => {
+  _clearSignatureCache();
+  const body = build({
+    input: [
+      { type: "function_call", name: "shell", arguments: "{}", call_id: "call_none" },
+      { type: "function_call_output", call_id: "call_none", output: "x" },
+    ],
+  });
+  assert.equal(body.request.contents[0].parts[0].thoughtSignature, undefined);
+});
+
+test("signature cached under a different session is NOT injected", () => {
+  _clearSignatureCache();
+  const input = [
+    { type: "message", role: "user", content: "run it" },
+    { type: "function_call", name: "shell", arguments: "{}", call_id: "call_iso" },
+    { type: "function_call_output", call_id: "call_iso", output: "x" },
+  ];
+  // Cache under a DIFFERENT first-message fingerprint than the input has.
+  cacheSignature(computeSessionFingerprint([{ type: "message", role: "user", content: "DIFFERENT" }]), "call_iso", LONG_SIG);
+  const body = build({ input });
+  assert.equal(body.request.contents[1].parts[0].thoughtSignature, undefined);
+});

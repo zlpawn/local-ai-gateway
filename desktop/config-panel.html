@@ -184,6 +184,59 @@
             box-shadow: inset 2px 0 0 var(--text-primary);
         }
 
+        .nav-collapsible { display: flex; flex-direction: column; }
+        .nav-parent-row { display: flex; align-items: stretch; }
+        .nav-parent-row .nav-item { flex: 1; min-width: 0; }
+        .nav-caret-btn {
+            display: flex; align-items: center; justify-content: center;
+            width: 24px; border: none; background: transparent; cursor: pointer;
+            color: var(--text-secondary); border-radius: var(--radius-md);
+        }
+        .nav-caret-btn:hover { background: var(--surface-hover); color: var(--text-primary); }
+        .nav-caret { transition: transform 0.15s ease; display: inline-block; font-size: 10px; }
+        .nav-collapsible.open .nav-caret { transform: rotate(90deg); }
+        .nav-children { display: none; flex-direction: column; padding-left: 14px; }
+        .nav-collapsible.open .nav-children { display: flex; }
+        .nav-child { min-height: 34px; font-size: 12px; opacity: 0.85; }
+        .nav-child .nav-child-dot { margin-right: 8px; opacity: 0.5; }
+
+        .install-form { display: flex; gap: 8px; margin-bottom: 14px; flex-wrap: wrap; }
+        .install-form input {
+            flex: 1; min-width: 200px; padding: 8px 10px; border-radius: var(--radius-md);
+            border: 1px solid var(--border-color); background: var(--input-bg); color: var(--text-primary); font-size: 13px;
+        }
+        .install-form input.install-cmd { flex: 2; }
+        .install-terminal-wrap {
+            border: 1px solid var(--border-color); border-radius: var(--radius-md);
+            background: #0c0c0c; margin-bottom: 14px; overflow: hidden; display: none;
+        }
+        .install-terminal-wrap.open { display: block; }
+        .install-terminal-header {
+            display: flex; align-items: center; justify-content: space-between;
+            padding: 6px 10px; background: #1a1a1a; color: #ddd; font-size: 12px;
+        }
+        .install-terminal-header .btn {
+            padding: 4px 12px; font-size: 12px;
+            background: #2a2a2a; color: #fafafa; border-color: #4a4a4a;
+        }
+        .install-terminal-header .btn:hover:not(:disabled) {
+            background: #3a3a3a; border-color: #6a6a6a;
+        }
+        #xterm-container { padding: 6px; min-height: 280px; }
+        .install-record {
+            border: 1px solid var(--border-color); border-radius: var(--radius-md);
+            padding: 10px 12px; margin-bottom: 8px; background: var(--input-bg);
+        }
+        .install-record-head { display: flex; justify-content: space-between; align-items: flex-start; gap: 8px; }
+        .install-record-skill { font-weight: 600; font-size: 14px; color: var(--text-primary); }
+        .install-record-cmd { font-family: var(--font-mono, monospace); font-size: 12px; color: var(--text-secondary); word-break: break-all; margin-top: 4px; }
+        .install-record-meta { font-size: 11px; color: var(--text-secondary); margin-top: 4px; }
+        .install-record-actions { display: flex; gap: 6px; flex: 0 0 auto; }
+        .skill-pill.status-running { background: rgba(59,130,246,0.15); color: #3b82f6; }
+        .skill-pill.status-success { background: rgba(34,197,94,0.15); color: #22c55e; }
+        .skill-pill.status-failed { background: rgba(239,68,68,0.15); color: #ef4444; }
+        .unify-batch-bar { display: flex; align-items: center; gap: 10px; margin-bottom: 10px; }
+
         .nav-group-title {
             font-size: 11px;
             font-weight: 700;
@@ -357,6 +410,16 @@
         .btn-primary:hover:not(:disabled) {
             opacity: 0.9;
             transform: none;
+        }
+
+        #unify-all-btn {
+            background: #3b82f6;
+            color: #fff;
+            border-color: transparent;
+        }
+        #unify-all-btn:hover:not(:disabled) {
+            background: #2563eb;
+            opacity: 1;
         }
 
         .btn-danger {
@@ -1530,6 +1593,9 @@
             }
         })();
     </script>
+    <link rel="stylesheet" href="/xterm/xterm.css" />
+    <script src="/xterm/xterm.js"></script>
+    <script src="/xterm/addon-fit.js"></script>
 </head>
 <body>
 
@@ -1559,10 +1625,20 @@
                     <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="margin-right: 8px;"><path d="M21.5 2v6h-6M21.34 15.57a10 10 0 1 1-.57-8.38l5.67-5.67"></path></svg>
                     会话同步 (Session Sync)
                 </a>
-                <a href="#skills" class="nav-item" onclick="switchTab('skills')">
-                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="margin-right: 8px;"><path d="M12 2L2 7l10 5 10-5-10-5zM2 17l10 5 10-5M2 12l10 5 10-5"></path></svg>
-                    预置技能 (Agent Skills)
-                </a>
+                <div class="nav-collapsible" id="nav-skills-group">
+                    <div class="nav-parent-row">
+                        <a href="#skills" class="nav-item" onclick="switchTab('skills')">
+                            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="margin-right: 8px;"><path d="M12 2L2 7l10 5 10-5-10-5zM2 17l10 5 10-5M2 12l10 5 10-5"></path></svg>
+                            预置技能 (Agent Skills)
+                        </a>
+                        <button class="nav-caret-btn" title="展开/收起" onclick="toggleNavGroup('nav-skills-group', event)"><span class="nav-caret">▶</span></button>
+                    </div>
+                    <div class="nav-children">
+                        <a href="#install-history" class="nav-item nav-child" onclick="switchTab('install-history')">
+                            <span class="nav-child-dot">└</span>安装记录
+                        </a>
+                    </div>
+                </div>
             </nav>
             <div class="sidebar-footer" style="flex-direction: column;">
                 <div style="display: flex; gap: 12px; width: 100%;">
@@ -1873,6 +1949,8 @@ experimental_bearer_token = "dummy"</pre>
                     <button class="skills-filter-chip" data-scope="managed" onclick="setSkillsScope('managed')">网关托管 0</button>
                     <button class="skills-filter-chip" data-scope="local" onclick="setSkillsScope('local')">本地发现 0</button>
                     <button class="skills-filter-chip" data-scope="missing" onclick="setSkillsScope('missing')">未安装托管 0</button>
+                                    <button class="skills-filter-chip" data-scope="unified-missing" onclick="setSkillsScope('unified-missing')">未统一到中央 0</button>
+                    <button class="btn btn-primary" id="unify-all-btn" style="padding:4px 12px;font-size:12px;" title="把未统一到中央的 skill 复制到 ~/.agents/skills 并软链其他目录" onclick="unifyAllSkills()">一键统一</button>
                 </div>
 
                 <div id="skills-category-filters" class="skills-filters"></div>
@@ -1883,6 +1961,38 @@ experimental_bearer_token = "dummy"</pre>
                         <div class="skill-detail-empty">从左侧选择一个技能，查看安装状态与说明。</div>
                     </aside>
                 </div>
+            </section>
+
+            <section id="section-install-history" class="tab-section" style="display: none;">
+                <div class="section-header">
+                    <div>
+                        <h2>安装记录</h2>
+                        <p>通过网关命令行安装的 skill 记录。每条可一键重新执行当时的安装命令。记录文件：<code class="path-pill" id="install-history-filepath"></code></p>
+                    </div>
+                    <button class="btn" onclick="refreshInstallHistory()">刷新</button>
+                </div>
+
+                <div class="usage-guide">
+                    <p><strong>使用方式</strong>：填写安装命令（如 <code>npx some-installer</code>），skill 名可留空——安装完成后会自动扫描本地目录、用新出现的 skill 名补全。命令在网关侧用伪终端交互式执行，支持 npx 的提问式安装。</p>
+                </div>
+
+                <div class="install-form">
+                    <input id="install-cmd" class="install-cmd" placeholder="安装命令，如 npx @scope/installer" />
+                    <input id="install-skill-name" placeholder="skill 名（可选，留空自动推断）" />
+                    <button class="btn btn-primary" onclick="startInstallFromForm()">安装</button>
+                </div>
+
+                <div class="install-terminal-wrap" id="install-terminal-wrap">
+                    <div class="install-terminal-header">
+                        <span id="install-terminal-title">安装终端</span>
+                        <span id="install-terminal-hint" style="color:#f59e0b;font-size:11px;margin-left:8px;flex:1;"></span>
+                        <button class="btn" title="关闭安装终端并终止运行中的进程" onclick="closeInstallTerminal()">关闭</button>
+                    </div>
+                    <div id="xterm-container"></div>
+                </div>
+
+                <div style="font-size:12px;font-weight:600;color:var(--text-secondary);margin-bottom:8px;">安装记录</div>
+                <div id="install-history-list"><div class="skill-detail-empty">暂无安装记录</div></div>
             </section>
 
         </main>
@@ -2050,6 +2160,213 @@ experimental_bearer_token = "dummy"</pre>
 
 
         // ---- Skills library state ----
+        // ===== Skills: nav collapsible =====
+        window.toggleNavGroup = function(groupId, event) {
+            if (event) event.stopPropagation();
+            const g = document.getElementById(groupId);
+            if (g) g.classList.toggle('open');
+        };
+
+        // ===== Skills: unify to central =====
+        window.unifySkillToCentral = async function(skillName) {
+            const name = String(skillName || '').trim();
+            if (!name) return false;
+            const call = (overwrite) => fetch('/v1/skills/unify', {
+                method: 'POST', headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ skill: name, overwrite })
+            }).then(r => r.json());
+            let data = await call(false);
+            if (data.needsConfirm) {
+                const ok = await showSkillConfirmModal(
+                    '统一到中央目录',
+                    '中央目录已存在「' + name + '」。确认用其他目录的内容<strong>覆盖</strong>中央目录，并把其他目录软链到中央？'
+                );
+                if (!ok) return false;
+                data = await call(true);
+            }
+            if (!data.success) { showToast('统一失败: ' + (data.error || ''), 'danger'); return false; }
+            await refreshSkillsLibrary(true);
+            showToast('已统一 ' + name + ' 到中央目录', 'success');
+            return true;
+        };
+
+        window.unifyAllSkills = async function() {
+            const ok = await showSkillConfirmModal(
+                '一键统一',
+                '把所有"未统一到中央"的 skill 复制到中央目录 <code>~/.agents/skills/</code>，并把其他目录软链到中央？仅处理中央目录缺失的 skill。'
+            );
+            if (!ok) return;
+            try {
+                const res = await fetch('/v1/skills/unify-all', { method: 'POST' });
+                const data = await res.json();
+                if (!data.success) throw new Error(data.error || '失败');
+                const done = (data.results || []).filter(r => r.unified).length;
+                const failed = (data.results || []).filter(r => r.error).length;
+                await refreshSkillsLibrary(true);
+                showToast('统一完成：成功 ' + done + (failed ? (' / 失败 ' + failed) : ''), failed ? 'danger' : 'success');
+            } catch (err) {
+                showToast('一键统一失败: ' + err.message, 'danger');
+            }
+        };
+
+        // ===== Skills: install history (gateway-driven installs) =====
+        let xtermTerm = null;
+        let xtermFit = null;
+        let currentInstallWs = null;
+
+        async function refreshInstallHistory() {
+            try {
+                const res = await fetch('/v1/skills/install-history');
+                const data = await res.json();
+                if (!data.success) throw new Error(data.error || '失败');
+                const fp = document.getElementById('install-history-filepath');
+                if (fp) fp.textContent = data.filePath || '';
+                renderInstallHistoryList(data.records || []);
+            } catch (err) {
+                showToast('加载安装记录失败: ' + err.message, 'danger');
+            }
+        }
+
+        function fmtInstallDate(iso) {
+            if (!iso) return '';
+            try { return new Date(iso).toLocaleString('zh-CN', { hour12: false }); } catch (e) { return iso; }
+        }
+
+        function renderInstallHistoryList(records) {
+            const host = document.getElementById('install-history-list');
+            if (!host) return;
+            if (!records.length) { host.innerHTML = '<div class="skill-detail-empty">暂无安装记录</div>'; return; }
+            host.innerHTML = records.map(function(r) {
+                const statusLabel = r.status === 'success' ? '成功' : (r.status === 'failed' ? '失败' : '运行中');
+                const meta = fmtInstallDate(r.startedAt) + (r.finishedAt ? (' -> ' + fmtInstallDate(r.finishedAt)) : '') + (r.exitCode !== null ? (' · 退出 ' + r.exitCode) : '');
+                return '<div class="install-record">' +
+                    '<div class="install-record-head">' +
+                    '<div style="min-width:0;flex:1;">' +
+                    '<div class="install-record-skill">' + escapeHtml(r.skillName || '(未关联 skill)') + ' <span class="skill-pill status-' + r.status + '">' + statusLabel + '</span></div>' +
+                    '<div class="install-record-cmd">$ ' + escapeHtml(r.command) + '</div>' +
+                    '<div class="install-record-meta">' + escapeHtml(meta) + '</div>' +
+                    '</div>' +
+                    '<div class="install-record-actions">' +
+                    '<button class="btn" style="padding:4px 10px;font-size:12px;" onclick="reinstallRecord(\'' + r.id + '\')">重新安装</button>' +
+                    '<button class="btn" style="padding:4px 10px;font-size:12px;" onclick="deleteInstallRecord(\'' + r.id + '\')">删除</button>' +
+                    '</div>' +
+                    '</div></div>';
+            }).join('');
+        }
+
+        function openInstallTerminal() {
+            const wrap = document.getElementById('install-terminal-wrap');
+            wrap.classList.add('open');
+            if (!xtermTerm) {
+                xtermTerm = new Terminal({ cols: 100, rows: 24, fontFamily: 'Consolas, monospace', fontSize: 13, theme: { background: '#0c0c0c' } });
+                xtermFit = new FitAddon.FitAddon();
+                xtermTerm.loadAddon(xtermFit);
+                xtermTerm.open(document.getElementById('xterm-container'));
+                // Wheel boundary passthrough: let xterm scroll its own buffer, but when the
+                // viewport is at the top/bottom of the scrollback, release the wheel to the
+                // page so the browser scrolls instead of fighting the terminal.
+                const xtermHost = document.getElementById('xterm-container');
+                xtermHost.addEventListener('wheel', function(e) {
+                    const buf = xtermTerm.buffer.active;
+                    const atTop = buf.viewportY <= 0;
+                    const atBottom = buf.viewportY >= buf.baseY;
+                    if ((e.deltaY < 0 && atTop) || (e.deltaY > 0 && atBottom)) e.stopImmediatePropagation();
+                }, { capture: true, passive: true });
+                xtermTerm.onData(function(d) {
+                    if (currentInstallWs && currentInstallWs.readyState === 1) currentInstallWs.send(d);
+                });
+                xtermTerm.onResize(function(size) {
+                    if (currentInstallWs && currentInstallWs.readyState === 1) {
+                        currentInstallWs.send(JSON.stringify({ type: 'resize', cols: size.cols, rows: size.rows }));
+                    }
+                });
+            }
+            xtermTerm.reset();
+            try { xtermFit.fit(); } catch (e) {}
+            xtermTerm.focus();
+        }
+
+        function closeInstallTerminal() {
+            const wrap = document.getElementById('install-terminal-wrap');
+            wrap.classList.remove('open');
+            if (currentInstallWs) { try { currentInstallWs.close(); } catch (e) {} currentInstallWs = null; }
+        }
+        window.closeInstallTerminal = closeInstallTerminal;
+
+        async function startInstallWithCommand(command, skillName) {
+            const cmd = String(command || '').trim();
+            if (!cmd) { showToast('请填写安装命令', 'danger'); return false; }
+            let record;
+            try {
+                const res = await fetch('/v1/skills/install', {
+                    method: 'POST', headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ command: cmd, skillName: skillName || '' })
+                });
+                const data = await res.json();
+                if (!data.success) throw new Error(data.error || '失败');
+                record = data.record;
+            } catch (err) { showToast('启动安装失败: ' + err.message, 'danger'); return false; }
+
+            openInstallTerminal();
+            const title = document.getElementById('install-terminal-title');
+            if (title) title.textContent = '安装终端 · ' + record.id;
+            xtermTerm.writeln('$ ' + cmd);
+
+            const wsUrl = 'ws://' + location.host + '/v1/skills/pty?recordId=' + record.id
+                + '&cols=' + xtermTerm.cols + '&rows=' + xtermTerm.rows;
+            const ws = new WebSocket(wsUrl);
+            currentInstallWs = ws;
+            const hint = document.getElementById('install-terminal-hint');
+            if (hint) hint.textContent = '运行中 · 如出现 Ok to proceed? (y) 请输入 y 并回车';
+            ws.onopen = function() {
+                xtermTerm.focus();
+                try { xtermFit.fit(); } catch (e) {}
+                if (ws.readyState === 1) ws.send(JSON.stringify({ type: 'resize', cols: xtermTerm.cols, rows: xtermTerm.rows }));
+            };
+            ws.onmessage = function(e) {
+                let parsed = null;
+                if (typeof e.data === 'string') { try { parsed = JSON.parse(e.data); } catch (err) {} }
+                if (parsed && parsed.type === 'exit') {
+                    if (hint) hint.textContent = '';
+                    xtermTerm.writeln('\r\n[进程退出 code=' + parsed.exitCode + ']' + (parsed.skillName ? (' 关联 skill: ' + parsed.skillName) : ''));
+                    refreshInstallHistory();
+                } else {
+                    xtermTerm.write(typeof e.data === 'string' ? e.data : '');
+                }
+            };
+            ws.onclose = function() { if (hint) hint.textContent = ''; refreshInstallHistory(); };
+            ws.onerror = function() { xtermTerm.writeln('\r\n[连接错误]'); };
+            return true;
+        }
+
+        window.startInstallFromForm = async function() {
+            const cmd = document.getElementById('install-cmd').value;
+            const skillName = document.getElementById('install-skill-name').value;
+            const ok = await startInstallWithCommand(cmd, skillName);
+            if (ok) { document.getElementById('install-cmd').value = ''; document.getElementById('install-skill-name').value = ''; }
+        };
+
+        window.reinstallRecord = async function(id) {
+            const res = await fetch('/v1/skills/install-history');
+            const data = await res.json();
+            const rec = (data.records || []).find(function(r) { return r.id === id; });
+            if (!rec) { showToast('记录不存在', 'danger'); return; }
+            const ok = await showSkillConfirmModal('重新安装', '用当时的命令重新执行？<br><code>' + escapeHtml(rec.command) + '</code>' + (rec.skillName ? ('<br>skill: ' + escapeHtml(rec.skillName)) : ''));
+            if (!ok) return;
+            await startInstallWithCommand(rec.command, rec.skillName || '');
+        };
+
+        window.deleteInstallRecord = async function(id) {
+            const ok = await showSkillConfirmModal('删除记录', '确认删除这条安装记录？');
+            if (!ok) return;
+            try {
+                const res = await fetch('/v1/skills/install-history?id=' + encodeURIComponent(id), { method: 'DELETE' });
+                const data = await res.json();
+                if (!data.success) throw new Error(data.error || '失败');
+                renderInstallHistoryList(data.records || []);
+                showToast('已删除', 'success');
+            } catch (err) { showToast('删除失败: ' + err.message, 'danger'); }
+        };
         let skillsLibraryState = {
             loaded: false,
             loading: false,
@@ -2080,12 +2397,20 @@ experimental_bearer_token = "dummy"</pre>
                 managed: `网关托管 ${s.managed || 0}`,
                 local: `本地发现 ${s.local || 0}`,
                 missing: `未安装托管 ${s.missing || 0}`,
+                'unified-missing': `未统一到中央 ${s.unifiedMissing || 0}`,
             };
             document.querySelectorAll('.skills-filter-chip[data-scope]').forEach((el) => {
                 const scope = el.getAttribute('data-scope');
                 el.classList.toggle('active', scope === skillsLibraryState.scope);
                 if (labels[scope]) el.textContent = labels[scope];
             });
+            const unifyBtn = document.getElementById('unify-all-btn');
+            if (unifyBtn) {
+                const n = s.unifiedMissing || 0;
+                const show = n > 0 && skillsLibraryState.scope === 'unified-missing';
+                unifyBtn.style.display = show ? '' : 'none';
+                if (show) unifyBtn.textContent = '一键统一 (' + n + ')';
+            }
         }
 
         function renderSkillsCategories() {
@@ -2147,14 +2472,16 @@ experimental_bearer_token = "dummy"</pre>
 
             const tools = skill.tools || skillsLibraryState.tools || {};
             const presentIn = skill.presentIn || {};
-            const rootByClient = { antigravity: 'antigravity', claude: 'claude', codex: 'central' };
+            const rootByClient = { antigravity: 'antigravity', claude: 'claude', claudeDesktop3p: 'claudeDesktop3p', codex: 'central' };
             const clientRows = Object.entries(tools).map(([tool, meta]) => {
                 const rootId = rootByClient[tool];
                 const present = rootId ? Boolean(presentIn[rootId]) : Boolean(skill.installed);
                 const isCentral = tool === 'codex';
                 const action = present ? 'unlink' : 'link';
-                const actionLabel = present ? '取消链接' : '链接';
-                const linkBtn = isCentral ? '' : `<button class="btn" style="padding:4px 10px;font-size:12px;flex:0 0 auto;" onclick="linkSkillClient('${escapeHtml(skill.name)}','${tool}','${action}')">${actionLabel}</button>`;
+                const isCopy = meta.mode === 'copy';
+                const actionLabel = present ? (isCopy ? '移除' : '取消链接') : (isCopy ? '复制' : '链接');
+                const modeKind = isCopy ? 'copy' : 'link';
+                const linkBtn = isCentral ? '' : `<button class="btn" style="padding:4px 10px;font-size:12px;flex:0 0 auto;" onclick="linkSkillClient('${escapeHtml(skill.name)}','${tool}','${action}','${modeKind}')">${actionLabel}</button>`;
                 return `
                 <div class="skill-mount-row">
                     <div class="skill-mount-main">
@@ -2178,6 +2505,9 @@ experimental_bearer_token = "dummy"</pre>
             }
             if (skill.canPromote || (skill.installed && !skill.managed)) {
                 actions.push(`<button class="btn" onclick="promoteLocalSkillToManaged('${escapeHtml(skill.name)}')">转为网关托管</button>`);
+            }
+            if (!skill.centralReal && skill.installed) {
+                actions.push(`<button class="btn btn-primary" onclick="unifySkillToCentral('${escapeHtml(skill.name)}')">统一到中央目录</button>`);
             }
 
             host.innerHTML = `
@@ -2342,7 +2672,7 @@ experimental_bearer_token = "dummy"</pre>
             }
         };
 
-        window.linkSkillClient = async function(skillName, client, action) {
+        window.linkSkillClient = async function(skillName, client, action, modeKind) {
             try {
                 const res = await fetch('/v1/skills/link', {
                     method: 'POST',
@@ -2352,7 +2682,11 @@ experimental_bearer_token = "dummy"</pre>
                 const data = await res.json();
                 if (!data.success) throw new Error(data.error || '操作失败');
                 await refreshSkillsLibrary(true);
-                showToast(action === 'unlink' ? `已从 ${client} 取消链接 ${skillName}` : `已链接 ${skillName} 到 ${client}`, 'success');
+                const isCopy = modeKind === 'copy';
+                const msg = action === 'unlink'
+                    ? (isCopy ? `已从 ${client} 移除 ${skillName}` : `已从 ${client} 取消链接 ${skillName}`)
+                    : (isCopy ? `已复制 ${skillName} 到 ${client}` : `已链接 ${skillName} 到 ${client}`);
+                showToast(msg, 'success');
                 return true;
             } catch (err) {
                 showToast(`操作失败: ${err.message}`, 'danger');
@@ -3008,6 +3342,13 @@ experimental_bearer_token = "dummy"</pre>
             if (tabId === 'skills') {
                 refreshSkillsLibrary(false);
             }
+            if (tabId === 'install-history') {
+                refreshInstallHistory();
+            }
+            if (tabId === 'skills' || tabId === 'install-history') {
+                const g = document.getElementById('nav-skills-group');
+                if (g) g.classList.add('open');
+            }
 
             // Scroll to top
             document.querySelector('.content-area').scrollTop = 0;
@@ -3015,7 +3356,7 @@ experimental_bearer_token = "dummy"</pre>
 
         window.addEventListener('load', () => {
             const hash = window.location.hash.replace('#', '');
-            if (hash === 'code' || hash === 'desktop' || hash === 'codex' || hash === 'sync' || hash === 'skills') {
+            if (hash === 'code' || hash === 'desktop' || hash === 'codex' || hash === 'sync' || hash === 'skills' || hash === 'install-history') {
                 switchTab(hash);
             }
         });
