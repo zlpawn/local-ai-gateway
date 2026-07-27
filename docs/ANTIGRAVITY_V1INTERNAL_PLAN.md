@@ -364,7 +364,7 @@ gateway 对接点:
 | 0 - 准备 | 已完成 | 方案文档、worktree、分支 `feat/antigravity-v1internal` | commit 1e78a59 已 push | main 已合并(c95db7c),desktop 已废弃 |
 | 1 - OAuth 与 token | 已完成(代码) | lib/antigravity/: constants.mjs, token-store.mjs, oauth.mjs, oauth-callback-server.mjs, cli.mjs, index.mjs;gateway-service.mjs 接入 antigravity 子命令;.gitignore 加 antigravity.secrets.json | token-store 8 测试 + cli 3 测试全过;全量 node --check 通过 | 端到端 OAuth 登录验证待用户填 client_id/secret 后执行 `local-ai-gateway antigravity login`;sessionId 算法修正见下 |
 | 2 - 单次 generateContent | 已完成(代码) | lib/antigravity/: session-id.mjs(64位 FNV,BigInt)、upstream.mjs(call_v1_internal/loadCodeAssist/generateContent/streamGenerateContent,端点 fallback+403降级+完整指纹 headers)、request-builder.mjs(Phase 2 最小版,单轮文本无 tools/identity) | session-id 4 测试(含空串=offset basis 精确 vector)+ upstream 8 测试全过;全部 23 测试通过;全量 node --check 干净 | generateContent 端到端验证待 Phase 4 路由打通(identity 已在 Phase 3 修正为短 stub,见下);loadCodeAssist 端到端验证待用户 login 后执行 |
-| 3 - 流式与转换 | 已完成(代码) | lib/antigravity/: system-prompt.mjs(antigravity identity 短 stub 1:1)、request-builder.mjs 完整版(instructions 保留+identity 前置、input[]->contents 角色映射、function_call/output->functionCall/Response 含 call_id->name 预扫描、tools->functionDeclarations 排序、generationConfig 映射、外层 project/model/userAgent/requestType/requestId/enabledCreditTypes、内层字段顺序稳定前缀在前)、response-streamer.mjs(v1internal SSE 解 response 包裹->Codex responses 事件,复用 ResponsesWriter);index.mjs 导出更新 | system-prompt 3 测试 + request-builder 10 测试 + response-streamer 5 测试全过;全部 41 antigravity 测试通过;全量 165 测试通过;全量 node --check 干净 | **关键修正见下**:identity 非 17.5K,实为 ~330 字符 stub;端到端验证待 Phase 4 路由打通后连同 loadCodeAssist+generateContent 一起验证(需用户 login) |
+| 3 - 流式与转换 | 已完成(代码) | lib/antigravity/: system-prompt.mjs(antigravity identity 短 stub 1:1)、request-builder.mjs 完整版(instructions 保留+identity 前置、input[]->contents 角色映射、function_call/output->functionCall/Response 含 call_id->name 预扫描、tools->functionDeclarations 排序、generationConfig 映射、外层 project/model/userAgent/requestType/requestId/enabledCreditTypes、内层字段顺序稳定前缀在前)、response-streamer.mjs(v1internal SSE 解 response 包裹->Codex responses 事件,复用 ResponsesWriter);index.mjs 导出更新 | system-prompt 3 测试 + request-builder 10 测试 + response-streamer 5 测试全过;全部 41 antigravity 测试通过;全量 165 测试通过;全量 node --check 干净 | **关键修正见下**:identity 非 17.5K,实为 ~330 字符 stub;新增 `scripts/antigravity-smoke.mjs` 可直接验证 Phase 1-3 链路(见第 19 节);Codex 列表级端到端待 Phase 4 |
 | 4 - 路由与目录 | 未开始 | | | |
 | 5 - 测试与健壮性 | 未开始 | | | |
 
@@ -376,4 +376,86 @@ gateway 对接点:
 >
 > Phase 3 其他实现决策:(1) 模型/工具名保持原样,**未**做 AG 的 `local_shell_call`->`shell` 重命名(我们同时控制声明与调用,名称一致即可;如 Google 后端要求保留名,Phase 5 再加);(2) thinking 签名(thoughtSignature)暂不注入,仅当 Codex 显式带 `thinking.budget_tokens` 时设 `thinkingConfig.thinkingBudget`;gemini-3 thinking 模型的 functionCall 签名需求留待 Phase 5;(3) response-streamer 假设 functionCall 在单帧内完整(Gemini 常见行为),跨帧分片累积留待 Phase 5;(4) requestId 用 AG `openai/request.rs:1253` 格式 `agent/antigravity/<sid前8位>/<消息数>`(非 wrapper.rs 的 `agent/<ts>/<hex>`,因输入是 Codex/OpenAI 形态)。
 >
-当前接力起点:**Phase 4**(server.js 路由 + 模型目录集成)。端到端验证(loadCodeAssist + generateContent + 流式)需用户先 `local-ai-gateway antigravity login` 拿 token,Phase 4 路由打通后可一起验证(测试用 8789 端口)。
+当前接力起点:**Phase 4**(server.js 路由 + 模型目录集成)。端到端验证(loadCodeAssist + generateContent + 流式)需用户先 `local-ai-gateway antigravity login` 拿 token;Phase 1-3 的链路已可用 `scripts/antigravity-smoke.mjs` 直接验证(见第 19 节),Phase 4 路由打通后再做 Codex 列表级端到端(测试用 8789 端口)。
+
+> 本机状态(2026-07-27):`antigravity.secrets.json` 已在本机 worktree 预填好 client_id/secret(取自 AG `oauth.rs:6-7`),但该文件 .gitignore 不进 git,**换台机器需重新创建**(见第 19.1 节)。本机尚未执行 `antigravity login`(无 token),待用户在测试机上登录。
+
+## 19. 测试指南(换台机器验证)
+
+本节供在另一台机器(或另一模型)上验证当前 Phase 1-3 成果。Phase 4(server.js 路由 + catalog)未完成前,Codex 列表里还选不到 antigravity 模型,但 OAuth + v1internal 上游链路已可独立验证。
+
+### 19.1 环境准备
+
+1. 拉代码并切到特性分支:
+
+```
+git clone https://github.com/zlpawn/local-ai-gateway.git
+cd local-ai-gateway
+git checkout feat/antigravity-v1internal
+```
+
+2. 安装依赖(仅需 `https-proxy-agent`,其余用 Node 内置模块;Node >= 18,推荐 20+):
+
+```
+npm install
+```
+
+3. 在仓库根目录创建凭据文件 `antigravity.secrets.json`(与 `gateway.secrets.json` 同级;已 .gitignore,不进 git)。内容为 Antigravity 应用自带的公开 OAuth 凭据(client_id / client_secret):
+
+```json
+{
+  "client_id": "<client_id,见下>",
+  "client_secret": "<client_secret,见下>"
+}
+```
+
+**实际值不写入本文档,避免触发 GitHub secret 扫描**(与第 6 节约定一致)。取值方式任选其一:(a) 从本机已填好的 worktree `antigravity.secrets.json` 拷贝到测试机;(b) 查 AG-Manager 开源仓库 `src-tauri/src/modules/oauth.rs:6-7`(`CLIENT_ID` / `CLIENT_SECRET` 两个常量)。client_id 形如 `数字-xxx.apps.googleuser.test`,client_secret 形如 `FAKESEC-...`。
+
+### 19.2 测试 1:OAuth 登录(Phase 1,已可测)
+
+```
+node bin/cli.js antigravity login
+```
+
+浏览器自动打开 Google 授权页 -> 用**订阅了 Antigravity 的 Google 账号**登录并同意 -> 回调服务在 `http://localhost:8080/callback` 接收 code -> token 写回 `antigravity.secrets.json`。
+
+验证:
+
+```
+node bin/cli.js antigravity status
+```
+
+应看到 `client_id: (set)`、`access_token: (set)`、`refresh_token: (set)`、`account_id: 你的邮箱`。
+
+### 19.3 测试 2:v1internal 冒烟测试(Phase 2+3,已可测)
+
+```
+node scripts/antigravity-smoke.mjs                    # 默认 gemini-3-pro-preview
+node scripts/antigravity-smoke.mjs gemini-3-flash     # 换模型
+node scripts/antigravity-smoke.mjs gemini-2.5-flash
+```
+
+该脚本验证完整链路:OAuth refresh -> `loadCodeAssist`(拿 cloudaicompanionProject)-> `buildGenerateContentRequest`(Codex 请求 -> v1internal body)-> `streamGenerateContent` -> `streamResponses`(实时打印模型文本)。
+
+成功标志:控制台打印出模型回复文本 + `[smoke] DONE - v1internal path works end-to-end.`。
+
+可用模型名(v1internal 上游实际名,见 AG `model_mapping.rs:84-86`):`gemini-3-pro-preview`、`gemini-3-flash`、`gemini-2.5-flash`。注意 AG 会把 `gemini-3-pro` 映射成 `gemini-3-pro-preview`,冒烟脚本直接用上游名;Phase 4 的 catalog 会做这层映射。
+
+### 19.4 当前可测 vs 待 Phase 4
+
+- **已可测(Phase 1-3)**:OAuth 登录、token 刷新、`loadCodeAssist`、`generateContent`/`streamGenerateContent`、请求体构造(identity + instructions + contents + tools)、响应流转(SSE -> Codex 事件)。测试 1、2 现在就能跑。
+- **待 Phase 4(未做)**:`server.js:835` 把 `/v1/responses` 在 `endpoint.type==='antigravity'` 时转交 `lib/antigravity/index.mjs`;`server.js:4653` 路由白名单加 `'antigravity'`;`server.js:6207` `writeCodexModelCatalog` 写入 antigravity 模型;`gateway.config.json` 加 antigravity endpoint 示例。Phase 4 完成后才能在 Codex 模型列表选到并用这些模型。届时用 8789 端口跑网关:
+
+```
+GATEWAY_PORT=8789 node bin/cli.js start
+```
+
+### 19.5 排错要点
+
+- `[smoke] No token`:`antigravity.secrets.json` 没有 refresh_token,先跑 19.2 登录。
+- `loadCodeAssist failed (401)`:token 过期且 refresh 失败,重新 `antigravity login`。
+- `loadCodeAssist returned no cloudaicompanionProject (account may be ineligible)`:该 Google 账号无有效 Antigravity 订阅,换订阅账号登录。
+- `generateContent/streamGenerateContent failed (400)`:请求体结构问题。重点核对:(a) `systemInstruction` 是否含 antigravity identity(`system-prompt.mjs`);(b) 内层字段顺序 systemInstruction->tools->toolConfig->generationConfig->sessionId->contents;(c) `model` 是否用上游名(`gemini-3-pro-preview` 而非 `gemini-3-pro`)。对照 AG `openai/request.rs`。
+- `403` 且带 `x-goog-user-project`:`upstream.mjs` 已实现降级重试(移除该 header 重试一次);仍 403 多为账号配额/订阅问题。
+- thinking 模型(`gemini-3-pro-preview`)带 functionCall 时若报缺 `thoughtSignature`:Phase 3 暂未注入 thinking 签名(见第 18 节 Phase 3 偏离记录),Phase 5 处理。纯文本对话不受影响。
+- `redirect_uri_mismatch`:确认 `constants.mjs` 的 `REDIRECT_PORT=8080`、`REDIRECT_PATH=/callback` 未被改动(AG `oauth.rs:725` 测试佐证这是 client 注册地址)。
