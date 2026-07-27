@@ -204,14 +204,19 @@ test("request adapter attaches tool calls to a preceding assistant text message"
   );
 });
 
-test("request adapter rejects an unrepresentable hosted tool", () => {
-  assert.throws(
-    () => responsesRequestToChat({
-      input: "Search",
-      tools: [{ type: "web_search_preview" }],
-    }, "chat-model"),
-    /cannot be represented by Chat Completions/,
-  );
+test("request adapter strips unrepresentable hosted tools", () => {
+  const result = responsesRequestToChat({
+    input: "Search",
+    tools: [
+      { type: "web_search_preview" },
+      { type: "tool_search" },
+      { type: "function", name: "shell", parameters: { type: "object", properties: {} } },
+    ],
+  }, "chat-model");
+  // Hosted tools that cannot run on a third-party Chat Completions endpoint
+  // are stripped; only function/custom tools survive.
+  assert.equal(result.body.tools.length, 1);
+  assert.equal(result.body.tools[0].function.name, "shell");
 });
 
 test("request adapter rejects an unsupported top-level input item", () => {

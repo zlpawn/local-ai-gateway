@@ -58,6 +58,17 @@
     "desktop": {
       "endpoints": [
         {
+          "id": "ep_396943be-f876-40a9-9c31-6b56c0d8545b",
+          "name": "ait",
+          "type": "anthropic",
+          "base_url": "https://openapi-ait.ke.com",
+          "auth": "bearer",
+          "models": [],
+          "model_mapping": {
+            "claude-opus-5": "claude-opus-5"
+          }
+        },
+        {
           "id": "ep_7093ea70-ffff-4602-8a9f-c5006fc233d8",
           "name": "视觉兜底节点",
           "purpose": "vision_fallback",
@@ -157,11 +168,12 @@
         {
           "id": "ep_3a82b850-9c20-4484-a206-0bfb79c5e9c3",
           "name": "ait",
-          "type": "openai-responses",
+          "type": "openai-chat",
           "base_url": "https://openapi-ait.ke.com",
           "auth": "bearer",
           "models": [
-            "claude-opus-5"
+            "claude-opus-5",
+            "claude-opus-4-8"
           ],
           "model_mapping": {},
           "capabilities": {

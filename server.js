@@ -67,6 +67,14 @@ enableNodeEnvProxy();
 const ENV_PORT = intEnv("GATEWAY_PORT", intEnv("PORT", 0));
 const ENV_HOST = process.env.GATEWAY_HOST || process.env.HOST || "";
 const REQUEST_TIMEOUT_MS = intEnv("REQUEST_TIMEOUT_MS", 600000);
+const UPSTREAM_RETRY_COUNT = intEnv("UPSTREAM_RETRY_COUNT", 2);
+const UPSTREAM_RETRY_BACKOFF_MS = intEnv("UPSTREAM_RETRY_BACKOFF_MS", 500);
+// HTTP statuses that indicate a transient upstream overload worth retrying
+// (e.g. Bedrock 503 "Channel Exception", rate limits, overloaded).
+const TRANSIENT_OVERLOAD_STATUSES = new Set([429, 503, 529]);
+function sleep(ms) {
+  return new Promise((resolve) => setTimeout(resolve, ms));
+}
 const GATEWAY_API_KEY = process.env.GATEWAY_API_KEY || "";
 const CONFIGURED_API_KEY_SENTINEL = "all";
 const ARK_API_KEY = process.env.ARK_API_KEY || "";
@@ -1127,6 +1135,19 @@ function collectGroupedModelsFromConfig(config) {
 }
 
 async function forwardAnthropicMessages(body, clientReq, clientRes, context) {
+  const requestAbort = bindRequestAbort(clientReq, clientRes);
+  const upstreamAbort = createUpstreamAbort(requestAbort.signal);
+  try {
+    await forwardAnthropicMessagesResolved(
+      body, clientReq, clientRes, context, upstreamAbort.signal,
+    );
+  } finally {
+    upstreamAbort.dispose();
+    requestAbort.dispose();
+  }
+}
+
+async function forwardAnthropicMessagesResolved(body, clientReq, clientRes, context, signal) {
   const requestedModel = body.model;
   const route = resolveAnthropicRoute(requestedModel, context.client);
   body = await maybePreprocessImages(body, route, clientReq, context);
@@ -1436,6 +1457,19 @@ async function forwardAnthropicMessages(body, clientReq, clientRes, context) {
 }
 
 async function forwardOpenAIChatCompletions(body, clientReq, clientRes, context) {
+  const requestAbort = bindRequestAbort(clientReq, clientRes);
+  const upstreamAbort = createUpstreamAbort(requestAbort.signal);
+  try {
+    await forwardOpenAIChatCompletionsResolved(
+      body, clientReq, clientRes, context, upstreamAbort.signal,
+    );
+  } finally {
+    upstreamAbort.dispose();
+    requestAbort.dispose();
+  }
+}
+
+async function forwardOpenAIChatCompletionsResolved(body, clientReq, clientRes, context, signal) {
   const requestedModel = body.model;
   if (context.client === "codex" && isOfficialCodexModel(requestedModel)) {
     throw httpError(
@@ -2746,34 +2780,39 @@ async function fetchConfiguredAnthropic(provider, body, clientReq) {
 
   try {
     try {
-      let res = await fetch(url, {
+      const baseHeaders = {
+        "anthropic-version": clientReq.headers["anthropic-version"] || "2023-06-01",
+        ...(clientReq.headers["anthropic-beta"]
+          ? { "anthropic-beta": clientReq.headers["anthropic-beta"] }
+          : {}),
+      };
+      const bodyStr = JSON.stringify(body);
+      const doFetch = (key) => fetch(url, {
         method: "POST",
-        headers: providerHeaders(provider, upstreamApiKey, {
-          "anthropic-version": clientReq.headers["anthropic-version"] || "2023-06-01",
-          ...(clientReq.headers["anthropic-beta"]
-            ? { "anthropic-beta": clientReq.headers["anthropic-beta"] }
-            : {}),
-        }),
-        body: JSON.stringify(body),
+        headers: providerHeaders(provider, key, baseHeaders),
+        body: bodyStr,
         signal: controller.signal,
       });
 
+      let key = upstreamApiKey;
+      let res = await doFetch(key);
+
+      // Auth fallback: retry once with the configured key on 401/403.
       if (res.status === 401 || res.status === 403) {
         const fallbackKey = getConfiguredProviderApiKey(provider);
         if (fallbackKey && fallbackKey !== upstreamApiKey) {
           logInfo("api_key_fallback", { provider: provider.id, original_status: res.status });
-          res = await fetch(url, {
-            method: "POST",
-            headers: providerHeaders(provider, fallbackKey, {
-              "anthropic-version": clientReq.headers["anthropic-version"] || "2023-06-01",
-              ...(clientReq.headers["anthropic-beta"]
-                ? { "anthropic-beta": clientReq.headers["anthropic-beta"] }
-                : {}),
-            }),
-            body: JSON.stringify(body),
-            signal: controller.signal,
-          });
+          key = fallbackKey;
+          res = await doFetch(key);
         }
+      }
+
+      // Retry transient upstream overload (e.g. Bedrock 503 "Channel Exception")
+      // before surfacing the error to the client.
+      for (let attempt = 0; attempt < UPSTREAM_RETRY_COUNT && TRANSIENT_OVERLOAD_STATUSES.has(res.status); attempt++) {
+        logInfo("upstream_retry", { provider: provider.id, status: res.status, attempt: attempt + 1 });
+        await sleep(UPSTREAM_RETRY_BACKOFF_MS * (attempt + 1));
+        res = await doFetch(key);
       }
 
       return res;
@@ -2841,24 +2880,34 @@ async function fetchConfiguredOpenAI(
 
   try {
     try {
-      let res = await fetch(url, {
+      const bodyStr = JSON.stringify(body);
+      const fetchSignal = signal || controller.signal;
+      const doFetch = (key) => fetch(url, {
         method: "POST",
-        headers: providerHeaders(provider, upstreamApiKey),
-        body: JSON.stringify(body),
-        signal: signal || controller.signal,
+        headers: providerHeaders(provider, key),
+        body: bodyStr,
+        signal: fetchSignal,
       });
 
+      let key = upstreamApiKey;
+      let res = await doFetch(key);
+
+      // Auth fallback: retry once with the configured key on 401/403.
       if (allowAuthFallback && (res.status === 401 || res.status === 403)) {
         const fallbackKey = getConfiguredProviderApiKey(provider);
         if (fallbackKey && fallbackKey !== upstreamApiKey) {
           logInfo("api_key_fallback", { provider: provider.id, original_status: res.status });
-          res = await fetch(url, {
-            method: "POST",
-            headers: providerHeaders(provider, fallbackKey),
-            body: JSON.stringify(body),
-            signal: signal || controller.signal,
-          });
+          key = fallbackKey;
+          res = await doFetch(key);
         }
+      }
+
+      // Retry transient upstream overload (e.g. Bedrock 503 "Channel Exception")
+      // before surfacing the error to the client.
+      for (let attempt = 0; attempt < UPSTREAM_RETRY_COUNT && TRANSIENT_OVERLOAD_STATUSES.has(res.status); attempt++) {
+        logInfo("upstream_retry", { provider: provider.id, status: res.status, attempt: attempt + 1 });
+        await sleep(UPSTREAM_RETRY_BACKOFF_MS * (attempt + 1));
+        res = await doFetch(key);
       }
 
       return res;
@@ -5563,28 +5612,77 @@ function streamFinalAnthropicMessage(clientRes, message, requestedModel) {
     usage: message?.usage || { input_tokens: 0, output_tokens: 0 },
   };
   writeAnthropicSse(clientRes, "message_start", { type: "message_start", message: msg });
-  const text = Array.isArray(message?.content)
-    ? message.content.filter((b) => b?.type === "text").map((b) => b.text || "").join("")
-    : "";
-  if (text) {
-    writeAnthropicSse(clientRes, "content_block_start", {
-      type: "content_block_start",
-      index: 0,
-      content_block: { type: "text", text: "" },
-    });
-    writeAnthropicSse(clientRes, "content_block_delta", {
-      type: "content_block_delta",
-      index: 0,
-      delta: { type: "text_delta", text },
-    });
+  // Stream every content block (text, tool_use, thinking, ...) so tool calls
+  // and other non-text blocks reach the client instead of being dropped.
+  const blocks = Array.isArray(message?.content) ? message.content : [];
+  blocks.forEach((block, index) => {
+    if (!block || typeof block !== "object") return;
+    if (block.type === "text") {
+      writeAnthropicSse(clientRes, "content_block_start", {
+        type: "content_block_start",
+        index,
+        content_block: { type: "text", text: "" },
+      });
+      writeAnthropicSse(clientRes, "content_block_delta", {
+        type: "content_block_delta",
+        index,
+        delta: { type: "text_delta", text: block.text || "" },
+      });
+    } else if (block.type === "tool_use") {
+      writeAnthropicSse(clientRes, "content_block_start", {
+        type: "content_block_start",
+        index,
+        content_block: {
+          type: "tool_use",
+          id: block.id || `toolu_${Date.now()}`,
+          name: block.name || "tool",
+          input: {},
+        },
+      });
+      writeAnthropicSse(clientRes, "content_block_delta", {
+        type: "content_block_delta",
+        index,
+        delta: { type: "input_json_delta", partial_json: JSON.stringify(block.input ?? {}) },
+      });
+    } else if (block.type === "thinking") {
+      writeAnthropicSse(clientRes, "content_block_start", {
+        type: "content_block_start",
+        index,
+        content_block: { type: "thinking", thinking: "", signature: "" },
+      });
+      if (block.thinking) {
+        writeAnthropicSse(clientRes, "content_block_delta", {
+          type: "content_block_delta",
+          index,
+          delta: { type: "thinking_delta", thinking: block.thinking },
+        });
+      }
+      if (block.signature) {
+        writeAnthropicSse(clientRes, "content_block_delta", {
+          type: "content_block_delta",
+          index,
+          delta: { type: "signature_delta", signature: block.signature },
+        });
+      }
+    } else {
+      // Pass through other block types (e.g. redacted_thinking) as-is.
+      writeAnthropicSse(clientRes, "content_block_start", {
+        type: "content_block_start",
+        index,
+        content_block: block,
+      });
+    }
     writeAnthropicSse(clientRes, "content_block_stop", {
       type: "content_block_stop",
-      index: 0,
+      index,
     });
-  }
+  });
   writeAnthropicSse(clientRes, "message_delta", {
     type: "message_delta",
-    delta: { stop_reason: "end_turn", stop_sequence: null },
+    delta: {
+      stop_reason: message?.stop_reason || "end_turn",
+      stop_sequence: message?.stop_sequence ?? null,
+    },
     usage: { output_tokens: message?.usage?.output_tokens || 0 },
   });
   writeAnthropicSse(clientRes, "message_stop", { type: "message_stop" });
