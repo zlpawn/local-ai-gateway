@@ -2472,14 +2472,16 @@ experimental_bearer_token = "dummy"</pre>
 
             const tools = skill.tools || skillsLibraryState.tools || {};
             const presentIn = skill.presentIn || {};
-            const rootByClient = { antigravity: 'antigravity', claude: 'claude', codex: 'central' };
+            const rootByClient = { antigravity: 'antigravity', claude: 'claude', claudeDesktop3p: 'claudeDesktop3p', codex: 'central' };
             const clientRows = Object.entries(tools).map(([tool, meta]) => {
                 const rootId = rootByClient[tool];
                 const present = rootId ? Boolean(presentIn[rootId]) : Boolean(skill.installed);
                 const isCentral = tool === 'codex';
                 const action = present ? 'unlink' : 'link';
-                const actionLabel = present ? '取消链接' : '链接';
-                const linkBtn = isCentral ? '' : `<button class="btn" style="padding:4px 10px;font-size:12px;flex:0 0 auto;" onclick="linkSkillClient('${escapeHtml(skill.name)}','${tool}','${action}')">${actionLabel}</button>`;
+                const isCopy = meta.mode === 'copy';
+                const actionLabel = present ? (isCopy ? '移除' : '取消链接') : (isCopy ? '复制' : '链接');
+                const modeKind = isCopy ? 'copy' : 'link';
+                const linkBtn = isCentral ? '' : `<button class="btn" style="padding:4px 10px;font-size:12px;flex:0 0 auto;" onclick="linkSkillClient('${escapeHtml(skill.name)}','${tool}','${action}','${modeKind}')">${actionLabel}</button>`;
                 return `
                 <div class="skill-mount-row">
                     <div class="skill-mount-main">
@@ -2670,7 +2672,7 @@ experimental_bearer_token = "dummy"</pre>
             }
         };
 
-        window.linkSkillClient = async function(skillName, client, action) {
+        window.linkSkillClient = async function(skillName, client, action, modeKind) {
             try {
                 const res = await fetch('/v1/skills/link', {
                     method: 'POST',
@@ -2680,7 +2682,11 @@ experimental_bearer_token = "dummy"</pre>
                 const data = await res.json();
                 if (!data.success) throw new Error(data.error || '操作失败');
                 await refreshSkillsLibrary(true);
-                showToast(action === 'unlink' ? `已从 ${client} 取消链接 ${skillName}` : `已链接 ${skillName} 到 ${client}`, 'success');
+                const isCopy = modeKind === 'copy';
+                const msg = action === 'unlink'
+                    ? (isCopy ? `已从 ${client} 移除 ${skillName}` : `已从 ${client} 取消链接 ${skillName}`)
+                    : (isCopy ? `已复制 ${skillName} 到 ${client}` : `已链接 ${skillName} 到 ${client}`);
+                showToast(msg, 'success');
                 return true;
             } catch (err) {
                 showToast(`操作失败: ${err.message}`, 'danger');

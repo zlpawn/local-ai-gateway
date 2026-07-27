@@ -234,6 +234,28 @@ if (startupClaude3pSync?.updated) {
 // --- Skills install: interactive PTY over WebSocket ---
 const ptySessions = new Map(); // recordId -> { pty, ws, beforeNames }
 
+// node-pty ships a prebuilt spawn-helper that npm sometimes extracts without
+// the executable bit: its install scripts only chmod build/Release, but the
+// prebuilds copy we actually load is left 644, so posix_spawnp fails and the
+// install terminal exits with -1. Ensure +x before the first spawn. This is
+// best-effort and must never break startup.
+function ensurePtyHelperExecutable() {
+  try {
+    const indexJs = fileURLToPath(new URL(import.meta.resolve("node-pty")));
+    const helper = path.join(
+      path.dirname(path.dirname(indexJs)),
+      "prebuilds",
+      `${process.platform}-${process.arch}`,
+      "spawn-helper",
+    );
+    const st = fs.statSync(helper);
+    if (!(st.mode & 0o100)) fs.chmodSync(helper, st.mode | 0o111);
+  } catch {
+    // ignore: optional hardening
+  }
+}
+ensurePtyHelperExecutable();
+
 function startPtyForRecord(recordId, opts = {}) {
   const record = InstallHistory.get(recordId);
   if (!record || record.status !== "running") return false;
@@ -259,6 +281,7 @@ function startPtyForRecord(recordId, opts = {}) {
       env: { ...process.env, FORCE_COLOR: "0" },
     });
   } catch (err) {
+    console.error("[skills-pty] spawn failed:", err && err.message ? err.message : err);
     InstallHistory.finish(recordId, { exitCode: -1, skillName: record.skillName });
     return false;
   }
@@ -724,12 +747,22 @@ function collectGroupedModelsFromConfig(config) {
         return;
       }
       const result = SkillInstaller.linkSkillToClient(skillName, client, action !== "unlink");
+      logInfo("skill_link", {
+        skill: skillName,
+        client,
+        action,
+        linked: Boolean(result.linked),
+        mode: result.mode || "symlink",
+        path: result.path || null,
+        sourceDir: result.sourceDir || null,
+      });
       sendJson(res, 200, {
         success: true,
         ...result,
         skillLibrary: SkillInstaller.buildLibrarySnapshot({}),
       });
     } catch (err) {
+      logError("skill_link", err, {});
       sendJson(res, 400, { error: err.message || String(err) });
     }
     return;
