@@ -24,6 +24,48 @@ function sampleBody() {
   };
 }
 
+function readVarint(buf, start) {
+  let value = 0;
+  let shift = 0;
+  let offset = start;
+  while (offset < buf.length) {
+    const byte = buf[offset++];
+    value += (byte & 0x7f) * (2 ** shift);
+    if ((byte & 0x80) === 0) return { value, offset };
+    shift += 7;
+  }
+  throw new Error("Truncated protobuf varint");
+}
+
+function lengthDelimitedFields(buf, wantedField) {
+  const values = [];
+  let offset = 0;
+  while (offset < buf.length) {
+    const tag = readVarint(buf, offset);
+    offset = tag.offset;
+    const fieldNumber = tag.value >> 3;
+    const wireType = tag.value & 0x07;
+
+    if (wireType === 0) {
+      offset = readVarint(buf, offset).offset;
+    } else if (wireType === 1) {
+      offset += 8;
+    } else if (wireType === 2) {
+      const length = readVarint(buf, offset);
+      offset = length.offset;
+      const end = offset + length.value;
+      if (end > buf.length) throw new Error("Truncated protobuf field");
+      if (fieldNumber === wantedField) values.push(buf.subarray(offset, end));
+      offset = end;
+    } else if (wireType === 5) {
+      offset += 4;
+    } else {
+      throw new Error(`Unsupported protobuf wire type: ${wireType}`);
+    }
+  }
+  return values;
+}
+
 test("encodeGenerateContentRequest produces non-empty buffer", () => {
   const buf = encodeGenerateContentRequest(sampleBody());
   assert.ok(Buffer.isBuffer(buf));
@@ -43,6 +85,34 @@ test("encodeGenerateContentRequest includes model string", () => {
 test("encodeGenerateContentRequest includes user message text", () => {
   const buf = encodeGenerateContentRequest(sampleBody());
   assert.ok(buf.includes(Buffer.from("Say hello")));
+});
+
+test("encodeGenerateContentRequest writes inline image data as raw bytes", () => {
+  const imageBytes = Buffer.from([
+    0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a,
+    0xde, 0xad, 0xbe, 0xef, 0x00, 0x7f, 0x80, 0xff,
+  ]);
+  const base64 = imageBytes.toString("base64");
+  const body = sampleBody();
+  body.request.contents = [{
+    role: "user",
+    parts: [{
+      inlineData: {
+        mimeType: "image/png",
+        data: base64,
+      },
+    }],
+  }];
+
+  const wrapper = encodeGenerateContentRequest(body);
+  const masterRequest = lengthDelimitedFields(wrapper, 3)[0];
+  const content = lengthDelimitedFields(masterRequest, 2)[0];
+  const part = lengthDelimitedFields(content, 2)[0];
+  const inlineData = lengthDelimitedFields(part, 2)[0];
+  const encodedImage = lengthDelimitedFields(inlineData, 2)[0];
+
+  assert.deepEqual(encodedImage, imageBytes);
+  assert.equal(encodedImage.equals(Buffer.from(base64, "utf8")), false);
 });
 
 test("encodeGenerateContentRequest handles tools", () => {
