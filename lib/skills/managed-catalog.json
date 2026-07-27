@@ -1,6 +1,6 @@
 {
   "version": 1,
-  "updatedAt": "2026-07-26T10:46:57.605Z",
+  "updatedAt": "2026-07-27T08:08:34.595Z",
   "skills": [
     {
       "id": "video-to-karpathy-wiki",
@@ -10,6 +10,34 @@
       "category": "download",
       "categoryLabel": "下载采集",
       "icon": "⬇️",
+      "featured": false,
+      "tags": [],
+      "requiresDaemon": false,
+      "promoted": true,
+      "managed": true
+    },
+    {
+      "id": "leo-internalize-knowledge",
+      "name": "leo-internalize-knowledge",
+      "title": "Leo Internalize Knowledge",
+      "summary": "Use when the user provides a Craft, Lark/Feishu, web, PDF, Office, local, image-rich, or similar document and asks to internalize, ingest, curate, or 沉淀 it into a specified knowled",
+      "category": "download",
+      "categoryLabel": "下载采集",
+      "icon": "⬇️",
+      "featured": false,
+      "tags": [],
+      "requiresDaemon": false,
+      "promoted": true,
+      "managed": true
+    },
+    {
+      "id": "leo-project-mastery",
+      "name": "leo-project-mastery",
+      "title": "Leo Project Mastery",
+      "summary": "Internalize an unfamiliar or partially known codebase into a code-evidenced business and technical mental model, then turn that understanding into interview-ready explanations and",
+      "category": "writing",
+      "categoryLabel": "写作与内容",
+      "icon": "🧩",
       "featured": false,
       "tags": [],
       "requiresDaemon": false,

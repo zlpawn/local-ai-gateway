@@ -1,0 +1,7 @@
+interface:
+  display_name: "Leo Knowledge Internalizer"
+  short_description: "完整读取图文与附件，经覆盖审计后沉淀为可复用专业知识"
+  default_prompt: "Use $leo-internalize-knowledge to internalize this document into the knowledgebase root I provide."
+
+policy:
+  allow_implicit_invocation: true

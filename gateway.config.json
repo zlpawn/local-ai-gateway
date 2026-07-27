@@ -155,6 +155,25 @@
     "codex": {
       "endpoints": [
         {
+          "id": "ep_3a82b850-9c20-4484-a206-0bfb79c5e9c3",
+          "name": "ait",
+          "type": "openai-responses",
+          "base_url": "https://openapi-ait.ke.com",
+          "auth": "bearer",
+          "models": [
+            "claude-opus-5"
+          ],
+          "model_mapping": {},
+          "capabilities": {
+            "input_modalities": [
+              "text",
+              "image"
+            ],
+            "reasoning": true,
+            "tools": true
+          }
+        },
+        {
           "id": "ep_bb7bce83-60f5-402f-abc4-0546081f65cf",
           "name": "联网搜索节点",
           "purpose": "web_search",
