@@ -215,7 +215,13 @@
             display: flex; align-items: center; justify-content: space-between;
             padding: 6px 10px; background: #1a1a1a; color: #ddd; font-size: 12px;
         }
-        .install-terminal-header .btn { padding: 2px 8px; font-size: 11px; }
+        .install-terminal-header .btn {
+            padding: 4px 12px; font-size: 12px;
+            background: #2a2a2a; color: #fafafa; border-color: #4a4a4a;
+        }
+        .install-terminal-header .btn:hover:not(:disabled) {
+            background: #3a3a3a; border-color: #6a6a6a;
+        }
         #xterm-container { padding: 6px; min-height: 280px; }
         .install-record {
             border: 1px solid var(--border-color); border-radius: var(--radius-md);
@@ -1980,7 +1986,7 @@ experimental_bearer_token = "dummy"</pre>
                     <div class="install-terminal-header">
                         <span id="install-terminal-title">安装终端</span>
                         <span id="install-terminal-hint" style="color:#f59e0b;font-size:11px;margin-left:8px;flex:1;"></span>
-                        <button class="btn" onclick="closeInstallTerminal()">关闭</button>
+                        <button class="btn" title="关闭安装终端并终止运行中的进程" onclick="closeInstallTerminal()">关闭</button>
                     </div>
                     <div id="xterm-container"></div>
                 </div>
