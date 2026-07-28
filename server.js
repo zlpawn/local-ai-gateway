@@ -8,9 +8,10 @@ import { createHash, randomUUID } from "node:crypto";
 import { URL, fileURLToPath } from "node:url";
 import https from "node:https";
 import { Readable } from "node:stream";
-import { HttpsProxyAgent } from "https-proxy-agent";
 import { responsesRequestToChat } from "./lib/codex/chat-request-adapter.mjs";
-import { sanitizeGrokResponsesInput } from "./lib/codex/grok-input-sanitizer.mjs";
+import { sanitizeResponsesInput, sanitizeGrokResponsesInput } from "./lib/codex/grok-input-sanitizer.mjs";
+
+
 import {
   chatCompletionToResponse,
   streamChatAsResponses,
@@ -2187,10 +2188,13 @@ async function forwardResolvedCodexResponse({
   const responseToolKinds = collectResponseToolKinds(body.tools);
   const upstreamBody = route?.provider?.type === "anthropic"
     ? openAIResponsesToAnthropic(body, resolvedModel)
-    : {
-        ...body,
-        model: resolvedModel,
-      };
+    : route?.provider?.type === "openai-responses" || !route?.provider
+      ? sanitizeResponsesInput({ ...body, model: resolvedModel })
+      : {
+          ...body,
+          model: resolvedModel,
+        };
+
 
   logInfo("openai_responses_request", {
     request_id: context.requestId,
@@ -2553,7 +2557,7 @@ async function forwardResolvedCodexResponse({
         let upstream = await fetchConfiguredOpenAI(
           route.provider,
           "/responses",
-          { ...loopBody, model: resolvedModel, stream: false },
+          sanitizeResponsesInput({ ...loopBody, model: resolvedModel, stream: false }),
           clientReq,
           signal,
           context.client !== "codex",
@@ -2567,7 +2571,7 @@ async function forwardResolvedCodexResponse({
           fetchAgain: (retryBody) => fetchConfiguredOpenAI(
             route.provider,
             "/responses",
-            { ...retryBody, model: resolvedModel, stream: false },
+            sanitizeResponsesInput({ ...retryBody, model: resolvedModel, stream: false }),
             clientReq,
             signal,
             context.client !== "codex",
@@ -2627,13 +2631,14 @@ async function forwardResolvedCodexResponse({
       fetchAgain: (retryBody) => fetchConfiguredOpenAI(
         route.provider,
         "/responses",
-        { ...retryBody, model: resolvedModel },
+        sanitizeResponsesInput({ ...retryBody, model: resolvedModel }),
         clientReq,
         signal,
         context.client !== "codex",
       ),
     });
   }
+
   logInfo("openai_responses_response", {
     request_id: context.requestId,
     client: context.client,

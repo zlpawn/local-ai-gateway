@@ -1,10 +1,10 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { sanitizeGrokResponsesInput } from "../../lib/codex/grok-input-sanitizer.mjs";
+import { sanitizeResponsesInput, sanitizeGrokResponsesInput } from "../../lib/codex/grok-input-sanitizer.mjs";
 
-test("sanitizeGrokResponsesInput converts custom_tool_call and output to standard function_call", () => {
+test("sanitizeResponsesInput converts custom_tool_call and output to standard function_call", () => {
   const raw = {
-    model: "grok-4.5",
+    model: "glm-5.2",
     input: [
       { role: "user", content: "hello" },
       { type: "custom_tool_call", id: "ctc_1", call_id: "call_1", name: "apply_patch", input: "*** Patch" },
@@ -20,12 +20,12 @@ test("sanitizeGrokResponsesInput converts custom_tool_call and output to standar
     instructions_variables: { foo: "bar" },
   };
 
-  const clean = sanitizeGrokResponsesInput(raw);
+  const clean = sanitizeResponsesInput(raw);
 
-  assert.equal(clean.model, "grok-4.5");
+  assert.equal(clean.model, "glm-5.2");
   assert.equal(clean.instructions_variables, undefined);
 
-  // Check tools sanitization
+  // Check tools sanitization (filters out namespace tools)
   assert.equal(clean.tools.length, 2);
   assert.equal(clean.tools[0].type, "function");
   assert.equal(clean.tools[0].name, "exec");
@@ -41,3 +41,8 @@ test("sanitizeGrokResponsesInput converts custom_tool_call and output to standar
   assert.equal(clean.input[2].type, "function_call_output");
   assert.equal(clean.input[2].output, "Success");
 });
+
+test("sanitizeGrokResponsesInput is exported as an alias of sanitizeResponsesInput", () => {
+  assert.equal(sanitizeGrokResponsesInput, sanitizeResponsesInput);
+});
+
