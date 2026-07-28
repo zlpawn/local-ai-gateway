@@ -10,6 +10,7 @@ import {
   buildClaudeInferenceModels,
   getEndpointApiKey,
   loadGatewayState,
+  copyClientEndpoints,
   saveGatewayState,
   selectExposedEndpoints,
   selectEmbeddingEndpoints,
@@ -473,3 +474,83 @@ test("validateGatewayConfig checks embedding endpoints for default uniqueness an
   const issues4 = validateGatewayConfig(missingBaseUrl);
   assert.ok(issues4.some((issue) => issue.code === "missing_embedding_base_url"));
 });
+test("copyClientEndpoints clones endpoints with fresh ids and copies secrets", () => {
+  const config = {
+    clients: {
+      codex: { endpoints: [
+        { id: "ep_a", name: "ait", type: "openai-chat", base_url: "https://x", models: ["m1"], model_mapping: {}, capabilities: { reasoning: true } },
+        { id: "ep_b", name: "tavily", purpose: "web_search", provider: "tavily", enabled: true, is_default: true, options: {} },
+      ] },
+    },
+  };
+  const secrets = { api_keys: { ep_a: "sk-secret-a", ep_b: "tvly-x" } };
+  let counter = 0;
+  const idFactory = () => "ep_new_" + (++counter);
+  const result = copyClientEndpoints({ config, secrets, from: "codex", to: "deeptutor", idFactory });
+  assert.equal(result.copied, 2);
+  const dt = result.config.clients.deeptutor.endpoints;
+  assert.equal(dt.length, 2);
+  assert.deepEqual(dt.map((e) => e.id), ["ep_new_1", "ep_new_2"]);
+  assert.equal(dt[0].name, "ait");
+  assert.equal(dt[0].capabilities.reasoning, true);
+  assert.equal(dt[1].purpose, "web_search");
+  // secrets copied to new ids
+  assert.equal(result.secrets.api_keys["ep_new_1"], "sk-secret-a");
+  assert.equal(result.secrets.api_keys["ep_new_2"], "tvly-x");
+  // original ids untouched and original client still present
+  assert.equal(result.secrets.api_keys.ep_a, "sk-secret-a");
+  assert.ok(result.config.clients.codex.endpoints.length, 2);
+  // cloning does not share references with source
+  assert.notEqual(dt[0], config.clients.codex.endpoints[0]);
+});
+
+test("loadGatewayState seeds DeepTutor from Codex with copied secrets on first load", () => {
+  const dir = mkdtempSync(path.join(os.tmpdir(), "gw-deeptutor-"));
+  try {
+    const configPath = path.join(dir, "gateway.config.json");
+    const secretsPath = path.join(dir, "gateway.secrets.json");
+    writeFileSync(configPath, JSON.stringify({
+      server: { host: "127.0.0.1", port: 8787 },
+      clients: {
+        code: { endpoints: [] },
+        desktop: { endpoints: [] },
+        codex: { endpoints: [
+          { id: "ep_codex_1", name: "ait", type: "openai-chat", base_url: "https://x", models: ["m1"], model_mapping: {} },
+        ] },
+      },
+    }));
+    writeFileSync(secretsPath, JSON.stringify({ api_keys: { ep_codex_1: "sk-codex" } }));
+
+    const state = loadGatewayState({ configPath, secretsPath });
+    assert.ok(state.config.clients.deeptutor, "deeptutor client should be seeded");
+    const dt = state.config.clients.deeptutor.endpoints;
+    assert.equal(dt.length, 1);
+    assert.equal(dt[0].name, "ait");
+    assert.notEqual(dt[0].id, "ep_codex_1", "deeptutor endpoint must get a fresh id");
+    assert.equal(state.secrets.api_keys[dt[0].id], "sk-codex", "secret copied to new id");
+    assert.equal(state.secrets.api_keys.ep_codex_1, "sk-codex", "original codex secret preserved");
+    assert.ok(state.migrated, "seeding should mark the state as migrated");
+
+    // Second load does not re-seed: deeptutor already present, ids stable.
+    const state2 = loadGatewayState({ configPath, secretsPath });
+    assert.equal(state2.config.clients.deeptutor.endpoints[0].id, dt[0].id);
+  } finally {
+    rmSync(dir, { recursive: true, force: true });
+  }
+});
+
+test("loadGatewayState does not seed DeepTutor when Codex has no endpoints", () => {
+  const dir = mkdtempSync(path.join(os.tmpdir(), "gw-deeptutor-empty-"));
+  try {
+    const configPath = path.join(dir, "gateway.config.json");
+    writeFileSync(configPath, JSON.stringify({
+      server: { host: "127.0.0.1", port: 8787 },
+      clients: { code: { endpoints: [] }, desktop: { endpoints: [] }, codex: { endpoints: [] } },
+    }));
+    const state = loadGatewayState({ configPath });
+    assert.ok(!state.config.clients.deeptutor, "deeptutor should not be seeded from empty codex");
+  } finally {
+    rmSync(dir, { recursive: true, force: true });
+  }
+});
+

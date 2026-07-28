@@ -1788,6 +1788,10 @@
                     <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="margin-right: 8px;"><path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z"></path></svg>
                     Codex 代理
                 </a>
+                <a href="#deeptutor" class="nav-item" onclick="switchTab('deeptutor')">
+                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="margin-right: 8px;"><path d="M22 10v6M2 10l10-5 10 5-10 5z"></path><path d="M6 12v5c3 3 9 3 12 0v-5"></path></svg>
+                    DeepTutor 代理
+                </a>
 
                 <div class="nav-group-title">系统扩展</div>
                 <a href="#sync" class="nav-item" onclick="switchTab('sync')">
@@ -1804,6 +1808,20 @@
                     </div>
                     <div class="nav-children">
                         <a href="#install-history" class="nav-item nav-child" onclick="switchTab('install-history')">
+                            <span class="nav-child-dot">└</span>安装记录
+                        </a>
+                    </div>
+                </div>
+                <div class="nav-collapsible" id="nav-cli-group">
+                    <div class="nav-parent-row">
+                        <a href="#cli" class="nav-item" onclick="switchTab('cli')">
+                            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="margin-right: 8px;"><polyline points="4 17 10 11 4 5"></polyline><line x1="12" y1="19" x2="20" y2="19"></line></svg>
+                            预置 CLI (Preset CLI)
+                        </a>
+                        <button class="nav-caret-btn" title="展开/收起" onclick="toggleNavGroup('nav-cli-group', event)"><span class="nav-caret">▶</span></button>
+                    </div>
+                    <div class="nav-children">
+                        <a href="#cli-install-history" class="nav-item nav-child" onclick="switchTab('cli-install-history')">
                             <span class="nav-child-dot">└</span>安装记录
                         </a>
                     </div>
@@ -1952,6 +1970,43 @@ experimental_bearer_token = "dummy"</pre>
                 </div>
 
                 <div class="endpoints-grid" id="codex-endpoints"></div>
+            </section>
+
+            <!-- DeepTutor Section -->
+            <section id="section-deeptutor" class="tab-section" style="display: none;">
+                <div class="section-header">
+                    <div>
+                        <h2>DeepTutor 代理</h2>
+                        <p>为 DeepTutor 客户端提供 OpenAI 兼容的下游代理支持。默认从 Codex 复制节点与密钥。</p>
+                    </div>
+                    <div class="section-header-actions">
+                        <button class="btn" id="deeptutor-copy-btn" onclick="copyClientFromCodex()" title="把 Codex 的全部节点（含密钥）以新 ID 复制到 DeepTutor，覆盖现有 DeepTutor 节点">
+                            从 Codex 复制节点
+                        </button>
+                        <div class="add-node-dropdown" id="add-node-dropdown-deeptutor">
+                            <button type="button" class="btn add-node-trigger" aria-expanded="false" aria-haspopup="menu" onclick="toggleAddNodeMenu('deeptutor', event)">
+                                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="12" y1="5" x2="12" y2="19"></line><line x1="5" y1="12" x2="19" y2="12"></line></svg>
+                                添加节点
+                                <svg class="add-node-chevron" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 12 15 18 9"></polyline></svg>
+                            </button>
+                            <div class="add-node-popover" role="menu" data-client="deeptutor"></div>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="usage-guide">
+                    <h3>🚀 如何连接此网关？</h3>
+                    <p>DeepTutor 走 OpenAI 兼容协议。保存本页配置后，把下面片段指向本网关（以 Responses 接口为例）：</p>
+                    <div class="code-snippet" style="margin-top: 10px;">
+                        <pre style="margin: 0; color: inherit; font-family: inherit; font-size: inherit; background: transparent; padding: 0; overflow-x: auto;">
+base_url = "http://<span class="cfg-host">127.0.0.1</span>:<span class="cfg-port">8787</span>/deeptutor/v1"
+# 模型列表：GET http://<span class="cfg-host">127.0.0.1</span>:<span class="cfg-port">8787</span>/deeptutor/v1/models
+# 接口：/deeptutor/v1/responses · /deeptutor/v1/chat/completions · /deeptutor/v1/embeddings</pre>
+                    </div>
+                    <p style="font-size: 12px; margin-top: 8px; margin-bottom: 0; color: var(--text-secondary);">首次进入时若 DeepTutor 为空，网关会自动从 Codex 复制节点与密钥。也可点右上角「从 Codex 复制节点」重新覆盖。</p>
+                </div>
+
+                <div class="endpoints-grid" id="deeptutor-endpoints"></div>
             </section>
 
             <!-- Session Sync Section -->
@@ -2124,6 +2179,63 @@ experimental_bearer_token = "dummy"</pre>
                 <div id="install-history-list"><div class="skill-detail-empty">暂无安装记录</div></div>
             </section>
 
+            <!-- Preset CLI Section -->
+            <section id="section-cli" class="tab-section" style="display: none;">
+                <div class="section-header">
+                    <div>
+                        <h2>预置 CLI (Preset CLI)</h2>
+                        <p>扫描系统中已安装的 AI / 开发 CLI 工具，查看版本与路径，并可一键（重）安装。</p>
+                    </div>
+                    <button class="btn" title="重新扫描系统 CLI" onclick="refreshCliLibrary(true)">
+                        刷新 CLI 列表
+                    </button>
+                </div>
+
+                <div class="usage-guide">
+                    <h3>💡 使用说明</h3>
+                    <p>网关在 PATH（及 Windows 常见安装目录）中查找下列 CLI。已安装的显示版本与路径；未安装的可到「安装记录」用命令行安装。</p>
+                </div>
+
+                <div class="skills-toolbar">
+                    <input id="cli-search-input" class="skills-search" type="search" placeholder="搜索 CLI 名称、标题、分类..." oninput="onCliSearchInput(this.value)" />
+                    <span class="skills-filter-chip" id="cli-stats-chip">共 0 · 已安装 0</span>
+                </div>
+
+                <div id="cli-list" class="skills-list"></div>
+            </section>
+
+            <section id="section-cli-install-history" class="tab-section" style="display: none;">
+                <div class="section-header">
+                    <div>
+                        <h2>安装记录</h2>
+                        <p>通过网关命令行安装的 CLI 记录。每条可一键重新执行当时的安装命令。记录文件：<code class="path-pill" id="cli-install-history-filepath"></code></p>
+                    </div>
+                    <button class="btn" onclick="refreshCliInstallHistory()">刷新</button>
+                </div>
+
+                <div class="usage-guide">
+                    <p><strong>使用方式</strong>：填写安装命令（如 <code>npm install -g @anthropic-ai/claude-code</code>），CLI 名可留空——安装完成后会自动用 PATH 新增的可执行文件名补全。命令在网关侧用伪终端交互式执行。</p>
+                </div>
+
+                <div class="install-form">
+                    <input id="cli-install-cmd" class="install-cmd" placeholder="安装命令，如 npm install -g @anthropic-ai/claude-code" />
+                    <input id="cli-install-name" placeholder="CLI 名（可选，留空自动推断）" />
+                    <button class="btn btn-primary" onclick="startCliInstallFromForm()">安装</button>
+                </div>
+
+                <div class="install-terminal-wrap" id="cli-install-terminal-wrap">
+                    <div class="install-terminal-header">
+                        <span id="cli-install-terminal-title">安装终端</span>
+                        <span id="cli-install-terminal-hint" style="color:#f59e0b;font-size:11px;margin-left:8px;flex:1;"></span>
+                        <button class="btn" title="关闭安装终端并终止运行中的进程" onclick="closeCliInstallTerminal()">关闭</button>
+                    </div>
+                    <div id="cli-xterm-container"></div>
+                </div>
+
+                <div style="font-size:12px;font-weight:600;color:var(--text-secondary);margin-bottom:8px;">安装记录</div>
+                <div id="cli-install-history-list"><div class="skill-detail-empty">暂无安装记录</div></div>
+            </section>
+
         </main>
     </div>
 
@@ -2144,7 +2256,7 @@ experimental_bearer_token = "dummy"</pre>
     <script>
         let config = {
             server: { host: "127.0.0.1", port: 8787 },
-            clients: { code: { endpoints: [], model_slots: {} }, desktop: { endpoints: [] }, codex: { endpoints: [] } }
+            clients: { code: { endpoints: [], model_slots: {} }, desktop: { endpoints: [] }, codex: { endpoints: [] }, deeptutor: { endpoints: [] } }
         };
         let codexModelCatalogPath = "~/.codex/gateway-model-catalog.json";
 
@@ -2256,7 +2368,8 @@ experimental_bearer_token = "dummy"</pre>
                         }
                     },
                     desktop: { endpoints: [desktopEndpoint] },
-                    codex: { endpoints: [] }
+                    codex: { endpoints: [] },
+                    deeptutor: { endpoints: [] }
                 }
             };
             render();
@@ -2266,6 +2379,62 @@ experimental_bearer_token = "dummy"</pre>
                 render();
             }
         }
+
+        // Reload the public config from the gateway and re-render.
+        async function loadConfig() {
+            try {
+                const res = await fetch('/v1/config');
+                if (res.ok) {
+                    const data = await res.json();
+                    if (data && data.clients) {
+                        config = {
+                            ...config,
+                            ...data,
+                            clients: {
+                                code: data.clients.code || { endpoints: [], model_slots: {} },
+                                desktop: data.clients.desktop || { endpoints: [] },
+                                codex: data.clients.codex || { endpoints: [] },
+                                deeptutor: data.clients.deeptutor || { endpoints: [] }
+                            }
+                        };
+                        if (data?.codex_model_catalog?.path_posix) {
+                            codexModelCatalogPath = data.codex_model_catalog.path_posix;
+                        } else if (data?.codex_model_catalog?.path) {
+                            codexModelCatalogPath = String(data.codex_model_catalog.path).replaceAll('\\', '/');
+                        }
+                    }
+                }
+            } catch (e) {
+                console.warn('加载配置失败。');
+            }
+            render();
+        }
+
+        // ===== DeepTutor: copy nodes (incl. secrets) from Codex =====
+        window.copyClientFromCodex = async function() {
+            const ok = await showSkillConfirmModal(
+                '从 Codex 复制节点',
+                '把 Codex 的全部节点（含密钥）以新 ID 复制到 DeepTutor，<strong>覆盖现有 DeepTutor 节点</strong>。确认继续？'
+            );
+            if (!ok) return;
+            const btn = document.getElementById('deeptutor-copy-btn');
+            try {
+                if (btn) { btn.disabled = true; btn.textContent = '复制中...'; }
+                const res = await fetch('/v1/config/copy-client', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json', 'X-Gateway-Config-Client': 'deeptutor' },
+                    body: JSON.stringify({ from: 'codex', to: 'deeptutor' })
+                });
+                const data = await res.json();
+                if (!data.success) throw new Error(data.error?.message || data.error || '失败');
+                await loadConfig();
+                showToast('已从 Codex 复制 ' + (data.copied ?? 0) + ' 个节点到 DeepTutor', 'success');
+            } catch (err) {
+                showToast('复制失败: ' + err.message, 'danger');
+            } finally {
+                if (btn) { btn.disabled = false; btn.textContent = '从 Codex 复制节点'; }
+            }
+        };
 
         async function init() {
             try {
@@ -2279,7 +2448,8 @@ experimental_bearer_token = "dummy"</pre>
                             clients: {
                                 code: data.clients.code || { endpoints: [], model_slots: {} },
                                 desktop: data.clients.desktop || { endpoints: [] },
-                                codex: data.clients.codex || { endpoints: [] }
+                                codex: data.clients.codex || { endpoints: [] },
+                                deeptutor: data.clients.deeptutor || { endpoints: [] }
                             }
                         };
                     }
@@ -2547,6 +2717,228 @@ experimental_bearer_token = "dummy"</pre>
                 showToast('已删除', 'success');
             } catch (err) { showToast('删除失败: ' + err.message, 'danger'); }
         };
+        // ===== Preset CLI: discovery + install history (mirrors skills) =====
+        let cliLibraryState = { loaded: false, loading: false, query: "", items: [], stats: { total: 0, installed: 0, shown: 0 } };
+        let cliSearchTimer = null;
+
+        async function refreshCliLibrary(force) {
+            if (cliLibraryState.loading) return;
+            if (cliLibraryState.loaded && !force) { renderCliLibrary(); return; }
+            cliLibraryState.loading = true;
+            try {
+                const res = await fetch('/v1/cli/discover?q=' + encodeURIComponent(cliLibraryState.query || ''));
+                const data = await res.json();
+                if (!data.success) throw new Error(data.error || '失败');
+                cliLibraryState.items = data.items || [];
+                cliLibraryState.stats = data.stats || { total: 0, installed: 0, shown: cliLibraryState.items.length };
+                cliLibraryState.loaded = true;
+                renderCliLibrary();
+            } catch (err) {
+                showToast('加载 CLI 列表失败: ' + err.message, 'danger');
+            } finally {
+                cliLibraryState.loading = false;
+            }
+        }
+
+        function onCliSearchInput(value) {
+            cliLibraryState.query = value || '';
+            clearTimeout(cliSearchTimer);
+            cliSearchTimer = setTimeout(() => { cliLibraryState.loaded = false; refreshCliLibrary(false); }, 250);
+        }
+
+        function renderCliLibrary() {
+            const host = document.getElementById('cli-list');
+            if (!host) return;
+            const chip = document.getElementById('cli-stats-chip');
+            if (chip) chip.textContent = '共 ' + (cliLibraryState.stats.total || 0) + ' · 已安装 ' + (cliLibraryState.stats.installed || 0);
+            const items = cliLibraryState.items || [];
+            if (!items.length) {
+                host.innerHTML = '<div class="skill-detail-empty">没有匹配的 CLI。</div>';
+                return;
+            }
+            host.innerHTML = items.map(function(item) {
+                const status = item.installed
+                    ? '<span class="skill-pill status-success">已安装</span>'
+                    : '<span class="skill-pill status-failed">未安装</span>';
+                const version = item.version ? escapeHtml(item.version) : '<span style="color:var(--text-secondary);">—</span>';
+                const pathLine = item.path ? escapeHtml(item.path) : '<span style="color:var(--text-secondary);">未在 PATH 中找到</span>';
+                return '<div class="install-record">' +
+                    '<div class="install-record-head">' +
+                    '<div style="min-width:0;flex:1;">' +
+                    '<div class="install-record-skill">' + escapeHtml(item.title) + ' <span class="skill-pill" style="background:var(--input-bg);">' + escapeHtml(item.category) + '</span> ' + status + '</div>' +
+                    '<div class="install-record-cmd">$ ' + escapeHtml(item.command) + ' --version</div>' +
+                    '<div class="install-record-meta">版本: ' + version + '</div>' +
+                    '<div class="install-record-meta">' + pathLine + '</div>' +
+                    '</div>' +
+                    '<div class="install-record-actions">' +
+                    '<button class="btn" style="padding:4px 10px;font-size:12px;" onclick="installCliByName(\'' + escapeHtml(item.name) + '\', \'' + escapeHtml(item.command) + '\')">' + (item.installed ? '重装' : '安装') + '</button>' +
+                    '</div>' +
+                    '</div></div>';
+            }).join('');
+        }
+
+        function installCliByName(name, command) {
+            // Prefill the install form in the install-history tab and switch to it.
+            switchTab('cli-install-history');
+            const cmdInput = document.getElementById('cli-install-cmd');
+            const nameInput = document.getElementById('cli-install-name');
+            if (cmdInput) cmdInput.value = 'npm install -g ' + command;
+            if (nameInput) nameInput.value = name;
+            if (cmdInput) cmdInput.focus();
+        }
+
+        // CLI install terminal + history (parallel to the skills install flow)
+        let cliXterm = null;
+        let cliXtermFit = null;
+        let currentCliInstallWs = null;
+
+        async function refreshCliInstallHistory() {
+            try {
+                const res = await fetch('/v1/cli/install-history');
+                const data = await res.json();
+                if (!data.success) throw new Error(data.error || '失败');
+                const fp = document.getElementById('cli-install-history-filepath');
+                if (fp) fp.textContent = data.filePath || '';
+                renderCliInstallHistoryList(data.records || []);
+            } catch (err) {
+                showToast('加载安装记录失败: ' + err.message, 'danger');
+            }
+        }
+
+        function renderCliInstallHistoryList(records) {
+            const host = document.getElementById('cli-install-history-list');
+            if (!host) return;
+            if (!records.length) { host.innerHTML = '<div class="skill-detail-empty">暂无安装记录</div>'; return; }
+            host.innerHTML = records.map(function(r) {
+                const statusLabel = r.status === 'success' ? '成功' : (r.status === 'failed' ? '失败' : '运行中');
+                const meta = fmtInstallDate(r.startedAt) + (r.finishedAt ? (' -> ' + fmtInstallDate(r.finishedAt)) : '') + (r.exitCode !== null ? (' · 退出 ' + r.exitCode) : '');
+                return '<div class="install-record">' +
+                    '<div class="install-record-head">' +
+                    '<div style="min-width:0;flex:1;">' +
+                    '<div class="install-record-skill">' + escapeHtml(r.cliName || '(未关联 CLI)') + ' <span class="skill-pill status-' + r.status + '">' + statusLabel + '</span></div>' +
+                    '<div class="install-record-cmd">$ ' + escapeHtml(r.command) + '</div>' +
+                    '<div class="install-record-meta">' + escapeHtml(meta) + '</div>' +
+                    '</div>' +
+                    '<div class="install-record-actions">' +
+                    '<button class="btn" style="padding:4px 10px;font-size:12px;" onclick="reinstallCliRecord(\'' + r.id + '\')">重新安装</button>' +
+                    '<button class="btn" style="padding:4px 10px;font-size:12px;" onclick="deleteCliInstallRecord(\'' + r.id + '\')">删除</button>' +
+                    '</div>' +
+                    '</div></div>';
+            }).join('');
+        }
+
+        function openCliInstallTerminal() {
+            const wrap = document.getElementById('cli-install-terminal-wrap');
+            wrap.classList.add('open');
+            if (!cliXterm) {
+                cliXterm = new Terminal({ cols: 100, rows: 24, fontFamily: 'Consolas, monospace', fontSize: 13, theme: { background: '#0c0c0c' } });
+                cliXtermFit = new FitAddon.FitAddon();
+                cliXterm.loadAddon(cliXtermFit);
+                cliXterm.open(document.getElementById('cli-xterm-container'));
+                const xtermHost = document.getElementById('cli-xterm-container');
+                xtermHost.addEventListener('wheel', function(e) {
+                    const buf = cliXterm.buffer.active;
+                    const atTop = buf.viewportY <= 0;
+                    const atBottom = buf.viewportY >= buf.baseY;
+                    if ((e.deltaY < 0 && atTop) || (e.deltaY > 0 && atBottom)) e.stopImmediatePropagation();
+                }, { capture: true, passive: true });
+                cliXterm.onData(function(d) {
+                    if (currentCliInstallWs && currentCliInstallWs.readyState === 1) currentCliInstallWs.send(d);
+                });
+                cliXterm.onResize(function(size) {
+                    if (currentCliInstallWs && currentCliInstallWs.readyState === 1) {
+                        currentCliInstallWs.send(JSON.stringify({ type: 'resize', cols: size.cols, rows: size.rows }));
+                    }
+                });
+            }
+            cliXterm.reset();
+            try { cliXtermFit.fit(); } catch (e) {}
+            cliXterm.focus();
+        }
+
+        function closeCliInstallTerminal() {
+            const wrap = document.getElementById('cli-install-terminal-wrap');
+            wrap.classList.remove('open');
+            if (currentCliInstallWs) { try { currentCliInstallWs.close(); } catch (e) {} currentCliInstallWs = null; }
+        }
+        window.closeCliInstallTerminal = closeCliInstallTerminal;
+
+        async function startCliInstallWithCommand(command, cliName) {
+            const cmd = String(command || '').trim();
+            if (!cmd) { showToast('请填写安装命令', 'danger'); return false; }
+            let record;
+            try {
+                const res = await fetch('/v1/cli/install', {
+                    method: 'POST', headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ command: cmd, cliName: cliName || '' })
+                });
+                const data = await res.json();
+                if (!data.success) throw new Error(data.error || '失败');
+                record = data.record;
+            } catch (err) { showToast('启动安装失败: ' + err.message, 'danger'); return false; }
+
+            openCliInstallTerminal();
+            const title = document.getElementById('cli-install-terminal-title');
+            if (title) title.textContent = '安装终端 · ' + record.id;
+            cliXterm.writeln('$ ' + cmd);
+
+            const wsUrl = 'ws://' + location.host + '/v1/cli/pty?recordId=' + record.id
+                + '&cols=' + cliXterm.cols + '&rows=' + cliXterm.rows;
+            const ws = new WebSocket(wsUrl);
+            currentCliInstallWs = ws;
+            const hint = document.getElementById('cli-install-terminal-hint');
+            if (hint) hint.textContent = '运行中 · 如出现 Ok to proceed? (y) 请输入 y 并回车';
+            ws.onopen = function() {
+                cliXterm.focus();
+                try { cliXtermFit.fit(); } catch (e) {}
+                if (ws.readyState === 1) ws.send(JSON.stringify({ type: 'resize', cols: cliXterm.cols, rows: cliXterm.rows }));
+            };
+            ws.onmessage = function(e) {
+                let parsed = null;
+                if (typeof e.data === 'string') { try { parsed = JSON.parse(e.data); } catch (err) {} }
+                if (parsed && parsed.type === 'exit') {
+                    if (hint) hint.textContent = '';
+                    cliXterm.writeln('\r\n[进程退出 code=' + parsed.exitCode + ']' + (parsed.cliName ? (' 关联 CLI: ' + parsed.cliName) : ''));
+                    refreshCliInstallHistory();
+                    if (cliLibraryState.loaded) refreshCliLibrary(true);
+                } else {
+                    cliXterm.write(typeof e.data === 'string' ? e.data : '');
+                }
+            };
+            ws.onclose = function() { if (hint) hint.textContent = ''; refreshCliInstallHistory(); };
+            ws.onerror = function() { cliXterm.writeln('\r\n[连接错误]'); };
+            return true;
+        }
+
+        window.startCliInstallFromForm = async function() {
+            const cmd = document.getElementById('cli-install-cmd').value;
+            const cliName = document.getElementById('cli-install-name').value;
+            const ok = await startCliInstallWithCommand(cmd, cliName);
+            if (ok) { document.getElementById('cli-install-cmd').value = ''; document.getElementById('cli-install-name').value = ''; }
+        };
+
+        window.reinstallCliRecord = async function(id) {
+            const res = await fetch('/v1/cli/install-history');
+            const data = await res.json();
+            const rec = (data.records || []).find(function(r) { return r.id === id; });
+            if (!rec) { showToast('记录不存在', 'danger'); return; }
+            const ok = await showSkillConfirmModal('重新安装', '用当时的命令重新执行？<br><code>' + escapeHtml(rec.command) + '</code>' + (rec.cliName ? ('<br>CLI: ' + escapeHtml(rec.cliName)) : ''));
+            if (!ok) return;
+            await startCliInstallWithCommand(rec.command, rec.cliName || '');
+        };
+
+        window.deleteCliInstallRecord = async function(id) {
+            const ok = await showSkillConfirmModal('删除记录', '确认删除这条安装记录？');
+            if (!ok) return;
+            try {
+                const res = await fetch('/v1/cli/install-history?id=' + encodeURIComponent(id), { method: 'DELETE' });
+                const data = await res.json();
+                if (!data.success) throw new Error(data.error || '失败');
+                renderCliInstallHistoryList(data.records || []);
+                showToast('已删除', 'success');
+            } catch (err) { showToast('删除失败: ' + err.message, 'danger'); }
+        };
+
         let skillsLibraryState = {
             loaded: false,
             loading: false,
@@ -3265,7 +3657,7 @@ experimental_bearer_token = "dummy"</pre>
                                     </button>
                                 </div>
                             </div>
-                            ${client === 'codex' && !isCapabilityNode ? `
+                            ${(client === 'codex' || client === 'deeptutor') && !isCapabilityNode ? `
                             <div class="form-group full">
                                 <label>Codex 能力</label>
                                 <div class="capability-options">
@@ -3479,7 +3871,7 @@ experimental_bearer_token = "dummy"</pre>
                 }
             }
 
-            ['code', 'desktop', 'codex'].forEach(client => {
+            ['code', 'desktop', 'codex', 'deeptutor'].forEach(client => {
                 const container = document.getElementById(`${client}-endpoints`);
                 const eps = config.clients[client].endpoints || [];
                 const inDetail = selectedEndpoint && selectedEndpoint.client === client;
@@ -3613,6 +4005,16 @@ experimental_bearer_token = "dummy"</pre>
             }
             if (tabId === 'skills' || tabId === 'install-history') {
                 const g = document.getElementById('nav-skills-group');
+                if (g) g.classList.add('open');
+            }
+            if (tabId === 'cli') {
+                refreshCliLibrary(false);
+            }
+            if (tabId === 'cli-install-history') {
+                refreshCliInstallHistory();
+            }
+            if (tabId === 'cli' || tabId === 'cli-install-history') {
+                const g = document.getElementById('nav-cli-group');
                 if (g) g.classList.add('open');
             }
 
