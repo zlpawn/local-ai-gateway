@@ -8,8 +8,10 @@ import { createHash, randomUUID } from "node:crypto";
 import { URL, fileURLToPath } from "node:url";
 import https from "node:https";
 import { Readable } from "node:stream";
+import { HttpsProxyAgent } from "https-proxy-agent";
 import { responsesRequestToChat } from "./lib/codex/chat-request-adapter.mjs";
 import { sanitizeResponsesInput, sanitizeGrokResponsesInput } from "./lib/codex/grok-input-sanitizer.mjs";
+
 
 
 import {
