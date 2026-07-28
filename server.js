@@ -486,7 +486,12 @@ async function forwardOpenAIEmbeddings(body, req, res, context) {
     return;
   }
 
-  const apiKey = getEndpointApiKey(embeddingEndpoint, GATEWAY_SECRETS);
+  const apiKey = getEndpointApiKey(
+    embeddingEndpoint,
+    GATEWAY_SECRETS,
+    process.env,
+    GATEWAY_CONFIG.clients?.[clientName]?.endpoints || [],
+  );
   let upstreamUrl = String(embeddingEndpoint.base_url || "").trim();
   if (!upstreamUrl) {
     sendJson(res, 500, {
@@ -498,8 +503,14 @@ async function forwardOpenAIEmbeddings(body, req, res, context) {
     return;
   }
   if (!upstreamUrl.endsWith("/embeddings")) {
-    upstreamUrl = upstreamUrl.replace(/\/+$/, "") + "/embeddings";
+    const cleanBase = upstreamUrl.replace(/\/+$/, "");
+    if (cleanBase.endsWith("/v1")) {
+      upstreamUrl = cleanBase + "/embeddings";
+    } else {
+      upstreamUrl = cleanBase + "/v1/embeddings";
+    }
   }
+
 
   const modelInput = body?.model;
   let upstreamModel = modelInput;
