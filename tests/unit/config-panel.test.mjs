@@ -70,13 +70,14 @@ test("endpoint detail provides an explicit manual save action", async () => {
 
 test("each client can add capability nodes from the grouped node menu", async () => {
   const html = await readFile(path.join(ROOT, "desktop", "config-panel.html"), "utf8");
-  assert.match(html, /addNodeByPurpose\('code'/);
-  assert.match(html, /addNodeByPurpose\('desktop'/);
-  assert.match(html, /addNodeByPurpose\('codex'/);
-  assert.match(html, /聊天模型节点/);
-  assert.match(html, /视觉兜底节点/);
-  assert.match(html, /联网搜索节点/);
-  assert.match(html, /向量模型节点/);
+  assert.match(html, /data-client="code"/);
+  assert.match(html, /data-client="desktop"/);
+  assert.match(html, /data-client="codex"/);
+  assert.match(html, /title:\s*'聊天模型'/);
+  assert.match(html, /title:\s*'视觉兜底'/);
+  assert.match(html, /title:\s*'联网搜索'/);
+  assert.match(html, /title:\s*'向量模型'/);
+  assert.match(html, /onclick="addNodeByPurpose\('\$\{client\}', '\$\{option\.purpose\}'\)"/);
   assert.match(html, /purpose:\s*'vision_fallback'/);
   assert.match(html, /addWebSearchEndpoint/);
   assert.match(html, /purpose:\s*'web_search'/);
@@ -105,9 +106,13 @@ test("section header actions stay compact and wrap cleanly on narrow screens", a
   const html = await readFile(path.join(ROOT, "desktop", "config-panel.html"), "utf8");
   assert.match(html, /\.section-header-actions\s*\{[^}]*flex:\s*0 0 auto/s);
   assert.match(html, /\.section-header-actions \.btn\s*\{[^}]*white-space:\s*nowrap/s);
-  assert.match(html, /\.add-node-menu\s*\{[^}]*width:\s*148px[^}]*max-width:\s*148px/s);
+  assert.match(html, /\.add-node-popover\s*\{[^}]*width:\s*292px/s);
+  assert.match(html, /\.add-node-option\s*\{[^}]*grid-template-columns:\s*34px minmax\(0,\s*1fr\)/s);
+  assert.match(html, /function createAddNodeOptionsHTML/);
+  assert.match(html, /window\.toggleAddNodeMenu/);
+  assert.doesNotMatch(html, /<select class="add-node-menu"/);
   assert.match(html, /@media\s*\(max-width:\s*760px\)[\s\S]*?\.section-header\s*\{[^}]*flex-direction:\s*column/s);
-  assert.match(html, />\s*迁移历史\s*</);
+  assert.match(html, />\s*迁移历史会话\s*</);
 });
 
 test("each upstream model exposes supported and unsupported vision choices", async () => {

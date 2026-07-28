@@ -508,16 +508,109 @@
             font-size: 11px;
         }
 
-        .add-node-menu {
-            width: 148px;
-            min-width: 148px;
-            max-width: 148px;
-            flex: 0 0 148px;
-            cursor: pointer;
+        .add-node-dropdown {
+            position: relative;
+            flex: 0 0 auto;
         }
 
-        .add-node-menu option {
+        .add-node-trigger {
+            min-height: 36px;
+            padding-inline: 12px 10px;
+            white-space: nowrap;
+        }
+
+        .add-node-trigger .add-node-chevron {
+            transition: transform var(--transition-fast);
+        }
+
+        .add-node-dropdown.is-open .add-node-trigger {
+            background: var(--surface-hover);
+            border-color: var(--text-secondary);
+        }
+
+        .add-node-dropdown.is-open .add-node-chevron {
+            transform: rotate(180deg);
+        }
+
+        .add-node-popover {
+            position: absolute;
+            top: calc(100% + 8px);
+            right: 0;
+            z-index: 120;
+            display: none;
+            width: 292px;
+            padding: 6px;
+            background: var(--surface);
+            border: 1px solid var(--border-color);
+            border-radius: var(--radius-lg);
+            box-shadow: 0 16px 40px rgba(0, 0, 0, 0.14);
+        }
+
+        .add-node-dropdown.is-open .add-node-popover {
+            display: block;
+        }
+
+        .add-node-option {
+            display: grid;
+            grid-template-columns: 34px minmax(0, 1fr);
+            align-items: center;
+            gap: 10px;
+            width: 100%;
+            min-height: 54px;
+            padding: 7px 8px;
             color: var(--text-primary);
+            background: transparent;
+            border: 0;
+            border-radius: var(--radius-md);
+            cursor: pointer;
+            font: inherit;
+            text-align: left;
+        }
+
+        .add-node-option:hover,
+        .add-node-option:focus-visible {
+            background: var(--surface-hover);
+            outline: none;
+        }
+
+        .add-node-option-icon {
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            width: 34px;
+            height: 34px;
+            color: var(--text-secondary);
+            background: var(--input-bg);
+            border: 1px solid var(--border-color);
+            border-radius: var(--radius-md);
+        }
+
+        .add-node-option:hover .add-node-option-icon,
+        .add-node-option:focus-visible .add-node-option-icon {
+            color: var(--text-primary);
+            border-color: var(--text-secondary);
+        }
+
+        .add-node-option-copy {
+            display: flex;
+            flex-direction: column;
+            gap: 2px;
+            min-width: 0;
+        }
+
+        .add-node-option-title {
+            font-size: 13px;
+            font-weight: 600;
+            line-height: 1.3;
+        }
+
+        .add-node-option-description {
+            overflow: hidden;
+            color: var(--text-secondary);
+            font-size: 11px;
+            line-height: 1.4;
+            text-overflow: ellipsis;
+            white-space: nowrap;
         }
 
         @media (max-width: 760px) {
@@ -533,11 +626,10 @@
                 flex-wrap: wrap;
             }
 
-            .add-node-menu {
-                width: 160px;
-                min-width: 160px;
-                max-width: 160px;
-                flex-basis: 160px;
+            .add-node-popover {
+                right: auto;
+                left: 0;
+                width: min(292px, calc(100vw - 48px));
             }
         }
 
@@ -1744,13 +1836,14 @@
                         <p>为 Claude Code CLI 工具提供下游代理支持。</p>
                     </div>
                     <div class="section-header-actions">
-                        <select class="add-node-menu" aria-label="添加 Claude Code 节点" onchange="addNodeByPurpose('code', this.value); this.value = ''">
-                            <option value="">添加节点...</option>
-                            <option value="chat">聊天模型节点</option>
-                            <option value="vision_fallback">视觉兜底节点</option>
-                            <option value="web_search">联网搜索节点</option>
-                            <option value="embedding">向量模型节点</option>
-                        </select>
+                        <div class="add-node-dropdown" id="add-node-dropdown-code">
+                            <button type="button" class="btn add-node-trigger" aria-expanded="false" aria-haspopup="menu" onclick="toggleAddNodeMenu('code', event)">
+                                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="12" y1="5" x2="12" y2="19"></line><line x1="5" y1="12" x2="19" y2="12"></line></svg>
+                                添加节点
+                                <svg class="add-node-chevron" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 12 15 18 9"></polyline></svg>
+                            </button>
+                            <div class="add-node-popover" role="menu" data-client="code"></div>
+                        </div>
                     </div>
                 </div>
 
@@ -1797,13 +1890,14 @@
                         <p>为 Claude Desktop 桌面客户端提供下游代理支持。</p>
                     </div>
                     <div class="section-header-actions">
-                        <select class="add-node-menu" aria-label="添加 Claude Desktop 节点" onchange="addNodeByPurpose('desktop', this.value); this.value = ''">
-                            <option value="">添加节点...</option>
-                            <option value="chat">聊天模型节点</option>
-                            <option value="vision_fallback">视觉兜底节点</option>
-                            <option value="web_search">联网搜索节点</option>
-                            <option value="embedding">向量模型节点</option>
-                        </select>
+                        <div class="add-node-dropdown" id="add-node-dropdown-desktop">
+                            <button type="button" class="btn add-node-trigger" aria-expanded="false" aria-haspopup="menu" onclick="toggleAddNodeMenu('desktop', event)">
+                                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="12" y1="5" x2="12" y2="19"></line><line x1="5" y1="12" x2="19" y2="12"></line></svg>
+                                添加节点
+                                <svg class="add-node-chevron" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 12 15 18 9"></polyline></svg>
+                            </button>
+                            <div class="add-node-popover" role="menu" data-client="desktop"></div>
+                        </div>
                     </div>
                 </div>
 
@@ -1824,15 +1918,16 @@
                     </div>
                     <div class="section-header-actions">
                         <button class="btn" id="codex-history-unify-btn" onclick="migrateCodexHistory()" title="把旧会话的 model_provider 迁移到 custom，以便在当前网关配置下重新显示历史">
-                            迁移历史
+                            迁移历史会话
                         </button>
-                        <select class="add-node-menu" aria-label="添加 Codex 节点" onchange="addNodeByPurpose('codex', this.value); this.value = ''">
-                            <option value="">添加节点...</option>
-                            <option value="chat">聊天模型节点</option>
-                            <option value="vision_fallback">视觉兜底节点</option>
-                            <option value="web_search">联网搜索节点</option>
-                            <option value="embedding">向量模型节点</option>
-                        </select>
+                        <div class="add-node-dropdown" id="add-node-dropdown-codex">
+                            <button type="button" class="btn add-node-trigger" aria-expanded="false" aria-haspopup="menu" onclick="toggleAddNodeMenu('codex', event)">
+                                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="12" y1="5" x2="12" y2="19"></line><line x1="5" y1="12" x2="19" y2="12"></line></svg>
+                                添加节点
+                                <svg class="add-node-chevron" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 12 15 18 9"></polyline></svg>
+                            </button>
+                            <div class="add-node-popover" role="menu" data-client="codex"></div>
+                        </div>
                     </div>
                 </div>
 
@@ -2064,6 +2159,56 @@ experimental_bearer_token = "dummy"</pre>
             { value: "openai-responses", label: "OpenAI Responses (实验性)" },
             { value: "grok", label: "Grok 订阅" }
         ];
+
+        const ADD_NODE_OPTIONS = [
+            {
+                purpose: 'chat',
+                title: '聊天模型',
+                description: '配置普通对话与推理模型',
+                icon: '<path d="M21 15a4 4 0 0 1-4 4H8l-5 3V7a4 4 0 0 1 4-4h10a4 4 0 0 1 4 4z"></path>',
+            },
+            {
+                purpose: 'vision_fallback',
+                title: '视觉兜底',
+                description: '为不支持图片的模型补充视觉理解',
+                icon: '<path d="M2 12s3.5-7 10-7 10 7 10 7-3.5 7-10 7S2 12 2 12z"></path><circle cx="12" cy="12" r="3"></circle>',
+            },
+            {
+                purpose: 'web_search',
+                title: '联网搜索',
+                description: '接入实时搜索提供商',
+                icon: '<circle cx="11" cy="11" r="7"></circle><line x1="20" y1="20" x2="16.65" y2="16.65"></line>',
+            },
+            {
+                purpose: 'embedding',
+                title: '向量模型',
+                description: '配置 OpenAI 兼容 Embeddings 接口',
+                icon: '<circle cx="5" cy="12" r="2"></circle><circle cx="12" cy="5" r="2"></circle><circle cx="19" cy="12" r="2"></circle><circle cx="12" cy="19" r="2"></circle><path d="M6.5 10.5l4-4M13.5 6.5l4 4M17.5 13.5l-4 4M10.5 17.5l-4-4"></path>',
+            },
+        ];
+
+        function createAddNodeOptionsHTML(client) {
+            return ADD_NODE_OPTIONS.map(option => `
+                <button type="button" class="add-node-option" role="menuitem"
+                    onclick="addNodeByPurpose('${client}', '${option.purpose}')">
+                    <span class="add-node-option-icon" aria-hidden="true">
+                        <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+                            ${option.icon}
+                        </svg>
+                    </span>
+                    <span class="add-node-option-copy">
+                        <span class="add-node-option-title">${option.title}</span>
+                        <span class="add-node-option-description">${option.description}</span>
+                    </span>
+                </button>
+            `).join('');
+        }
+
+        function renderAddNodeMenus() {
+            document.querySelectorAll('.add-node-popover[data-client]').forEach(popover => {
+                popover.innerHTML = createAddNodeOptionsHTML(popover.dataset.client);
+            });
+        }
 
         async function loadDefaultTemplate() {
             if (!confirm('这会覆盖你当前的所有配置，确定要恢复默认模板吗？')) return;
@@ -3273,7 +3418,7 @@ experimental_bearer_token = "dummy"</pre>
             const section = document.getElementById(`section-${client}`);
             if (!section) return;
             const guide = section.querySelector('.usage-guide');
-            const addMenu = section.querySelector('.section-header .add-node-menu');
+            const addMenu = section.querySelector('.section-header .add-node-dropdown');
             if (guide) guide.style.display = detailMode ? 'none' : '';
             if (addMenu) addMenu.style.display = detailMode ? 'none' : '';
         }
@@ -3540,6 +3685,7 @@ experimental_bearer_token = "dummy"</pre>
 
         window.addNodeByPurpose = function(client, purpose) {
             if (!purpose) return;
+            closeAddNodeMenus();
             if (purpose === 'vision_fallback') {
                 addVisionFallbackEndpoint(client);
             } else if (purpose === 'web_search') {
@@ -3548,6 +3694,28 @@ experimental_bearer_token = "dummy"</pre>
                 addEmbeddingEndpoint(client);
             } else {
                 addEndpoint(client);
+            }
+        }
+
+        window.closeAddNodeMenus = function(exceptClient = '') {
+            document.querySelectorAll('.add-node-dropdown').forEach(dropdown => {
+                if (exceptClient && dropdown.id === `add-node-dropdown-${exceptClient}`) return;
+                dropdown.classList.remove('is-open');
+                dropdown.querySelector('.add-node-trigger')?.setAttribute('aria-expanded', 'false');
+            });
+        }
+
+        window.toggleAddNodeMenu = function(client, event) {
+            event?.stopPropagation();
+            const dropdown = document.getElementById(`add-node-dropdown-${client}`);
+            if (!dropdown) return;
+            const shouldOpen = !dropdown.classList.contains('is-open');
+            closeAddNodeMenus(client);
+            dropdown.classList.toggle('is-open', shouldOpen);
+            dropdown.querySelector('.add-node-trigger')
+                ?.setAttribute('aria-expanded', shouldOpen ? 'true' : 'false');
+            if (shouldOpen) {
+                dropdown.querySelector('.add-node-option')?.focus();
             }
         }
 
@@ -4203,12 +4371,21 @@ experimental_bearer_token = "dummy"</pre>
         }
 
         document.addEventListener('DOMContentLoaded', () => {
+            renderAddNodeMenus();
             init();
             const currentTheme = document.documentElement.getAttribute('data-theme') || 'dark';
             updateThemeIcon(currentTheme);
         });
 
+        document.addEventListener('click', (e) => {
+            if (!e.target.closest('.add-node-dropdown')) closeAddNodeMenus();
+        });
+
         document.addEventListener('keydown', (e) => {
+            if (e.key === 'Escape' && document.querySelector('.add-node-dropdown.is-open')) {
+                closeAddNodeMenus();
+                return;
+            }
             if (e.key === 'Escape' && selectedEndpoint) {
                 // Don't hijack Esc while typing in inputs unless it's a pure cancel
                 const tag = (e.target && e.target.tagName) || '';
