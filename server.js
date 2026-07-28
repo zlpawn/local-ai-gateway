@@ -46,6 +46,7 @@ import {
   saveGatewayState,
   selectExposedEndpoints,
   selectDefaultEmbeddingEndpoint,
+  isCapabilityEndpoint,
 } from "./lib/config/gateway-config-store.mjs";
 import { syncClaudeCodeSettings } from "./lib/config/claude-code-settings.mjs";
 import { SkillInstaller } from "./lib/session-sync/skill-installer.mjs";
@@ -139,7 +140,7 @@ const _allEndpoints = [
   ...(GATEWAY_CONFIG.clients?.desktop?.endpoints || []),
   ...(GATEWAY_CONFIG.clients?.claude?.endpoints || []),
   ...(GATEWAY_CONFIG.clients?.codex?.endpoints || [])
-].filter((endpoint) => endpoint?.purpose !== "vision_fallback" && endpoint?.purpose !== "web_search");
+].filter((endpoint) => !isCapabilityEndpoint(endpoint));
 let EXPOSED_MODELS = [...new Set(_allEndpoints.flatMap(ep => [
   ...(ep.models || []),
   ...Object.keys(ep.model_mapping || {})
@@ -7325,7 +7326,7 @@ function reloadGatewayConfig({ reloadFiles = true } = {}) {
     ...(GATEWAY_CONFIG.clients?.desktop?.endpoints || []),
     ...(GATEWAY_CONFIG.clients?.claude?.endpoints || []),
     ...(GATEWAY_CONFIG.clients?.codex?.endpoints || [])
-  ].filter((endpoint) => endpoint?.purpose !== "vision_fallback" && endpoint?.purpose !== "web_search");
+  ].filter((endpoint) => !isCapabilityEndpoint(endpoint));
   EXPOSED_MODELS = [...new Set(_endpoints.flatMap(ep => [
     ...(ep.models || []),
     ...Object.keys(ep.model_mapping || {})
