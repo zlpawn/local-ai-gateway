@@ -847,7 +847,7 @@ test("cosine similarity and embedding request helpers exist", async () => {
   const html = await readFile(path.join(ROOT, "desktop", "config-panel.html"), "utf8");
   assert.match(html, /function cosineSimilarity\(a, b\)/);
   assert.match(html, /window\.runEmbedding\s*=\s*async function/);
-  assert.match(html, /endpoint_id=/);
+  assert.match(html, /params\.set\('endpoint_id'/);
   assert.match(html, /X-Gateway-Client/);
 });
 ```

@@ -271,3 +271,24 @@ test("tools cards list renders text embedding card", async () => {
   assert.match(html, /openTool\('embedding'\)/);
   assert.match(html, /tools-card/);
 });
+
+test("text embedding tool detail renders form, mode switch, and similarity formula", async () => {
+  const html = await readFile(path.join(ROOT, "desktop", "config-panel.html"), "utf8");
+  assert.match(html, /window\.renderToolsDetail\s*=\s*function/);
+  assert.match(html, /embed-client-select/);
+  assert.match(html, /embed-node-select/);
+  assert.match(html, /embed-model-select/);
+  assert.match(html, /embed-custom-dims/);
+  assert.match(html, /embed-mode-single/);
+  assert.match(html, /embed-mode-similarity/);
+  assert.match(html, /余弦相似度 = \(A·B\) \/ \(‖A‖ × ‖B‖\)/);
+  assert.match(html, /范围 -1 到 1/);
+});
+
+test("cosine similarity and embedding request helpers exist", async () => {
+  const html = await readFile(path.join(ROOT, "desktop", "config-panel.html"), "utf8");
+  assert.match(html, /function cosineSimilarity\(a, b\)/);
+  assert.match(html, /window\.runEmbedding\s*=\s*async function/);
+  assert.match(html, /params\.set\('endpoint_id'/);
+  assert.match(html, /X-Gateway-Client/);
+});

@@ -2375,6 +2375,19 @@ experimental_bearer_token = "dummy"</pre>
         let selectedEndpoint = null;
         let activeClient = 'code';
         let toolsView = 'cards'; // 'cards' | 'embedding'
+        const embedState = {
+            client: 'codex',
+            endpointId: '',
+            model: '',
+            customDims: false,
+            dimensions: '',
+            mode: 'single', // 'single' | 'similarity'
+            textA: '',
+            textB: '',
+            result: null,
+            loading: false,
+            error: ''
+        };
         let lastLoadedSyncTargets = { antigravity: true, claude: true, codex: true };
 
         const ENDPOINT_TYPES = [
@@ -3877,6 +3890,252 @@ experimental_bearer_token = "dummy"</pre>
             if (cards) cards.style.display = '';
             if (detail) detail.innerHTML = '';
             renderToolsCards();
+        };
+
+        function getEmbeddingEndpoints(client) {
+            const eps = (config.clients[client]?.endpoints || []).filter(
+                ep => ep.purpose === 'embedding' && ep.enabled !== false
+            );
+            return eps;
+        }
+
+        window.renderToolsDetail = function() {
+            const cards = document.getElementById('tools-cards');
+            const detail = document.getElementById('tools-detail');
+            if (!cards || !detail) return;
+            cards.style.display = 'none';
+
+            const eps = getEmbeddingEndpoints(embedState.client);
+            const nodeOptions = eps.map(ep => {
+                const dim = ep.dimensions != null ? ep.dimensions + '维' : '默认';
+                const model = ep.embedding_model || (ep.models[0] || '未设置');
+                const sel = ep.id === embedState.endpointId ? 'selected' : '';
+                return '<option value="' + escapeHtml(ep.id) + '" ' + sel + '>' + escapeHtml(ep.name) + ' · ' + escapeHtml(model) + ' · ' + dim + '</option>';
+            }).join('');
+
+            const selectedNode = eps.find(ep => ep.id === embedState.endpointId) || eps[0] || null;
+            if (selectedNode && !embedState.endpointId) embedState.endpointId = selectedNode.id;
+            const models = selectedNode?.models || [];
+            const modelOptions = models.map(m => '<option value="' + escapeHtml(m) + '" ' + (m === embedState.model ? 'selected' : '') + '>' + escapeHtml(m) + '</option>').join('');
+            const nodeDims = selectedNode?.dimensions != null ? String(selectedNode.dimensions) : '默认';
+
+            const noNodeHint = eps.length === 0
+                ? '<div class="embed-error" style="margin-bottom:12px;">该 client 未配置向量节点,请到代理节点 tab 添加 purpose=embedding 的节点。</div>'
+                : '';
+
+            detail.innerHTML = `
+                <button class="tools-detail-back" onclick="backToToolsCards()">
+                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="15 18 9 12 15 6"></polyline></svg>
+                    返回工具列表
+                </button>
+                <div class="embed-layout">
+                    <div class="embed-panel">
+                        <h3>输入</h3>
+                        ${noNodeHint}
+                        <div class="embed-form-group">
+                            <label>Client</label>
+                            <select id="embed-client-select" class="embed-form-select" onchange="onEmbedClientChange(this.value)">
+                                <option value="codex" ${embedState.client==='codex'?'selected':''}>codex</option>
+                                <option value="code" ${embedState.client==='code'?'selected':''}>code</option>
+                                <option value="desktop" ${embedState.client==='desktop'?'selected':''}>desktop</option>
+                            </select>
+                        </div>
+                        <div class="embed-form-group">
+                            <label>向量节点</label>
+                            <select id="embed-node-select" class="embed-form-select" onchange="onEmbedNodeChange(this.value)" ${eps.length===0?'disabled':''}>
+                                ${nodeOptions || '<option value="">无可用节点</option>'}
+                            </select>
+                        </div>
+                        <div class="embed-form-group">
+                            <label>模型</label>
+                            <select id="embed-model-select" class="embed-form-select" onchange="embedState.model=this.value; renderToolsDetail();" ${models.length===0?'disabled':''}>
+                                ${modelOptions || '<option value="' + escapeHtml(selectedNode?.embedding_model||'') + '">' + escapeHtml(selectedNode?.embedding_model||'无') + '</option>'}
+                            </select>
+                        </div>
+                        <div class="embed-form-group">
+                            <label>维度</label>
+                            <div class="embed-dims-row">
+                                <span>节点维度: <strong>${escapeHtml(nodeDims)}</strong></span>
+                                <label style="margin:0;"><input type="checkbox" id="embed-custom-dims" ${embedState.customDims?'checked':''} onchange="onEmbedCustomDimsToggle(this.checked)" /> 自定义</label>
+                                ${embedState.customDims ? '<input type="number" id="embed-dims-input" min="1" placeholder="如 1024" value="' + escapeHtml(String(embedState.dimensions)) + '" onchange="embedState.dimensions=this.value; renderToolsDetail();" />' : ''}
+                            </div>
+                        </div>
+                        <div class="embed-mode-switch">
+                            <button class="embed-mode-btn ${embedState.mode==='single'?'active':''}" id="embed-mode-single" onclick="setEmbedMode('single')">单段文本</button>
+                            <button class="embed-mode-btn ${embedState.mode==='similarity'?'active':''}" id="embed-mode-similarity" onclick="setEmbedMode('similarity')">两段文本(相似度)</button>
+                        </div>
+                        <div class="embed-form-group">
+                            <label>文本 A</label>
+                            <textarea id="embed-text-a" class="embed-textarea" placeholder="输入要向量化的文本" oninput="embedState.textA=this.value">${escapeHtml(embedState.textA)}</textarea>
+                        </div>
+                        ${embedState.mode === 'similarity' ? `
+                        <div class="embed-form-group">
+                            <label>文本 B</label>
+                            <textarea id="embed-text-b" class="embed-textarea" placeholder="输入第二段文本" oninput="embedState.textB=this.value">${escapeHtml(embedState.textB)}</textarea>
+                        </div>` : ''}
+                        <button class="btn btn-primary" id="embed-run-btn" onclick="runEmbedding()" ${embedState.loading?'disabled':''}>
+                            ${embedState.loading ? '计算中...' : '向量化'}
+                        </button>
+                    </div>
+                    <div class="embed-panel" id="embed-result-panel">
+                        ${renderEmbedResult()}
+                    </div>
+                </div>
+            `;
+        };
+
+        window.onEmbedClientChange = function(client) {
+            embedState.client = client;
+            embedState.endpointId = '';
+            embedState.model = '';
+            embedState.result = null;
+            embedState.error = '';
+            renderToolsDetail();
+        };
+
+        window.onEmbedNodeChange = function(endpointId) {
+            embedState.endpointId = endpointId;
+            const ep = getEmbeddingEndpoints(embedState.client).find(e => e.id === endpointId);
+            embedState.model = ep?.models?.[0] || ep?.embedding_model || '';
+            embedState.result = null;
+            embedState.error = '';
+            renderToolsDetail();
+        };
+
+        window.onEmbedCustomDimsToggle = function(checked) {
+            embedState.customDims = checked;
+            if (!checked) embedState.dimensions = '';
+            embedState.result = null;
+            renderToolsDetail();
+        };
+
+        window.setEmbedMode = function(mode) {
+            embedState.mode = mode;
+            embedState.result = null;
+            embedState.error = '';
+            renderToolsDetail();
+        };
+
+        function cosineSimilarity(a, b) {
+            let dot = 0, normA = 0, normB = 0;
+            for (let i = 0; i < a.length; i++) {
+                dot += a[i] * b[i];
+                normA += a[i] * a[i];
+                normB += b[i] * b[i];
+            }
+            const denom = Math.sqrt(normA) * Math.sqrt(normB);
+            if (denom === 0) return null; // 零向量无法计算
+            return dot / denom;
+        }
+
+        async function callEmbedding(text) {
+            const params = new URLSearchParams();
+            if (embedState.endpointId) params.set('endpoint_id', embedState.endpointId);
+            const body = { input: text };
+            if (embedState.model) body.model = embedState.model;
+            if (embedState.customDims && embedState.dimensions) {
+                body.dimensions = Number(embedState.dimensions);
+            }
+            const res = await fetch('/v1/embeddings?' + params.toString(), {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'X-Gateway-Client': embedState.client,
+                },
+                body: JSON.stringify(body),
+            });
+            const json = await res.json();
+            if (!res.ok) {
+                throw new Error(json?.error?.message || '请求失败 (' + res.status + ')');
+            }
+            const vec = json?.data?.[0]?.embedding;
+            if (!Array.isArray(vec)) throw new Error('返回数据格式异常,未找到向量');
+            return {
+                vector: vec,
+                model: json.model || embedState.model,
+                dimensions: vec.length,
+                tokens: json?.usage?.prompt_tokens ?? null,
+            };
+        }
+
+        window.runEmbedding = async function() {
+            if (!embedState.textA.trim()) {
+                embedState.error = '请输入文本 A';
+                renderToolsDetail();
+                return;
+            }
+            if (embedState.mode === 'similarity' && !embedState.textB.trim()) {
+                embedState.error = '请输入文本 B';
+                renderToolsDetail();
+                return;
+            }
+            embedState.loading = true;
+            embedState.error = '';
+            embedState.result = null;
+            renderToolsDetail();
+            try {
+                const t0 = performance.now();
+                const a = await callEmbedding(embedState.textA);
+                const t1 = performance.now();
+                if (embedState.mode === 'single') {
+                    embedState.result = { mode: 'single', a, elapsedMs: t1 - t0 };
+                } else {
+                    const b = await callEmbedding(embedState.textB);
+                    const t2 = performance.now();
+                    const sim = cosineSimilarity(a.vector, b.vector);
+                    embedState.result = { mode: 'similarity', a, b, similarity: sim, elapsedMsA: t1 - t0, elapsedMsB: t2 - t1 };
+                }
+            } catch (err) {
+                embedState.error = err.message || String(err);
+            } finally {
+                embedState.loading = false;
+                renderToolsDetail();
+            }
+        };
+
+        function renderEmbedResult() {
+            if (embedState.loading) return '<div class="embed-result-empty">计算中...</div>';
+            if (embedState.error) return '<div class="embed-error">' + escapeHtml(embedState.error) + '</div>';
+            if (!embedState.result) return '<div class="embed-result-empty">输入文本后点击「向量化」查看结果。</div>';
+
+            const r = embedState.result;
+            const vectorHtml = (label, info) => {
+                const preview = info.vector.slice(0, 8).map(v => v.toFixed(6)).join(', ');
+                const more = info.vector.length > 8 ? ', ...共 ' + info.vector.length + ' 维' : '';
+                const elapsed = r.mode === 'single' ? r.elapsedMs : (label === 'A' ? r.elapsedMsA : r.elapsedMsB);
+                return `
+                    <div style="margin-top:8px;">
+                        <button class="embed-vector-toggle" onclick="toggleEmbedVector('${label}')">${label} 向量 ▾</button>
+                        <div class="embed-vector" id="embed-vec-${label}" style="display:none;">[${preview}${more}]</div>
+                        <div class="embed-meta" style="margin-top:4px;">
+                            <span>模型: ${escapeHtml(info.model)}</span>
+                            <span>维度: ${info.dimensions}</span>
+                            ${info.tokens != null ? '<span>tokens: ' + info.tokens + '</span>' : ''}
+                            <span>耗时: ${elapsed.toFixed(0)}ms</span>
+                        </div>
+                    </div>`;
+            };
+
+            if (r.mode === 'single') {
+                return `
+                    <h3>结果</h3>
+                    ${vectorHtml('A', r.a)}
+                `;
+            }
+            const score = r.similarity === null ? '无法计算(向量模长为 0)' : r.similarity.toFixed(4);
+            return `
+                <h3>相似度</h3>
+                <div class="embed-similarity-score">${escapeHtml(String(score))}</div>
+                <div class="embed-formula">余弦相似度 = (A·B) / (‖A‖ × ‖B‖)</div>
+                <div class="embed-formula-note">对两段文本分别向量化后计算两个向量的余弦值,范围 -1 到 1,越接近 1 越相似。</div>
+                ${vectorHtml('A', r.a)}
+                ${vectorHtml('B', r.b)}
+            `;
+        }
+
+        window.toggleEmbedVector = function(label) {
+            const el = document.getElementById('embed-vec-' + label);
+            if (el) el.style.display = el.style.display === 'none' ? 'block' : 'none';
         };
 
         window.addEventListener('load', () => {
