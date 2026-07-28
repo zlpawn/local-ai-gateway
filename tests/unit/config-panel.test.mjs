@@ -102,6 +102,18 @@ test("endpoint list renders chat and capability nodes in separate groups", async
   assert.match(html, /class="node-group-count"/);
 });
 
+test("embedding node keeps dimensions optional and does not expose task batch size", async () => {
+  const html = await readFile(path.join(ROOT, "desktop", "config-panel.html"), "utf8");
+  const addEmbeddingSource = html.match(
+    /window\.addEmbeddingEndpoint = function\(client\) \{[\s\S]*?\n        \}/,
+  )?.[0] || "";
+
+  assert.match(html, /输出维度（可选，留空使用模型默认值）/);
+  assert.match(html, /updateEndpoint\('\$\{client\}', \$\{index\}, 'dimensions'/);
+  assert.doesNotMatch(html, /批处理大小|batch_size/);
+  assert.doesNotMatch(addEmbeddingSource, /dimensions/);
+});
+
 test("section header actions stay compact and wrap cleanly on narrow screens", async () => {
   const html = await readFile(path.join(ROOT, "desktop", "config-panel.html"), "utf8");
   assert.match(html, /\.section-header-actions\s*\{[^}]*flex:\s*0 0 auto/s);

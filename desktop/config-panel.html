@@ -3352,11 +3352,7 @@ experimental_bearer_token = "dummy"</pre>
                                 </select>
                             </div>
                             <div class="form-group">
-                                <label>批处理大小 (batch_size)</label>
-                                <input type="number" min="1" max="512" value="${escapeHtml(String(ep.batch_size ?? 32))}" onchange="updateEndpoint('${client}', ${index}, 'batch_size', Number(this.value) || 32)">
-                            </div>
-                            <div class="form-group">
-                                <label>向量维度 (dimensions，可选)</label>
+                                <label>输出维度（可选，留空使用模型默认值）</label>
                                 <input type="number" min="1" placeholder="例如: 1536" value="${ep.dimensions != null ? escapeHtml(String(ep.dimensions)) : ''}" onchange="updateEndpoint('${client}', ${index}, 'dimensions', this.value ? Number(this.value) : null)">
                             </div>
                             <div class="form-group full">
@@ -3735,9 +3731,7 @@ experimental_bearer_token = "dummy"</pre>
                 is_default: !hasDefaultEmbedding,
                 models: ["text-embedding-3-small", "BAAI/bge-m3"],
                 model_mapping: {},
-                embedding_model: "text-embedding-3-small",
-                batch_size: 32,
-                dimensions: 1536
+                embedding_model: "text-embedding-3-small"
             });
             selectedEndpoint = { client, index: 0 };
             render();
