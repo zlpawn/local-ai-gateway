@@ -68,17 +68,37 @@ test("endpoint detail provides an explicit manual save action", async () => {
   assert.match(html, /saveConfig\(\{\s*button:\s*btn,\s*client,\s*scope:\s*'node'/);
 });
 
-test("each client can add an ordinary configured vision fallback node", async () => {
+test("each client can add capability nodes from the grouped node menu", async () => {
   const html = await readFile(path.join(ROOT, "desktop", "config-panel.html"), "utf8");
-  assert.match(html, /addVisionFallbackEndpoint\('code'\)/);
-  assert.match(html, /addVisionFallbackEndpoint\('desktop'\)/);
-  assert.match(html, /addVisionFallbackEndpoint\('codex'\)/);
+  assert.match(html, /addNodeByPurpose\('code'/);
+  assert.match(html, /addNodeByPurpose\('desktop'/);
+  assert.match(html, /addNodeByPurpose\('codex'/);
+  assert.match(html, /聊天模型节点/);
+  assert.match(html, /视觉兜底节点/);
+  assert.match(html, /联网搜索节点/);
+  assert.match(html, /向量模型节点/);
   assert.match(html, /purpose:\s*'vision_fallback'/);
   assert.match(html, /addWebSearchEndpoint/);
   assert.match(html, /purpose:\s*'web_search'/);
+  assert.match(html, /purpose:\s*'embedding'/);
+  assert.match(html, /type:\s*'openai-chat'/);
+  assert.match(html, /OpenAI Embeddings 协议/);
+  assert.match(html, /setAsDefaultEmbedding/);
+  assert.match(html, /setAsDefaultWebSearch/);
   assert.match(html, /vision_fallback_enabled:\s*true/);
   assert.match(html, /视觉兜底模型/);
   assert.match(html, /vision_model/);
+});
+
+test("endpoint list renders chat and capability nodes in separate groups", async () => {
+  const html = await readFile(path.join(ROOT, "desktop", "config-panel.html"), "utf8");
+  assert.match(html, /function createEndpointGroupsHTML/);
+  assert.match(html, /title:\s*'聊天模型'/);
+  assert.match(html, /title:\s*'视觉兜底'/);
+  assert.match(html, /title:\s*'联网搜索'/);
+  assert.match(html, /title:\s*'向量模型'/);
+  assert.match(html, /class="node-group-header"/);
+  assert.match(html, /class="node-group-count"/);
 });
 
 test("each upstream model exposes supported and unsupported vision choices", async () => {

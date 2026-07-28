@@ -440,4 +440,20 @@ test("validateGatewayConfig checks embedding endpoints for default uniqueness an
   };
   const issues2 = validateGatewayConfig(invalidModel);
   assert.ok(issues2.some((issue) => issue.code === "invalid_embedding_model"));
+
+  const invalidType = {
+    clients: {
+      codex: {
+        endpoints: [{
+          id: "ep1",
+          purpose: "embedding",
+          type: "anthropic",
+          embedding_model: "bge-m3",
+          models: ["bge-m3"],
+        }],
+      },
+    },
+  };
+  const issues3 = validateGatewayConfig(invalidType);
+  assert.ok(issues3.some((issue) => issue.code === "unsupported_embedding_endpoint_type"));
 });

@@ -464,6 +464,40 @@
             font-size: 13px;
         }
 
+        .node-groups {
+            display: flex;
+            flex-direction: column;
+            gap: 28px;
+        }
+
+        .node-group-header {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            margin-bottom: 12px;
+            padding-bottom: 8px;
+            border-bottom: 1px solid var(--border-color);
+        }
+
+        .node-group-title {
+            color: var(--text-primary);
+            font-size: 14px;
+            font-weight: 600;
+        }
+
+        .node-group-count {
+            color: var(--text-secondary);
+            font-size: 11px;
+        }
+
+        .add-node-menu {
+            min-width: 180px;
+        }
+
+        .add-node-menu option {
+            color: var(--text-primary);
+        }
+
         /* Endpoints Grid */
         .endpoints-grid {
             display: grid;
@@ -1666,13 +1700,13 @@
                         <h2>Claude Code 代理</h2>
                         <p>为 Claude Code CLI 工具提供下游代理支持。</p>
                     </div>
-                    <div style="display:flex; gap:8px;">
-                        <button class="btn" onclick="addVisionFallbackEndpoint('code')">添加视觉兜底</button>
-                        <button class="btn" onclick="addWebSearchEndpoint('code')">添加联网搜索</button>
-                        <button class="btn" onclick="addEmbeddingEndpoint('code')">添加向量节点</button>
-                        <button class="btn" onclick="addEndpoint('code')">
-                            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="12" y1="5" x2="12" y2="19"></line><line x1="5" y1="12" x2="19" y2="12"></line></svg>添加节点</button>
-                    </div>
+                    <select class="add-node-menu" onchange="addNodeByPurpose('code', this.value); this.value = ''">
+                        <option value="">添加节点...</option>
+                        <option value="chat">聊天模型节点</option>
+                        <option value="vision_fallback">视觉兜底节点</option>
+                        <option value="web_search">联网搜索节点</option>
+                        <option value="embedding">向量模型节点</option>
+                    </select>
                 </div>
 
                 <div class="usage-guide">
@@ -1717,13 +1751,13 @@
                         <h2>Claude Desktop 代理</h2>
                         <p>为 Claude Desktop 桌面客户端提供下游代理支持。</p>
                     </div>
-                    <div style="display:flex; gap:8px;">
-                        <button class="btn" onclick="addVisionFallbackEndpoint('desktop')">添加视觉兜底</button>
-                        <button class="btn" onclick="addWebSearchEndpoint('desktop')">添加联网搜索</button>
-                        <button class="btn" onclick="addEmbeddingEndpoint('desktop')">添加向量节点</button>
-                        <button class="btn" onclick="addEndpoint('desktop')">
-                            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="12" y1="5" x2="12" y2="19"></line><line x1="5" y1="12" x2="19" y2="12"></line></svg>添加节点</button>
-                    </div>
+                    <select class="add-node-menu" onchange="addNodeByPurpose('desktop', this.value); this.value = ''">
+                        <option value="">添加节点...</option>
+                        <option value="chat">聊天模型节点</option>
+                        <option value="vision_fallback">视觉兜底节点</option>
+                        <option value="web_search">联网搜索节点</option>
+                        <option value="embedding">向量模型节点</option>
+                    </select>
                 </div>
 
                 <div class="usage-guide">
@@ -1745,11 +1779,13 @@
                         <button class="btn" id="codex-history-unify-btn" onclick="migrateCodexHistory()" title="把旧会话的 model_provider 迁移到 custom，以便在当前网关配置下重新显示历史">
                             迁移历史会话
                         </button>
-                        <button class="btn" onclick="addVisionFallbackEndpoint('codex')">添加视觉兜底</button>
-                        <button class="btn" onclick="addWebSearchEndpoint('codex')">添加联网搜索</button>
-                        <button class="btn" onclick="addEmbeddingEndpoint('codex')">添加向量节点</button>
-                        <button class="btn" onclick="addEndpoint('codex')">
-                            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="12" y1="5" x2="12" y2="19"></line><line x1="5" y1="12" x2="19" y2="12"></line></svg>添加节点</button>
+                        <select class="add-node-menu" onchange="addNodeByPurpose('codex', this.value); this.value = ''">
+                            <option value="">添加节点...</option>
+                            <option value="chat">聊天模型节点</option>
+                            <option value="vision_fallback">视觉兜底节点</option>
+                            <option value="web_search">联网搜索节点</option>
+                            <option value="embedding">向量模型节点</option>
+                        </select>
                     </div>
                 </div>
 
@@ -2835,7 +2871,7 @@ experimental_bearer_token = "dummy"</pre>
             const isCapabilityNode = isVisionFallback || isWebSearch || isEmbedding;
             const isDisabled = ep.enabled === false;
             const name = escapeHtml(ep.name || `节点 ${index + 1}`);
-            const type = escapeHtml(typeLabel(ep.type));
+            const type = escapeHtml(isEmbedding ? 'OpenAI Embeddings 协议' : typeLabel(ep.type));
             const url = escapeHtml(shortUrl(ep.base_url));
             const models = Array.isArray(ep.models) ? ep.models : [];
             const mappingCount = Object.keys(ep.model_mapping || {}).length;
@@ -2925,7 +2961,9 @@ experimental_bearer_token = "dummy"</pre>
             const isWebSearch = ep.purpose === 'web_search';
             const isEmbedding = ep.purpose === 'embedding';
             const isCapabilityNode = isVisionFallback || isWebSearch || isEmbedding;
-            const availableTypes = (client === 'code' || client === 'desktop')
+            const availableTypes = isEmbedding
+                ? [{ value: 'openai-chat', label: 'OpenAI Embeddings 协议' }]
+                : (client === 'code' || client === 'desktop')
                 ? ENDPOINT_TYPES.filter(t => ['anthropic', 'openai-chat', 'grok'].includes(t.value))
                 : ENDPOINT_TYPES.filter(t => ['anthropic', 'openai-responses', 'openai-chat', 'grok'].includes(t.value));
 
@@ -2966,7 +3004,11 @@ experimental_bearer_token = "dummy"</pre>
                                 <input class="detail-default-input" type="radio" name="default-search-${client}" ${ep.is_default ? 'checked' : ''} onchange="setAsDefaultWebSearch('${client}', ${index})">
                                 <svg width="14" height="14" viewBox="0 0 24 24" fill="${ep.is_default ? 'currentColor' : 'none'}" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"></polygon></svg>
                                 ${ep.is_default ? '默认搜索' : '设为默认搜索'}
-                            </label>` : '') : `<label class="btn btn-sm detail-default-action ${ep.is_default ? 'is-active' : ''}">
+                            </label>` : (isEmbedding ? `<label class="btn btn-sm detail-default-action ${ep.is_default ? 'is-active' : ''}">
+                                <input class="detail-default-input" type="radio" name="default-embedding-${client}" ${ep.is_default ? 'checked' : ''} onchange="setAsDefaultEmbedding('${client}', ${index})">
+                                <svg width="14" height="14" viewBox="0 0 24 24" fill="${ep.is_default ? 'currentColor' : 'none'}" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"></polygon></svg>
+                                ${ep.is_default ? '默认向量节点' : '设为默认向量节点'}
+                            </label>` : '')) : `<label class="btn btn-sm detail-default-action ${ep.is_default ? 'is-active' : ''}">
                                 <input class="detail-default-input" type="radio" name="default-${client}" ${ep.is_default ? 'checked' : ''} onchange="setAsDefault('${client}', ${index})">
                                 <svg width="14" height="14" viewBox="0 0 24 24" fill="${ep.is_default ? 'currentColor' : 'none'}" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"></polygon></svg>
                                 ${ep.is_default ? '默认节点' : '设为默认'}
@@ -3002,7 +3044,7 @@ experimental_bearer_token = "dummy"</pre>
                             ` : `
                             <div class="form-group">
                                 <label>类型</label>
-                                <select onchange="updateEndpoint('${client}', ${index}, 'type', this.value)">
+                                <select ${isEmbedding ? 'disabled' : ''} onchange="updateEndpoint('${client}', ${index}, 'type', this.value)">
                                     ${typeOptions}
                                 </select>
                             </div>
@@ -3184,9 +3226,51 @@ experimental_bearer_token = "dummy"</pre>
             const section = document.getElementById(`section-${client}`);
             if (!section) return;
             const guide = section.querySelector('.usage-guide');
-            const addBtn = section.querySelector('.section-header .btn');
+            const addMenu = section.querySelector('.section-header .add-node-menu');
             if (guide) guide.style.display = detailMode ? 'none' : '';
-            if (addBtn) addBtn.style.display = detailMode ? 'none' : '';
+            if (addMenu) addMenu.style.display = detailMode ? 'none' : '';
+        }
+
+        function createEndpointGroupsHTML(client, endpoints) {
+            const groups = [
+                {
+                    title: '聊天模型',
+                    matches: endpoint => !['vision_fallback', 'web_search', 'embedding'].includes(endpoint.purpose),
+                },
+                {
+                    title: '视觉兜底',
+                    matches: endpoint => endpoint.purpose === 'vision_fallback',
+                },
+                {
+                    title: '联网搜索',
+                    matches: endpoint => endpoint.purpose === 'web_search',
+                },
+                {
+                    title: '向量模型',
+                    matches: endpoint => endpoint.purpose === 'embedding',
+                },
+            ];
+
+            return groups.map(group => {
+                const items = endpoints
+                    .map((endpoint, index) => ({ endpoint, index }))
+                    .filter(({ endpoint }) => group.matches(endpoint));
+                if (!items.length) return '';
+
+                return `
+                    <section class="node-group">
+                        <div class="node-group-header">
+                            <span class="node-group-title">${group.title}</span>
+                            <span class="node-group-count">${items.length} 个节点</span>
+                        </div>
+                        <div class="endpoints-grid">
+                            ${items.map(({ endpoint, index }) =>
+                                createEndpointSummaryHTML(client, index, endpoint)
+                            ).join('')}
+                        </div>
+                    </section>
+                `;
+            }).join('');
         }
 
         function render() {
@@ -3217,20 +3301,22 @@ experimental_bearer_token = "dummy"</pre>
                 if (inDetail) {
                     const ep = eps[selectedEndpoint.index];
                     container.classList.remove('endpoints-grid');
+                    container.classList.remove('node-groups');
                     container.innerHTML = createEndpointDetailHTML(client, selectedEndpoint.index, ep);
                     return;
                 }
 
-                container.classList.add('endpoints-grid');
+                container.classList.remove('endpoints-grid');
+                container.classList.add('node-groups');
                 if (eps.length === 0) {
                     container.innerHTML = `
-                        <div class="empty-state" style="grid-column: 1 / -1;">
+                        <div class="empty-state">
                             <p>${client} 尚未配置任何节点。</p>
                             <button class="btn" onclick="addEndpoint('${client}')">创建第一个节点</button>
                         </div>
                     `;
                 } else {
-                    container.innerHTML = eps.map((ep, i) => createEndpointSummaryHTML(client, i, ep)).join('');
+                    container.innerHTML = createEndpointGroupsHTML(client, eps);
                 }
             });
         }
@@ -3405,6 +3491,19 @@ experimental_bearer_token = "dummy"</pre>
             render();
         }
 
+        window.addNodeByPurpose = function(client, purpose) {
+            if (!purpose) return;
+            if (purpose === 'vision_fallback') {
+                addVisionFallbackEndpoint(client);
+            } else if (purpose === 'web_search') {
+                addWebSearchEndpoint(client);
+            } else if (purpose === 'embedding') {
+                addEmbeddingEndpoint(client);
+            } else {
+                addEndpoint(client);
+            }
+        }
+
         window.addEmbeddingEndpoint = function(client) {
             config.clients[client].endpoints = config.clients[client].endpoints || [];
             const hasDefaultEmbedding = config.clients[client].endpoints.some(
@@ -3414,7 +3513,7 @@ experimental_bearer_token = "dummy"</pre>
                 id: `ep_${crypto.randomUUID()}`,
                 name: "向量模型节点",
                 purpose: 'embedding',
-                type: (client === 'code' || client === 'desktop') ? 'openai-chat' : 'openai-responses',
+                type: 'openai-chat',
                 base_url: "https://api.openai.com/v1",
                 api_key: "",
                 enabled: true,
