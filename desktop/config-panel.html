@@ -446,9 +446,14 @@
             margin-bottom: 24px;
             display: flex;
             justify-content: space-between;
-            align-items: flex-end;
+            align-items: center;
+            gap: 20px;
             padding-bottom: 12px;
             border-bottom: 1px solid var(--border-color);
+        }
+
+        .section-header > div:first-child {
+            min-width: 0;
         }
 
         .section-header h2 {
@@ -462,6 +467,19 @@
         .section-header p {
             color: var(--text-secondary);
             font-size: 13px;
+        }
+
+        .section-header-actions {
+            display: flex;
+            align-items: center;
+            justify-content: flex-end;
+            gap: 8px;
+            flex: 0 0 auto;
+        }
+
+        .section-header-actions .btn {
+            min-height: 36px;
+            white-space: nowrap;
         }
 
         .node-groups {
@@ -491,11 +509,36 @@
         }
 
         .add-node-menu {
-            min-width: 180px;
+            width: 148px;
+            min-width: 148px;
+            max-width: 148px;
+            flex: 0 0 148px;
+            cursor: pointer;
         }
 
         .add-node-menu option {
             color: var(--text-primary);
+        }
+
+        @media (max-width: 760px) {
+            .section-header {
+                align-items: flex-start;
+                flex-direction: column;
+                gap: 12px;
+            }
+
+            .section-header-actions {
+                width: 100%;
+                justify-content: flex-start;
+                flex-wrap: wrap;
+            }
+
+            .add-node-menu {
+                width: 160px;
+                min-width: 160px;
+                max-width: 160px;
+                flex-basis: 160px;
+            }
         }
 
         /* Endpoints Grid */
@@ -1700,13 +1743,15 @@
                         <h2>Claude Code 代理</h2>
                         <p>为 Claude Code CLI 工具提供下游代理支持。</p>
                     </div>
-                    <select class="add-node-menu" onchange="addNodeByPurpose('code', this.value); this.value = ''">
-                        <option value="">添加节点...</option>
-                        <option value="chat">聊天模型节点</option>
-                        <option value="vision_fallback">视觉兜底节点</option>
-                        <option value="web_search">联网搜索节点</option>
-                        <option value="embedding">向量模型节点</option>
-                    </select>
+                    <div class="section-header-actions">
+                        <select class="add-node-menu" aria-label="添加 Claude Code 节点" onchange="addNodeByPurpose('code', this.value); this.value = ''">
+                            <option value="">添加节点...</option>
+                            <option value="chat">聊天模型节点</option>
+                            <option value="vision_fallback">视觉兜底节点</option>
+                            <option value="web_search">联网搜索节点</option>
+                            <option value="embedding">向量模型节点</option>
+                        </select>
+                    </div>
                 </div>
 
                 <div class="usage-guide">
@@ -1751,13 +1796,15 @@
                         <h2>Claude Desktop 代理</h2>
                         <p>为 Claude Desktop 桌面客户端提供下游代理支持。</p>
                     </div>
-                    <select class="add-node-menu" onchange="addNodeByPurpose('desktop', this.value); this.value = ''">
-                        <option value="">添加节点...</option>
-                        <option value="chat">聊天模型节点</option>
-                        <option value="vision_fallback">视觉兜底节点</option>
-                        <option value="web_search">联网搜索节点</option>
-                        <option value="embedding">向量模型节点</option>
-                    </select>
+                    <div class="section-header-actions">
+                        <select class="add-node-menu" aria-label="添加 Claude Desktop 节点" onchange="addNodeByPurpose('desktop', this.value); this.value = ''">
+                            <option value="">添加节点...</option>
+                            <option value="chat">聊天模型节点</option>
+                            <option value="vision_fallback">视觉兜底节点</option>
+                            <option value="web_search">联网搜索节点</option>
+                            <option value="embedding">向量模型节点</option>
+                        </select>
+                    </div>
                 </div>
 
                 <div class="usage-guide">
@@ -1775,11 +1822,11 @@
                         <h2>Codex 代理</h2>
                         <p>为兼容 OpenAI 接口的独立 Codex 客户端提供下游代理支持。</p>
                     </div>
-                    <div style="display:flex; gap:8px; align-items:center;">
+                    <div class="section-header-actions">
                         <button class="btn" id="codex-history-unify-btn" onclick="migrateCodexHistory()" title="把旧会话的 model_provider 迁移到 custom，以便在当前网关配置下重新显示历史">
-                            迁移历史会话
+                            迁移历史
                         </button>
-                        <select class="add-node-menu" onchange="addNodeByPurpose('codex', this.value); this.value = ''">
+                        <select class="add-node-menu" aria-label="添加 Codex 节点" onchange="addNodeByPurpose('codex', this.value); this.value = ''">
                             <option value="">添加节点...</option>
                             <option value="chat">聊天模型节点</option>
                             <option value="vision_fallback">视觉兜底节点</option>

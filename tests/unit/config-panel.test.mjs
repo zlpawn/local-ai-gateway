@@ -101,6 +101,15 @@ test("endpoint list renders chat and capability nodes in separate groups", async
   assert.match(html, /class="node-group-count"/);
 });
 
+test("section header actions stay compact and wrap cleanly on narrow screens", async () => {
+  const html = await readFile(path.join(ROOT, "desktop", "config-panel.html"), "utf8");
+  assert.match(html, /\.section-header-actions\s*\{[^}]*flex:\s*0 0 auto/s);
+  assert.match(html, /\.section-header-actions \.btn\s*\{[^}]*white-space:\s*nowrap/s);
+  assert.match(html, /\.add-node-menu\s*\{[^}]*width:\s*148px[^}]*max-width:\s*148px/s);
+  assert.match(html, /@media\s*\(max-width:\s*760px\)[\s\S]*?\.section-header\s*\{[^}]*flex-direction:\s*column/s);
+  assert.match(html, />\s*迁移历史\s*</);
+});
+
 test("each upstream model exposes supported and unsupported vision choices", async () => {
   const html = await readFile(path.join(ROOT, "desktop", "config-panel.html"), "utf8");
   assert.match(html, /updateModelImageCapability/);
