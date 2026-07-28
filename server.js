@@ -49,6 +49,7 @@ import {
   saveGatewayState,
   selectExposedEndpoints,
   selectDefaultEmbeddingEndpoint,
+  selectEmbeddingEndpoints,
   isCapabilityEndpoint,
 } from "./lib/config/gateway-config-store.mjs";
 import { syncClaudeCodeSettings } from "./lib/config/claude-code-settings.mjs";
@@ -465,25 +466,44 @@ async function forwardOpenAIEmbeddings(body, req, res, context) {
   const clientName = context.client !== "unknown" ? context.client : "codex";
   let clientObj = GATEWAY_CONFIG.clients?.[clientName];
   let endpoints = clientObj?.endpoints || [];
-  let embeddingEndpoint = selectDefaultEmbeddingEndpoint(endpoints);
 
-  if (!embeddingEndpoint) {
-    for (const fallbackClient of ["codex", "code", "desktop"]) {
-      if (fallbackClient === clientName) continue;
-      const fbEndpoints = GATEWAY_CONFIG.clients?.[fallbackClient]?.endpoints || [];
-      embeddingEndpoint = selectDefaultEmbeddingEndpoint(fbEndpoints);
-      if (embeddingEndpoint) break;
+  // endpoint_id 精确匹配:用户显式指定节点时,严格在该 client 内查找,不跨 client 兜底
+  const requestedEndpointId = context.url.searchParams.get("endpoint_id");
+  let embeddingEndpoint;
+  if (requestedEndpointId) {
+    embeddingEndpoint = selectEmbeddingEndpoints(endpoints).find(
+      (ep) => ep.id === requestedEndpointId,
+    ) || null;
+    if (!embeddingEndpoint) {
+      sendJson(res, 404, {
+        error: {
+          type: "invalid_request_error",
+          message: "Embedding endpoint '" + requestedEndpointId + "' not found for client '" + clientName + "'.",
+        },
+      });
+      return;
     }
-  }
+  } else {
+    embeddingEndpoint = selectDefaultEmbeddingEndpoint(endpoints);
 
-  if (!embeddingEndpoint) {
-    sendJson(res, 404, {
-      error: {
-        type: "invalid_request_error",
-        message: "No embedding endpoint configured for client '" + clientName + "'.",
-      },
-    });
-    return;
+    if (!embeddingEndpoint) {
+      for (const fallbackClient of ["codex", "code", "desktop"]) {
+        if (fallbackClient === clientName) continue;
+        const fbEndpoints = GATEWAY_CONFIG.clients?.[fallbackClient]?.endpoints || [];
+        embeddingEndpoint = selectDefaultEmbeddingEndpoint(fbEndpoints);
+        if (embeddingEndpoint) break;
+      }
+    }
+
+    if (!embeddingEndpoint) {
+      sendJson(res, 404, {
+        error: {
+          type: "invalid_request_error",
+          message: "No embedding endpoint configured for client '" + clientName + "'.",
+        },
+      });
+      return;
+    }
   }
 
   const apiKey = getEndpointApiKey(

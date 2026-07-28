@@ -101,14 +101,16 @@ test("endpoint_id query param selects the matching embedding endpoint by id", as
   const ROOT = path.resolve(import.meta.dirname, "../..");
   const tempDir = await mkdtemp(path.join(os.tmpdir(), "gw-embed-id-"));
 
-  // mock 上游:不同路径返回不同向量,用以区分命中了哪个节点
+  // mock 上游:按请求的 model 区分返回不同向量,用以区分命中了哪个节点
+  // (base_url 拼接会给路径加 /v1/embeddings,故不依赖 URL 路径区分)
   const upstream = http.createServer((req, res) => {
     let data = "";
     req.on("data", (chunk) => { data += chunk; });
     req.on("end", () => {
       const body = JSON.parse(data || "{}");
       res.writeHead(200, { "Content-Type": "application/json" });
-      const vec = req.url === "/target/embeddings" ? [0.4, 0.5, 0.6] : [0.1, 0.2, 0.3];
+      // text-embedding-3-large (ep_TARGET) -> [0.4,0.5,0.6];其它 -> [0.1,0.2,0.3]
+      const vec = body.model === "text-embedding-3-large" ? [0.4, 0.5, 0.6] : [0.1, 0.2, 0.3];
       res.end(JSON.stringify({
         object: "list",
         data: [{ object: "embedding", embedding: vec, index: 0 }],
@@ -137,7 +139,7 @@ test("endpoint_id query param selects the matching embedding endpoint by id", as
             name: "default-node",
             purpose: "embedding",
             type: "openai-chat",
-            base_url: "http://127.0.0.1:" + upstreamPort + "/default",
+            base_url: "http://127.0.0.1:" + upstreamPort + "/v1",
             enabled: true,
             is_default: true,
             models: ["text-embedding-3-small"],
@@ -150,7 +152,7 @@ test("endpoint_id query param selects the matching embedding endpoint by id", as
             name: "target-node",
             purpose: "embedding",
             type: "openai-chat",
-            base_url: "http://127.0.0.1:" + upstreamPort + "/target",
+            base_url: "http://127.0.0.1:" + upstreamPort + "/v1",
             enabled: true,
             is_default: false,
             models: ["text-embedding-3-large"],
@@ -207,7 +209,7 @@ test("endpoint_id query param selects the matching embedding endpoint by id", as
 
   const json = await res.json();
   assert.equal(res.status, 200);
-  // 命中 ep_TARGET -> 上游 /target/embeddings -> [0.4, 0.5, 0.6]
+  // 命中 ep_TARGET -> model=text-embedding-3-large -> [0.4, 0.5, 0.6]
   assert.deepEqual(json.data[0].embedding, [0.4, 0.5, 0.6]);
 });
 ```
@@ -216,7 +218,7 @@ test("endpoint_id query param selects the matching embedding endpoint by id", as
 
 Run: `cd .worktrees/codex-tools-embedding && node --test tests/unit/embeddings-endpoint.test.mjs`
 
-Expected: 新 test 失败,因为 server.js 还没实现 endpoint_id 分支--请求会走默认节点 ep_DEFAULT,命中上游 `/default/embeddings`,返回 `[0.1, 0.2, 0.3]`,断言期望 `[0.4, 0.5, 0.6]` 失败。原有 test 保持通过。
+Expected: 新 test 失败,因为 server.js 还没实现 endpoint_id 分支--请求会走默认节点 ep_DEFAULT(其 model 是 text-embedding-3-small),上游返回 `[0.1, 0.2, 0.3]`,断言期望 `[0.4, 0.5, 0.6]` 失败。原有 test 保持通过。
 
 注意:若 gateway 启动需更久,Step 1 中的 `setTimeout(resolve, 800)` 可适当加大;也可改为轮询 `/health` 直到 200。
 
@@ -332,7 +334,7 @@ test("endpoint_id not matching returns 404 without cross-client fallback", async
       },
       desktop: {
         endpoints: [{
-          id: "ep_A", name: "desktop-emb", purpose: "embedding", type: "openai-chat",
+          id: "ep_DESKTOP", name: "desktop-emb", purpose: "embedding", type: "openai-chat",
           base_url: "http://127.0.0.1:" + upstreamPort + "/desktop",
           enabled: true, is_default: true, models: ["m2"], model_mapping: {}, embedding_model: "m2"
         }]
