@@ -102,7 +102,7 @@ test("endpoint list renders chat and capability nodes in separate groups", async
   assert.match(html, /class="node-group-count"/);
 });
 
-test("embedding node keeps dimensions optional and does not expose task batch size", async () => {
+test("new embedding node starts without preset models or task-level options", async () => {
   const html = await readFile(path.join(ROOT, "desktop", "config-panel.html"), "utf8");
   const addEmbeddingSource = html.match(
     /window\.addEmbeddingEndpoint = function\(client\) \{[\s\S]*?\n        \}/,
@@ -112,6 +112,9 @@ test("embedding node keeps dimensions optional and does not expose task batch si
   assert.match(html, /updateEndpoint\('\$\{client\}', \$\{index\}, 'dimensions'/);
   assert.doesNotMatch(html, /批处理大小|batch_size/);
   assert.doesNotMatch(addEmbeddingSource, /dimensions/);
+  assert.match(addEmbeddingSource, /models:\s*\[\]/);
+  assert.match(addEmbeddingSource, /embedding_model:\s*""/);
+  assert.doesNotMatch(addEmbeddingSource, /text-embedding-3-small|BAAI\/bge-m3/);
 });
 
 test("section header actions stay compact and wrap cleanly on narrow screens", async () => {
