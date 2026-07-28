@@ -272,7 +272,7 @@ test("DeepTutor section exposes a copy-from-codex action and a connection guide"
   assert.match(html, /copyClientFromCodex/);
   assert.match(html, /\/v1\/config\/copy-client/);
   assert.match(html, /从 Codex 复制节点/);
-  assert.match(html, /\/deeptutor\/v1/);
+  assert.match(html, /大语言模型 base_url：[\s\S]*?\/deeptutor\//);
 });
 
 test("DeepTutor is included in the render loop and default config", async () => {
@@ -290,7 +290,7 @@ test("DeepTutor endpoints show the capability editor like Codex", async () => {
 test("Preset CLI module has a nav group, a discovery section, and an install-history sub-tab", async () => {
   const html = await readHtml();
   assert.match(html, /id="nav-cli-group"/);
-  assert.match(html, /href="#cli"[\s\S]*?预置 CLI/);
+  assert.match(html, /href="#cli"[\s\S]*?本机 CLI/);
   assert.match(html, /href="#cli-install-history"/);
   assert.match(html, /id="section-cli"/);
   assert.match(html, /id="section-cli-install-history"/);

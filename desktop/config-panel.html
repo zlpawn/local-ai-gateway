@@ -1816,7 +1816,7 @@
                     <div class="nav-parent-row">
                         <a href="#cli" class="nav-item" onclick="switchTab('cli')">
                             <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="margin-right: 8px;"><polyline points="4 17 10 11 4 5"></polyline><line x1="12" y1="19" x2="20" y2="19"></line></svg>
-                            预置 CLI (Preset CLI)
+                            本机 CLI (Local CLI)
                         </a>
                         <button class="nav-caret-btn" title="展开/收起" onclick="toggleNavGroup('nav-cli-group', event)"><span class="nav-caret">▶</span></button>
                     </div>
@@ -1996,12 +1996,11 @@ experimental_bearer_token = "dummy"</pre>
 
                 <div class="usage-guide">
                     <h3>🚀 如何连接此网关？</h3>
-                    <p>DeepTutor 走 OpenAI 兼容协议。保存本页配置后，把下面片段指向本网关（以 Responses 接口为例）：</p>
+                    <p>DeepTutor 走 OpenAI 兼容协议。把下面的 base_url 填入 DeepTutor 对应配置（网关会自动补全 /v1 前缀，无需手动填写）：</p>
                     <div class="code-snippet" style="margin-top: 10px;">
                         <pre style="margin: 0; color: inherit; font-family: inherit; font-size: inherit; background: transparent; padding: 0; overflow-x: auto;">
-base_url = "http://<span class="cfg-host">127.0.0.1</span>:<span class="cfg-port">8787</span>/deeptutor/v1"
-# 模型列表：GET http://<span class="cfg-host">127.0.0.1</span>:<span class="cfg-port">8787</span>/deeptutor/v1/models
-# 接口：/deeptutor/v1/responses · /deeptutor/v1/chat/completions · /deeptutor/v1/embeddings</pre>
+大语言模型 base_url：http://<span class="cfg-host">127.0.0.1</span>:<span class="cfg-port">8787</span>/deeptutor/
+向量模型 base_url：http://<span class="cfg-host">127.0.0.1</span>:<span class="cfg-port">8787</span>/deeptutor/</pre>
                     </div>
                     <p style="font-size: 12px; margin-top: 8px; margin-bottom: 0; color: var(--text-secondary);">首次进入时若 DeepTutor 为空，网关会自动从 Codex 复制节点与密钥。也可点右上角「从 Codex 复制节点」重新覆盖。</p>
                 </div>
@@ -2183,7 +2182,7 @@ base_url = "http://<span class="cfg-host">127.0.0.1</span>:<span class="cfg-port
             <section id="section-cli" class="tab-section" style="display: none;">
                 <div class="section-header">
                     <div>
-                        <h2>预置 CLI (Preset CLI)</h2>
+                        <h2>本机 CLI (Local CLI)</h2>
                         <p>扫描系统中已安装的 AI / 开发 CLI 工具，查看版本与路径，并可一键（重）安装。</p>
                     </div>
                     <button class="btn" title="重新扫描系统 CLI" onclick="refreshCliLibrary(true)">

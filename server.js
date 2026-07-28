@@ -6870,6 +6870,17 @@ function isTruthy(value) {
   return ["1", "true", "yes", "on"].includes(String(value || "").trim().toLowerCase());
 }
 
+const OPENAI_V1_PATHS = new Set([
+  "/models",
+  "/messages",
+  "/chat/completions",
+  "/responses",
+  "/embeddings",
+  "/images/generations",
+  "/images/edits",
+  "/messages/count_tokens",
+]);
+
 function getRequestContext(req) {
   const url = new URL(req.url || "/", `http://${req.headers.host || "localhost"}`);
   const originalPath = url.pathname;
@@ -6878,11 +6889,19 @@ function getRequestContext(req) {
   const queryClient = normalizeClientName(url.searchParams.get("client"));
   const inferredClient = inferClientFromUserAgent(req.headers["user-agent"] || "");
   const client = normalized.client || headerClient || queryClient || inferredClient || "unknown";
+  // Auto-append /v1 for client-prefixed OpenAI paths so callers can use a
+  // cleaner base_url like http://host/deeptutor/ (the SDK then appends e.g.
+  // /chat/completions). Paths that already include /v1, or root routes such
+  // as /health and /config, are left untouched.
+  let path = normalized.path;
+  if (normalized.client && OPENAI_V1_PATHS.has(path)) {
+    path = "/v1" + path;
+  }
 
   return {
     url,
     originalPath,
-    path: normalized.path,
+    path,
     client,
     requestId: req.headers["x-request-id"] || randomUUID(),
   };
