@@ -1824,6 +1824,9 @@
                         <a href="#cli-install-history" class="nav-item nav-child" onclick="switchTab('cli-install-history')">
                             <span class="nav-child-dot">└</span>安装记录
                         </a>
+                        <a href="#cli-sources" class="nav-item nav-child" onclick="switchTab('cli-sources')">
+                            <span class="nav-child-dot">└</span>扫描来源
+                        </a>
                     </div>
                 </div>
             </nav>
@@ -2183,7 +2186,7 @@ experimental_bearer_token = "dummy"</pre>
                 <div class="section-header">
                     <div>
                         <h2>本机 CLI (Local CLI)</h2>
-                        <p>扫描系统中已安装的 AI / 开发 CLI 工具，查看版本与路径，并可一键（重）安装。</p>
+                        <p>扫描 PATH 中已安装的 CLI 工具，查看版本与路径。如需安装新 CLI，请到「安装记录」标签页手动执行。</p>
                     </div>
                     <button class="btn" title="重新扫描系统 CLI" onclick="refreshCliLibrary(true)">
                         刷新 CLI 列表
@@ -2192,12 +2195,12 @@ experimental_bearer_token = "dummy"</pre>
 
                 <div class="usage-guide">
                     <h3>💡 使用说明</h3>
-                    <p>网关在 PATH（及 Windows 常见安装目录）中查找下列 CLI。已安装的显示版本与路径；未安装的可到「安装记录」用命令行安装。</p>
+                    <p>网关扫描 PATH（及 Windows 常见安装目录）中的可执行文件，列出本机已安装的 CLI 及其版本与路径。</p>
                 </div>
 
                 <div class="skills-toolbar">
-                    <input id="cli-search-input" class="skills-search" type="search" placeholder="搜索 CLI 名称、标题、分类..." oninput="onCliSearchInput(this.value)" />
-                    <span class="skills-filter-chip" id="cli-stats-chip">共 0 · 已安装 0</span>
+                    <input id="cli-search-input" class="skills-search" type="search" placeholder="搜索 CLI 名称..." oninput="onCliSearchInput(this.value)" />
+                    <span class="skills-filter-chip" id="cli-stats-chip">已安装 0 个</span>
                 </div>
 
                 <div id="cli-list" class="skills-list"></div>
@@ -2233,6 +2236,36 @@ experimental_bearer_token = "dummy"</pre>
 
                 <div style="font-size:12px;font-weight:600;color:var(--text-secondary);margin-bottom:8px;">安装记录</div>
                 <div id="cli-install-history-list"><div class="skill-detail-empty">暂无安装记录</div></div>
+            </section>
+
+            <!-- CLI Scan Sources Section -->
+            <section id="section-cli-sources" class="tab-section" style="display: none;">
+                <div class="section-header">
+                    <div>
+                        <h2>扫描来源</h2>
+                        <p>管理 CLI 扫描的安装来源及其目录。默认包含 uv、npm、curl、homebrew、winget、irm、PATH，可新增自定义来源（如 chocolatey）。</p>
+                    </div>
+                    <div style="display:flex;gap:8px;">
+                        <button class="btn" title="恢复为系统默认来源" onclick="resetCliSources()">恢复默认</button>
+                        <button class="btn" onclick="refreshCliSources()">刷新</button>
+                        <button class="btn btn-primary" onclick="saveCliSources()">保存</button>
+                    </div>
+                </div>
+
+                <div class="usage-guide">
+                    <h3>💡 使用说明</h3>
+                    <p>每个来源包含名称、标签、是否启用、以及一个或多个扫描目录。目录支持 <code>~</code>、环境变量（<code>HOME</code> / <code>%APPDATA%</code>）和通配符 <code>*</code>（如 <code>~/.nvm/versions/node/*/bin</code>）。特殊值 <code>PATH</code> 表示扫描系统 PATH 目录。</p>
+                    <p>来源按列表顺序优先扫描，先扫到的二进制优先归属该来源。例如 uv 来源排在 npm 之前，一个同时被两者安装的 CLI 会标记为 uv。</p>
+                </div>
+
+                <div class="install-form" style="margin-bottom:16px;">
+                    <input id="cli-source-new-name" placeholder="来源名称（如 chocolatey）" style="flex:0 0 180px;" />
+                    <input id="cli-source-new-label" placeholder="标签（如 Chocolatey 安装）" style="flex:0 0 200px;" />
+                    <input id="cli-source-new-dirs" placeholder="目录，多个用分号分隔" style="flex:1;" />
+                    <button class="btn btn-primary" onclick="addCliSourceRow()">新增来源</button>
+                </div>
+
+                <div id="cli-sources-list" class="skills-list"></div>
             </section>
 
         </main>
@@ -2749,31 +2782,149 @@ experimental_bearer_token = "dummy"</pre>
             const host = document.getElementById('cli-list');
             if (!host) return;
             const chip = document.getElementById('cli-stats-chip');
-            if (chip) chip.textContent = '共 ' + (cliLibraryState.stats.total || 0) + ' · 已安装 ' + (cliLibraryState.stats.installed || 0);
+            if (chip) chip.textContent = '已安装 ' + (cliLibraryState.stats.total || 0) + ' 个';
             const items = cliLibraryState.items || [];
             if (!items.length) {
                 host.innerHTML = '<div class="skill-detail-empty">没有匹配的 CLI。</div>';
                 return;
             }
             host.innerHTML = items.map(function(item) {
-                const status = item.installed
-                    ? '<span class="skill-pill status-success">已安装</span>'
-                    : '<span class="skill-pill status-failed">未安装</span>';
                 const version = item.version ? escapeHtml(item.version) : '<span style="color:var(--text-secondary);">—</span>';
                 const pathLine = item.path ? escapeHtml(item.path) : '<span style="color:var(--text-secondary);">未在 PATH 中找到</span>';
                 return '<div class="install-record">' +
                     '<div class="install-record-head">' +
                     '<div style="min-width:0;flex:1;">' +
-                    '<div class="install-record-skill">' + escapeHtml(item.title) + ' <span class="skill-pill" style="background:var(--input-bg);">' + escapeHtml(item.category) + '</span> ' + status + '</div>' +
+                    '<div class="install-record-skill">' + escapeHtml(item.name) + (item.source ? ' <span class="skill-pill" style="background:var(--input-bg);color:var(--text-secondary);">' + escapeHtml(item.source) + '</span>' : '') + '</div>' +
                     '<div class="install-record-cmd">$ ' + escapeHtml(item.command) + ' --version</div>' +
                     '<div class="install-record-meta">版本: ' + version + '</div>' +
                     '<div class="install-record-meta">' + pathLine + '</div>' +
                     '</div>' +
-                    '<div class="install-record-actions">' +
-                    '<button class="btn" style="padding:4px 10px;font-size:12px;" onclick="installCliByName(\'' + escapeHtml(item.name) + '\', \'' + escapeHtml(item.command) + '\')">' + (item.installed ? '重装' : '安装') + '</button>' +
+                    '</div></div>';
+            }).join('');
+        }
+
+        // ===== CLI Scan Sources management =====
+        let cliSourcesState = { loaded: false, loading: false, sources: [] };
+
+        async function refreshCliSources() {
+            cliSourcesState.loading = true;
+            try {
+                const res = await fetch('/v1/cli/sources');
+                const data = await res.json();
+                if (!data.success) throw new Error(data.error || '失败');
+                cliSourcesState.sources = data.sources || [];
+                cliSourcesState.loaded = true;
+                renderCliSources();
+            } catch (err) {
+                showToast('加载扫描来源失败: ' + err.message, 'danger');
+            } finally {
+                cliSourcesState.loading = false;
+            }
+        }
+
+        function renderCliSources() {
+            const host = document.getElementById('cli-sources-list');
+            if (!host) return;
+            const sources = cliSourcesState.sources || [];
+            if (!sources.length) {
+                host.innerHTML = '<div class="skill-detail-empty">暂无来源，点击「新增来源」添加。</div>';
+                return;
+            }
+            host.innerHTML = sources.map(function(src, i) {
+                const enabled = src.enabled !== false;
+                const dirs = (src.dirs || []).join('; ');
+                return '<div class="install-record" data-source-index="' + i + '">' +
+                    '<div class="install-record-head">' +
+                    '<div style="min-width:0;flex:1;display:flex;flex-direction:column;gap:6px;">' +
+                    '<div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;">' +
+                    '<input class="cli-source-name" value="' + escapeHtml(src.name || '') + '" placeholder="名称" style="width:120px;font-weight:600;" />' +
+                    '<input class="cli-source-label" value="' + escapeHtml(src.label || '') + '" placeholder="标签" style="width:160px;" />' +
+                    '<label style="display:flex;align-items:center;gap:4px;font-size:12px;color:var(--text-secondary);">' +
+                    '<input type="checkbox" class="cli-source-enabled"' + (enabled ? ' checked' : '') + ' /> 启用' +
+                    '</label>' +
+                    '<button class="btn" style="padding:2px 8px;font-size:12px;" onclick="moveCliSource(' + i + ', -1)">↑</button>' +
+                    '<button class="btn" style="padding:2px 8px;font-size:12px;" onclick="moveCliSource(' + i + ', 1)">↓</button>' +
+                    '<button class="btn" style="padding:2px 8px;font-size:12px;color:#e53e3e;" onclick="removeCliSource(' + i + ')">删除</button>' +
+                    '</div>' +
+                    '<input class="cli-source-dirs" value="' + escapeHtml(dirs) + '" placeholder="目录，多个用分号分隔" style="width:100%;font-size:12px;" />' +
                     '</div>' +
                     '</div></div>';
             }).join('');
+        }
+
+        function addCliSourceRow() {
+            const name = (document.getElementById('cli-source-new-name').value || '').trim();
+            const label = (document.getElementById('cli-source-new-label').value || '').trim();
+            const dirsRaw = (document.getElementById('cli-source-new-dirs').value || '').trim();
+            if (!name) { showToast('请填写来源名称', 'danger'); return; }
+            const dirs = dirsRaw ? dirsRaw.split(';').map(function(d) { return d.trim(); }).filter(Boolean) : [];
+            cliSourcesState.sources.push({ name: name, label: label || name, enabled: true, dirs: dirs });
+            document.getElementById('cli-source-new-name').value = '';
+            document.getElementById('cli-source-new-label').value = '';
+            document.getElementById('cli-source-new-dirs').value = '';
+            renderCliSources();
+        }
+
+        function moveCliSource(index, delta) {
+            const arr = cliSourcesState.sources;
+            const ni = index + delta;
+            if (ni < 0 || ni >= arr.length) return;
+            const tmp = arr[index]; arr[index] = arr[ni]; arr[ni] = tmp;
+            renderCliSources();
+        }
+
+        function removeCliSource(index) {
+            cliSourcesState.sources.splice(index, 1);
+            renderCliSources();
+        }
+
+        function collectCliSourcesFromDom() {
+            const rows = document.querySelectorAll('#cli-sources-list .install-record');
+            return Array.from(rows).map(function(row, i) {
+                const old = cliSourcesState.sources[i] || {};
+                return {
+                    id: old.id || undefined,
+                    name: (row.querySelector('.cli-source-name').value || '').trim(),
+                    label: (row.querySelector('.cli-source-label').value || '').trim(),
+                    enabled: row.querySelector('.cli-source-enabled').checked,
+                    dirs: (row.querySelector('.cli-source-dirs').value || '').split(';').map(function(d) { return d.trim(); }).filter(Boolean),
+                };
+            });
+        }
+
+        async function saveCliSources() {
+            const sources = collectCliSourcesFromDom();
+            try {
+                const res = await fetch('/v1/cli/sources', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ sources: sources }),
+                });
+                const data = await res.json();
+                if (!data.success) throw new Error(data.error || '保存失败');
+                cliSourcesState.sources = data.sources || [];
+                renderCliSources();
+                showToast('扫描来源已保存', 'success');
+                if (cliLibraryState.loaded) refreshCliLibrary(true);
+            } catch (err) {
+                showToast('保存失败: ' + err.message, 'danger');
+            }
+        }
+
+        async function resetCliSources() {
+            const ok = await showSkillConfirmModal('恢复默认', '确定恢复为系统默认来源？当前自定义来源将丢失。');
+            if (!ok) return;
+            try {
+                const res = await fetch('/v1/cli/sources/reset', { method: 'POST' });
+                const data = await res.json();
+                if (!data.success) throw new Error(data.error || '失败');
+                cliSourcesState.sources = data.sources || [];
+                renderCliSources();
+                showToast('已恢复默认来源', 'success');
+                if (cliLibraryState.loaded) refreshCliLibrary(true);
+            } catch (err) {
+                showToast('恢复失败: ' + err.message, 'danger');
+            }
         }
 
         function installCliByName(name, command) {
@@ -4012,7 +4163,10 @@ experimental_bearer_token = "dummy"</pre>
             if (tabId === 'cli-install-history') {
                 refreshCliInstallHistory();
             }
-            if (tabId === 'cli' || tabId === 'cli-install-history') {
+            if (tabId === 'cli-sources') {
+                refreshCliSources();
+            }
+            if (tabId === 'cli' || tabId === 'cli-install-history' || tabId === 'cli-sources') {
                 const g = document.getElementById('nav-cli-group');
                 if (g) g.classList.add('open');
             }

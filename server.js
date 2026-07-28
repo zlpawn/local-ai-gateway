@@ -60,6 +60,7 @@ import * as nodePty from "node-pty";
 import { InstallHistory } from "./lib/skills/install-history.mjs";
 import { CliInstallHistory } from "./lib/cli/install-history.mjs";
 import { discoverInstalledClis } from "./lib/cli/discovery.mjs";
+import { CliSourceConfig } from "./lib/cli/source-config.mjs";
 import {
   collectImages,
   containsImages,
@@ -1265,7 +1266,7 @@ function collectGroupedModelsFromConfig(config) {
     if (!checkLocalAuth(req, res)) return;
     try {
       const query = String(url.searchParams.get("q") || "").trim();
-      const result = discoverInstalledClis({ query });
+      const result = await discoverInstalledClis({ query });
       sendJson(res, 200, { success: true, ...result });
     } catch (err) {
       sendJson(res, 500, { error: err.message || String(err) });
@@ -1315,6 +1316,45 @@ function collectGroupedModelsFromConfig(config) {
     return;
   }
 
+
+  // --- CLI scan sources (configurable discovery directories) ---
+  if (reqPath === "/v1/cli/sources" && req.method === "GET") {
+    if (!checkLocalAuth(req, res)) return;
+    try {
+      sendJson(res, 200, {
+        success: true,
+        sources: CliSourceConfig.list(),
+        filePath: CliSourceConfig.filePath(),
+      });
+    } catch (err) {
+      sendJson(res, 500, { error: err.message || String(err) });
+    }
+    return;
+  }
+
+  if (reqPath === "/v1/cli/sources" && req.method === "POST") {
+    if (!checkLocalAuth(req, res)) return;
+    try {
+      const payload = JSON.parse(await readText(req) || "{}");
+      const sources = Array.isArray(payload.sources) ? payload.sources : [];
+      const saved = CliSourceConfig.save(sources);
+      sendJson(res, 200, { success: true, sources: saved, filePath: CliSourceConfig.filePath() });
+    } catch (err) {
+      sendJson(res, 400, { error: err.message || String(err) });
+    }
+    return;
+  }
+
+  if (reqPath === "/v1/cli/sources/reset" && req.method === "POST") {
+    if (!checkLocalAuth(req, res)) return;
+    try {
+      const sources = CliSourceConfig.reset();
+      sendJson(res, 200, { success: true, sources, filePath: CliSourceConfig.filePath() });
+    } catch (err) {
+      sendJson(res, 500, { error: err.message || String(err) });
+    }
+    return;
+  }
   // --- xterm static assets (served locally, no CDN) ---
   if (reqPath.startsWith("/xterm/") && req.method === "GET") {
     const seg = reqPath.slice("/xterm/".length);

@@ -301,3 +301,14 @@ test("Preset CLI module has a nav group, a discovery section, and an install-his
   assert.match(html, /startCliInstallFromForm/);
 });
 
+test("CLI scan sources sub-tab and management endpoints exist", async () => {
+  const html = await readHtml();
+  assert.match(html, /href="#cli-sources"[\s\S]*?扫描来源/);
+  assert.match(html, /id="section-cli-sources"/);
+  assert.match(html, /refreshCliSources/);
+  assert.match(html, /saveCliSources/);
+  assert.match(html, /\/v1\/cli\/sources/);
+  assert.match(html, /\/v1\/cli\/sources\/reset/);
+  assert.match(html, /addCliSourceRow/);
+});
+
