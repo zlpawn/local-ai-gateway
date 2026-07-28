@@ -503,7 +503,7 @@ git commit -m "feat(tools): add tools tab nav item and section skeleton"
 ```js
 test("tools cards list renders text embedding card", async () => {
   const html = await readFile(path.join(ROOT, "desktop", "config-panel.html"), "utf8");
-  assert.match(html, /function renderToolsCards/);
+  assert.match(html, /window\.renderToolsCards\s*=\s*function/);
   assert.match(html, /文本向量化/);
   assert.match(html, /openTool\('embedding'\)/);
   assert.match(html, /tools-card/);

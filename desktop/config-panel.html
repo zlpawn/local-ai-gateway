@@ -1749,6 +1749,213 @@
             font-size: 13px;
         }
 
+        .tools-cards {
+            display: grid;
+            grid-template-columns: repeat(auto-fill, minmax(260px, 1fr));
+            gap: 16px;
+        }
+        .tools-card {
+            background: var(--surface);
+            border: 1px solid var(--border-color);
+            border-radius: var(--radius-lg);
+            padding: 20px;
+            cursor: pointer;
+            transition: var(--transition-fast);
+            display: flex;
+            flex-direction: column;
+            gap: 8px;
+        }
+        .tools-card:hover {
+            background: var(--surface-hover);
+            border-color: var(--text-secondary);
+        }
+        .tools-card-icon {
+            width: 36px;
+            height: 36px;
+            border-radius: var(--radius-md);
+            background: var(--input-bg);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            color: var(--text-primary);
+        }
+        .tools-card-name {
+            font-weight: 600;
+            font-size: 15px;
+            color: var(--text-primary);
+        }
+        .tools-card-desc {
+            font-size: 13px;
+            color: var(--text-secondary);
+            line-height: 1.5;
+        }
+        .tools-detail-back {
+            display: inline-flex;
+            align-items: center;
+            gap: 6px;
+            background: none;
+            border: none;
+            color: var(--text-secondary);
+            cursor: pointer;
+            font-size: 13px;
+            padding: 4px 0;
+            margin-bottom: 16px;
+        }
+        .tools-detail-back:hover { color: var(--text-primary); }
+        .embed-layout {
+            display: grid;
+            grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+            gap: 20px;
+        }
+        @media (max-width: 900px) {
+            .embed-layout { grid-template-columns: 1fr; }
+        }
+        .embed-panel {
+            background: var(--surface);
+            border: 1px solid var(--border-color);
+            border-radius: var(--radius-lg);
+            padding: 16px;
+        }
+        .embed-panel h3 {
+            margin: 0 0 12px;
+            font-size: 14px;
+            color: var(--text-primary);
+        }
+        .embed-form-group { margin-bottom: 12px; }
+        .embed-form-group label {
+            display: block;
+            font-size: 12px;
+            color: var(--text-secondary);
+            margin-bottom: 4px;
+        }
+        .embed-form-select {
+            width: 100%;
+            box-sizing: border-box;
+            background: var(--input-bg);
+            border: 1px solid var(--border-color);
+            border-radius: var(--radius-md);
+            color: var(--text-primary);
+            font-size: 13px;
+            padding: 6px 8px;
+        }
+        .embed-textarea {
+            width: 100%;
+            min-height: 80px;
+            resize: vertical;
+            box-sizing: border-box;
+            background: var(--input-bg);
+            border: 1px solid var(--border-color);
+            border-radius: var(--radius-md);
+            color: var(--text-primary);
+            font-family: var(--font-sans);
+            font-size: 13px;
+            padding: 8px;
+        }
+        .embed-textarea:focus {
+            outline: none;
+            border-color: var(--text-secondary);
+        }
+        .embed-mode-switch {
+            display: inline-flex;
+            border: 1px solid var(--border-color);
+            border-radius: var(--radius-md);
+            overflow: hidden;
+            margin-bottom: 12px;
+        }
+        .embed-mode-btn {
+            background: none;
+            border: none;
+            padding: 6px 14px;
+            font-size: 13px;
+            color: var(--text-secondary);
+            cursor: pointer;
+        }
+        .embed-mode-btn.active {
+            background: var(--brand-primary);
+            color: var(--brand-text);
+        }
+        .embed-dims-row {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            font-size: 13px;
+            color: var(--text-secondary);
+        }
+        .embed-dims-row input[type="number"] {
+            width: 80px;
+            background: var(--input-bg);
+            border: 1px solid var(--border-color);
+            border-radius: var(--radius-md);
+            color: var(--text-primary);
+            padding: 4px 6px;
+            font-size: 13px;
+        }
+        .embed-result-empty {
+            color: var(--text-secondary);
+            font-size: 13px;
+            text-align: center;
+            padding: 32px 0;
+        }
+        .embed-similarity-score {
+            font-size: 32px;
+            font-weight: 700;
+            color: var(--text-primary);
+            font-family: var(--font-mono);
+        }
+        .embed-formula {
+            font-family: var(--font-mono);
+            font-size: 13px;
+            color: var(--text-secondary);
+            background: var(--input-bg);
+            border: 1px solid var(--border-color);
+            border-radius: var(--radius-md);
+            padding: 8px 10px;
+            margin: 8px 0;
+        }
+        .embed-formula-note {
+            font-size: 12px;
+            color: var(--text-secondary);
+            line-height: 1.5;
+        }
+        .embed-vector-toggle {
+            background: none;
+            border: 1px solid var(--border-color);
+            border-radius: var(--radius-md);
+            color: var(--text-secondary);
+            cursor: pointer;
+            font-size: 12px;
+            padding: 4px 10px;
+        }
+        .embed-vector-toggle:hover { color: var(--text-primary); }
+        .embed-vector {
+            font-family: var(--font-mono);
+            font-size: 12px;
+            color: var(--text-secondary);
+            background: var(--input-bg);
+            border: 1px solid var(--border-color);
+            border-radius: var(--radius-md);
+            padding: 8px;
+            word-break: break-all;
+            max-height: 200px;
+            overflow-y: auto;
+        }
+        .embed-meta {
+            font-size: 12px;
+            color: var(--text-secondary);
+            display: flex;
+            flex-wrap: wrap;
+            gap: 12px;
+        }
+        .embed-error {
+            color: var(--danger);
+            background: var(--danger-bg);
+            border: 1px solid var(--danger);
+            border-radius: var(--radius-md);
+            padding: 10px;
+            font-size: 13px;
+        }
+
+
     </style>
     <script>
         // Prevent FOUC by setting theme early
@@ -2167,6 +2374,7 @@ experimental_bearer_token = "dummy"</pre>
         // Craft-style navigation: null = card list, {client,index} = detail editor
         let selectedEndpoint = null;
         let activeClient = 'code';
+        let toolsView = 'cards'; // 'cards' | 'embedding'
         let lastLoadedSyncTargets = { antigravity: true, claude: true, codex: true };
 
         const ENDPOINT_TYPES = [
@@ -3631,10 +3839,45 @@ experimental_bearer_token = "dummy"</pre>
                 const g = document.getElementById('nav-skills-group');
                 if (g) g.classList.add('open');
             }
+            if (tabId === 'tools') {
+                toolsView = 'cards';
+                renderToolsCards();
+            }
 
             // Scroll to top
             document.querySelector('.content-area').scrollTop = 0;
         }
+
+        window.renderToolsCards = function() {
+            const cards = document.getElementById('tools-cards');
+            const detail = document.getElementById('tools-detail');
+            if (!cards || !detail) return;
+            detail.innerHTML = '';
+            cards.style.display = '';
+            cards.innerHTML = `
+                <div class="tools-card" onclick="openTool('embedding')">
+                    <div class="tools-card-icon">
+                        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z"></path></svg>
+                    </div>
+                    <div class="tools-card-name">文本向量化</div>
+                    <div class="tools-card-desc">选择已配置的向量模型,对文本生成向量或计算两段文本的余弦相似度。</div>
+                </div>
+            `;
+        };
+
+        window.openTool = function(toolId) {
+            toolsView = toolId;
+            renderToolsDetail();
+        };
+
+        window.backToToolsCards = function() {
+            toolsView = 'cards';
+            const cards = document.getElementById('tools-cards');
+            const detail = document.getElementById('tools-detail');
+            if (cards) cards.style.display = '';
+            if (detail) detail.innerHTML = '';
+            renderToolsCards();
+        };
 
         window.addEventListener('load', () => {
             const hash = window.location.hash.replace('#', '');
