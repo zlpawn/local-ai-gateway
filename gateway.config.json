@@ -166,6 +166,21 @@
     "codex": {
       "endpoints": [
         {
+          "id": "ep_36e0017d-bb25-4b0d-87f1-2def4971c91e",
+          "name": "向量模型节点",
+          "purpose": "embedding",
+          "type": "openai-chat",
+          "base_url": "https://openapi-ait.ke.com",
+          "enabled": true,
+          "is_default": true,
+          "models": [
+            "text-embedding-3-large"
+          ],
+          "model_mapping": {},
+          "embedding_model": "text-embedding-3-large",
+          "dimensions": 1024
+        },
+        {
           "id": "ep_3a82b850-9c20-4484-a206-0bfb79c5e9c3",
           "name": "ait",
           "type": "openai-chat",

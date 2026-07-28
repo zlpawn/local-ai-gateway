@@ -46,6 +46,8 @@ import {
   loadGatewayState,
   saveGatewayState,
   selectExposedEndpoints,
+  selectDefaultEmbeddingEndpoint,
+  isCapabilityEndpoint,
 } from "./lib/config/gateway-config-store.mjs";
 import { syncClaudeCodeSettings } from "./lib/config/claude-code-settings.mjs";
 import { SkillInstaller } from "./lib/session-sync/skill-installer.mjs";
@@ -139,7 +141,7 @@ const _allEndpoints = [
   ...(GATEWAY_CONFIG.clients?.desktop?.endpoints || []),
   ...(GATEWAY_CONFIG.clients?.claude?.endpoints || []),
   ...(GATEWAY_CONFIG.clients?.codex?.endpoints || [])
-].filter((endpoint) => endpoint?.purpose !== "vision_fallback" && endpoint?.purpose !== "web_search");
+].filter((endpoint) => !isCapabilityEndpoint(endpoint));
 let EXPOSED_MODELS = [...new Set(_allEndpoints.flatMap(ep => [
   ...(ep.models || []),
   ...Object.keys(ep.model_mapping || {})
@@ -455,6 +457,104 @@ server.listen(LISTEN_PORT, LISTEN_HOST, () => {
     });
   }
 });
+
+
+async function forwardOpenAIEmbeddings(body, req, res, context) {
+  const clientName = context.client !== "unknown" ? context.client : "codex";
+  let clientObj = GATEWAY_CONFIG.clients?.[clientName];
+  let endpoints = clientObj?.endpoints || [];
+  let embeddingEndpoint = selectDefaultEmbeddingEndpoint(endpoints);
+
+  if (!embeddingEndpoint) {
+    for (const fallbackClient of ["codex", "code", "desktop"]) {
+      if (fallbackClient === clientName) continue;
+      const fbEndpoints = GATEWAY_CONFIG.clients?.[fallbackClient]?.endpoints || [];
+      embeddingEndpoint = selectDefaultEmbeddingEndpoint(fbEndpoints);
+      if (embeddingEndpoint) break;
+    }
+  }
+
+  if (!embeddingEndpoint) {
+    sendJson(res, 404, {
+      error: {
+        type: "invalid_request_error",
+        message: "No embedding endpoint configured for client '" + clientName + "'.",
+      },
+    });
+    return;
+  }
+
+  const apiKey = getEndpointApiKey(embeddingEndpoint, GATEWAY_SECRETS);
+  let upstreamUrl = String(embeddingEndpoint.base_url || "").trim();
+  if (!upstreamUrl) {
+    sendJson(res, 500, {
+      error: {
+        type: "gateway_config_error",
+        message: "Embedding endpoint '" + embeddingEndpoint.id + "' is missing base_url.",
+      },
+    });
+    return;
+  }
+  if (!upstreamUrl.endsWith("/embeddings")) {
+    upstreamUrl = upstreamUrl.replace(/\/+$/, "") + "/embeddings";
+  }
+
+  const modelInput = body?.model;
+  let upstreamModel = modelInput;
+  if (modelInput && embeddingEndpoint.model_mapping?.[modelInput]) {
+    upstreamModel = embeddingEndpoint.model_mapping[modelInput];
+  } else if (!upstreamModel && embeddingEndpoint.embedding_model) {
+    upstreamModel = embeddingEndpoint.embedding_model;
+  } else if (!upstreamModel && Array.isArray(embeddingEndpoint.models) && embeddingEndpoint.models.length > 0) {
+    upstreamModel = embeddingEndpoint.models[0];
+  }
+
+  const upstreamBody = {
+    ...body,
+    ...(upstreamModel ? { model: upstreamModel } : {}),
+  };
+  if (embeddingEndpoint.dimensions != null && upstreamBody.dimensions == null) {
+    upstreamBody.dimensions = embeddingEndpoint.dimensions;
+  }
+
+  const upstreamHeaders = {
+    "Content-Type": "application/json",
+  };
+  if (apiKey) {
+    upstreamHeaders["Authorization"] = "Bearer " + apiKey;
+  }
+
+  logInfo("embeddings_forward", {
+    request_id: context.requestId,
+    client: clientName,
+    endpoint_id: embeddingEndpoint.id,
+    requested_model: modelInput || null,
+    upstream_model: upstreamModel || null,
+    upstream_url: upstreamUrl,
+  });
+
+  try {
+    const upstreamRes = await fetch(upstreamUrl, {
+      method: "POST",
+      headers: upstreamHeaders,
+      body: JSON.stringify(upstreamBody),
+    });
+
+    const responseText = await upstreamRes.text();
+    res.writeHead(upstreamRes.status, {
+      "Content-Type": upstreamRes.headers.get("content-type") || "application/json",
+    });
+    res.end(responseText);
+  } catch (err) {
+    logError("embeddings_forward_failed", err, context);
+    sendJson(res, 500, {
+      error: {
+        type: "gateway_error",
+        message: err instanceof Error ? err.message : String(err),
+      },
+    });
+  }
+}
 
 async function route(req, res) {
   const context = getRequestContext(req);
@@ -1097,6 +1197,13 @@ function collectGroupedModelsFromConfig(config) {
     if (!checkLocalAuth(req, res)) return;
     const body = await readJson(req);
     await forwardAnthropicMessages(body, req, res, context);
+    return;
+  }
+
+  if (reqPath === "/v1/embeddings" && req.method === "POST") {
+    if (!checkLocalAuth(req, res)) return;
+    const body = await readJson(req);
+    await forwardOpenAIEmbeddings(body, req, res, context);
     return;
   }
 
@@ -7233,7 +7340,7 @@ function reloadGatewayConfig({ reloadFiles = true } = {}) {
     ...(GATEWAY_CONFIG.clients?.desktop?.endpoints || []),
     ...(GATEWAY_CONFIG.clients?.claude?.endpoints || []),
     ...(GATEWAY_CONFIG.clients?.codex?.endpoints || [])
-  ].filter((endpoint) => endpoint?.purpose !== "vision_fallback" && endpoint?.purpose !== "web_search");
+  ].filter((endpoint) => !isCapabilityEndpoint(endpoint));
   EXPOSED_MODELS = [...new Set(_endpoints.flatMap(ep => [
     ...(ep.models || []),
     ...Object.keys(ep.model_mapping || {})

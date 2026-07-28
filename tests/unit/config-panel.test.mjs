@@ -68,17 +68,68 @@ test("endpoint detail provides an explicit manual save action", async () => {
   assert.match(html, /saveConfig\(\{\s*button:\s*btn,\s*client,\s*scope:\s*'node'/);
 });
 
-test("each client can add an ordinary configured vision fallback node", async () => {
+test("each client can add capability nodes from the grouped node menu", async () => {
   const html = await readFile(path.join(ROOT, "desktop", "config-panel.html"), "utf8");
-  assert.match(html, /addVisionFallbackEndpoint\('code'\)/);
-  assert.match(html, /addVisionFallbackEndpoint\('desktop'\)/);
-  assert.match(html, /addVisionFallbackEndpoint\('codex'\)/);
+  assert.match(html, /data-client="code"/);
+  assert.match(html, /data-client="desktop"/);
+  assert.match(html, /data-client="codex"/);
+  assert.match(html, /title:\s*'聊天模型'/);
+  assert.match(html, /title:\s*'视觉兜底'/);
+  assert.match(html, /title:\s*'联网搜索'/);
+  assert.match(html, /title:\s*'向量模型'/);
+  assert.match(html, /onclick="addNodeByPurpose\('\$\{client\}', '\$\{option\.purpose\}'\)"/);
   assert.match(html, /purpose:\s*'vision_fallback'/);
   assert.match(html, /addWebSearchEndpoint/);
   assert.match(html, /purpose:\s*'web_search'/);
+  assert.match(html, /purpose:\s*'embedding'/);
+  assert.match(html, /type:\s*'openai-chat'/);
+  assert.match(html, /OpenAI Embeddings 协议/);
+  assert.match(html, /setAsDefaultEmbedding/);
+  assert.match(html, /setAsDefaultWebSearch/);
   assert.match(html, /vision_fallback_enabled:\s*true/);
   assert.match(html, /视觉兜底模型/);
   assert.match(html, /vision_model/);
+});
+
+test("endpoint list renders chat and capability nodes in separate groups", async () => {
+  const html = await readFile(path.join(ROOT, "desktop", "config-panel.html"), "utf8");
+  assert.match(html, /function createEndpointGroupsHTML/);
+  assert.match(html, /title:\s*'聊天模型'/);
+  assert.match(html, /title:\s*'视觉兜底'/);
+  assert.match(html, /title:\s*'联网搜索'/);
+  assert.match(html, /title:\s*'向量模型'/);
+  assert.match(html, /class="node-group-header"/);
+  assert.match(html, /class="node-group-count"/);
+});
+
+test("new embedding node starts without preset models or task-level options", async () => {
+  const html = await readFile(path.join(ROOT, "desktop", "config-panel.html"), "utf8");
+  const addEmbeddingSource = html.match(
+    /window\.addEmbeddingEndpoint = function\(client\) \{[\s\S]*?\n        \}/,
+  )?.[0] || "";
+
+  assert.match(html, /输出维度（可选，留空使用模型默认值）/);
+  assert.match(html, /updateEndpoint\('\$\{client\}', \$\{index\}, 'dimensions'/);
+  assert.doesNotMatch(html, /批处理大小|batch_size/);
+  assert.doesNotMatch(addEmbeddingSource, /dimensions/);
+  assert.match(addEmbeddingSource, /models:\s*\[\]/);
+  assert.match(addEmbeddingSource, /embedding_model:\s*""/);
+  assert.match(addEmbeddingSource, /base_url:\s*""/);
+  assert.doesNotMatch(addEmbeddingSource, /text-embedding-3-small|BAAI\/bge-m3/);
+  assert.match(html, /请先填写向量模型节点的 Base URL/);
+});
+
+test("section header actions stay compact and wrap cleanly on narrow screens", async () => {
+  const html = await readFile(path.join(ROOT, "desktop", "config-panel.html"), "utf8");
+  assert.match(html, /\.section-header-actions\s*\{[^}]*flex:\s*0 0 auto/s);
+  assert.match(html, /\.section-header-actions \.btn\s*\{[^}]*white-space:\s*nowrap/s);
+  assert.match(html, /\.add-node-popover\s*\{[^}]*width:\s*292px/s);
+  assert.match(html, /\.add-node-option\s*\{[^}]*grid-template-columns:\s*34px minmax\(0,\s*1fr\)/s);
+  assert.match(html, /function createAddNodeOptionsHTML/);
+  assert.match(html, /window\.toggleAddNodeMenu/);
+  assert.doesNotMatch(html, /<select class="add-node-menu"/);
+  assert.match(html, /@media\s*\(max-width:\s*760px\)[\s\S]*?\.section-header\s*\{[^}]*flex-direction:\s*column/s);
+  assert.match(html, />\s*迁移历史会话\s*</);
 });
 
 test("each upstream model exposes supported and unsupported vision choices", async () => {
