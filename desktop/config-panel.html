@@ -1669,6 +1669,7 @@
                     <div style="display:flex; gap:8px;">
                         <button class="btn" onclick="addVisionFallbackEndpoint('code')">添加视觉兜底</button>
                         <button class="btn" onclick="addWebSearchEndpoint('code')">添加联网搜索</button>
+                        <button class="btn" onclick="addEmbeddingEndpoint('code')">添加向量节点</button>
                         <button class="btn" onclick="addEndpoint('code')">
                             <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="12" y1="5" x2="12" y2="19"></line><line x1="5" y1="12" x2="19" y2="12"></line></svg>添加节点</button>
                     </div>
@@ -1719,6 +1720,7 @@
                     <div style="display:flex; gap:8px;">
                         <button class="btn" onclick="addVisionFallbackEndpoint('desktop')">添加视觉兜底</button>
                         <button class="btn" onclick="addWebSearchEndpoint('desktop')">添加联网搜索</button>
+                        <button class="btn" onclick="addEmbeddingEndpoint('desktop')">添加向量节点</button>
                         <button class="btn" onclick="addEndpoint('desktop')">
                             <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="12" y1="5" x2="12" y2="19"></line><line x1="5" y1="12" x2="19" y2="12"></line></svg>添加节点</button>
                     </div>
@@ -1745,6 +1747,7 @@
                         </button>
                         <button class="btn" onclick="addVisionFallbackEndpoint('codex')">添加视觉兜底</button>
                         <button class="btn" onclick="addWebSearchEndpoint('codex')">添加联网搜索</button>
+                        <button class="btn" onclick="addEmbeddingEndpoint('codex')">添加向量节点</button>
                         <button class="btn" onclick="addEndpoint('codex')">
                             <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="12" y1="5" x2="12" y2="19"></line><line x1="5" y1="12" x2="19" y2="12"></line></svg>添加节点</button>
                     </div>
@@ -2828,7 +2831,8 @@ experimental_bearer_token = "dummy"</pre>
         function createEndpointSummaryHTML(client, index, ep) {
             const isVisionFallback = ep.purpose === 'vision_fallback';
             const isWebSearch = ep.purpose === 'web_search';
-            const isCapabilityNode = isVisionFallback || isWebSearch;
+            const isEmbedding = ep.purpose === 'embedding';
+            const isCapabilityNode = isVisionFallback || isWebSearch || isEmbedding;
             const isDisabled = ep.enabled === false;
             const name = escapeHtml(ep.name || `节点 ${index + 1}`);
             const type = escapeHtml(typeLabel(ep.type));
@@ -2865,7 +2869,12 @@ experimental_bearer_token = "dummy"</pre>
                                 <svg width="14" height="14" viewBox="0 0 24 24" fill="${ep.is_default ? 'currentColor' : 'none'}" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
                                     <polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"></polygon>
                                 </svg>
-                            </button>` : '') : `<button type="button" class="${defaultClass}" title="${defaultTitle}"
+                            </button>` : (isEmbedding ? `<button type="button" class="${defaultClass}" title="${ep.is_default ? '当前默认向量模型节点' : '设为默认向量模型节点'}"
+                                onclick="event.stopPropagation(); setAsDefaultEmbedding('${client}', ${index})">
+                                <svg width="14" height="14" viewBox="0 0 24 24" fill="${ep.is_default ? 'currentColor' : 'none'}" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                                    <polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"></polygon>
+                                </svg>
+                            </button>` : '')) : `<button type="button" class="${defaultClass}" title="${defaultTitle}"
                                 onclick="event.stopPropagation(); setAsDefault('${client}', ${index})">
                                 <svg width="14" height="14" viewBox="0 0 24 24" fill="${ep.is_default ? 'currentColor' : 'none'}" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
                                     <polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"></polygon>
@@ -2885,6 +2894,7 @@ experimental_bearer_token = "dummy"</pre>
                             <span class="badge">${type}</span>
                             ${isVisionFallback ? '<span class="badge badge-default">视觉兜底</span>' : ''}
                             ${isWebSearch ? '<span class="badge badge-default">联网搜索</span>' : ''}
+                            ${isEmbedding ? '<span class="badge badge-default">向量模型</span>' : ''}
                             ${ep.is_default ? '<span class="badge badge-default">默认</span>' : ''}
                             ${isDisabled ? '<span class="badge" style="background: var(--input-bg); color: var(--text-secondary);">已禁用</span>' : ''}
                         </div>
@@ -2894,13 +2904,15 @@ experimental_bearer_token = "dummy"</pre>
                         <div class="node-card-models">
                             ${isWebSearch
                                 ? `<span class="badge">${escapeHtml(ep.options?.search_depth || 'basic')}</span><span class="badge">top ${escapeHtml(String(ep.options?.max_results ?? 5))}</span>`
-                                : (previewModels || '<span class="badge">暂无上游模型</span>')}
-                            ${isWebSearch ? '' : moreModels}
+                                : (isEmbedding
+                                    ? `<span class="badge">${escapeHtml(ep.embedding_model || '向量模型')}</span>${ep.dimensions ? `<span class="badge">${ep.dimensions}维</span>` : ''}`
+                                    : (previewModels || '<span class="badge">暂无上游模型</span>'))}
+                            ${(isWebSearch || isEmbedding) ? '' : moreModels}
                         </div>
                     </div>
                     <div class="node-card-footer">
                         <span>${isCapabilityNode
-                            ? `${escapeHtml(isWebSearch ? (ep.provider || 'tavily') : (ep.vision_model || '视觉兜底'))}${isDisabled ? ' · 已禁用' : ' · 已启用'}`
+                            ? `${escapeHtml(isWebSearch ? (ep.provider || 'tavily') : (isEmbedding ? (ep.embedding_model || '向量模型') : (ep.vision_model || '视觉兜底')))}${isDisabled ? ' · 已禁用' : ' · 已启用'}`
                             : `${models.length} 模型 · ${mappingCount} 映射`}</span>
                         <span class="node-card-cta">打开配置 →</span>
                     </div>
@@ -2911,7 +2923,8 @@ experimental_bearer_token = "dummy"</pre>
         function createEndpointDetailHTML(client, index, ep) {
             const isVisionFallback = ep.purpose === 'vision_fallback';
             const isWebSearch = ep.purpose === 'web_search';
-            const isCapabilityNode = isVisionFallback || isWebSearch;
+            const isEmbedding = ep.purpose === 'embedding';
+            const isCapabilityNode = isVisionFallback || isWebSearch || isEmbedding;
             const availableTypes = (client === 'code' || client === 'desktop')
                 ? ENDPOINT_TYPES.filter(t => ['anthropic', 'openai-chat', 'grok'].includes(t.value))
                 : ENDPOINT_TYPES.filter(t => ['anthropic', 'openai-responses', 'openai-chat', 'grok'].includes(t.value));
@@ -3096,6 +3109,29 @@ experimental_bearer_token = "dummy"</pre>
                                 </div>
                             </div>
                             ` : ''}
+                            ${isEmbedding ? `
+                            <div class="form-group">
+                                <label>默认向量模型</label>
+                                <select onchange="updateEndpoint('${client}', ${index}, 'embedding_model', this.value)">
+                                    <option value="">请选择模型</option>
+                                    ${(ep.models || []).map(model => `<option value="${escapeHtml(model)}" ${ep.embedding_model === model ? 'selected' : ''}>${escapeHtml(model)}</option>`).join('')}
+                                </select>
+                            </div>
+                            <div class="form-group">
+                                <label>批处理大小 (batch_size)</label>
+                                <input type="number" min="1" max="512" value="${escapeHtml(String(ep.batch_size ?? 32))}" onchange="updateEndpoint('${client}', ${index}, 'batch_size', Number(this.value) || 32)">
+                            </div>
+                            <div class="form-group">
+                                <label>向量维度 (dimensions，可选)</label>
+                                <input type="number" min="1" placeholder="例如: 1536" value="${ep.dimensions != null ? escapeHtml(String(ep.dimensions)) : ''}" onchange="updateEndpoint('${client}', ${index}, 'dimensions', this.value ? Number(this.value) : null)">
+                            </div>
+                            <div class="form-group full">
+                                <label>说明</label>
+                                <div class="usage-guide" style="margin:0;">
+                                    <p style="margin:0;">向量模型节点专为 <code>/v1/embeddings</code> 接口及 Gateway 内部组件（如会话同步、Skill 关联）提供文本向量化服务，不作为普通聊天模型展示在下拉列表中。</p>
+                                </div>
+                            </div>
+                            ` : ''}
                             ${isWebSearch ? '' : `<div class="form-group full">
                                 <label>上游模型列表 (输入模型名称后按回车添加)</label>
                                 ${(ep.models && ep.models.length > 0) ? `
@@ -3201,7 +3237,7 @@ experimental_bearer_token = "dummy"</pre>
 
         function getClaudeCodeDefaultEndpoint() {
             const endpoints = (config.clients?.code?.endpoints || [])
-                .filter(endpoint => endpoint.purpose !== 'vision_fallback' && endpoint.purpose !== 'web_search');
+                .filter(endpoint => !['vision_fallback', 'web_search', 'embedding'].includes(endpoint.purpose));
             return endpoints.find(endpoint => endpoint.is_default === true)
                 || (endpoints.length === 1 ? endpoints[0] : null);
         }
@@ -3369,6 +3405,50 @@ experimental_bearer_token = "dummy"</pre>
             render();
         }
 
+        window.addEmbeddingEndpoint = function(client) {
+            config.clients[client].endpoints = config.clients[client].endpoints || [];
+            const hasDefaultEmbedding = config.clients[client].endpoints.some(
+                endpoint => endpoint.purpose === 'embedding' && endpoint.is_default === true
+            );
+            config.clients[client].endpoints.unshift({
+                id: `ep_${crypto.randomUUID()}`,
+                name: "向量模型节点",
+                purpose: 'embedding',
+                type: (client === 'code' || client === 'desktop') ? 'openai-chat' : 'openai-responses',
+                base_url: "https://api.openai.com/v1",
+                api_key: "",
+                enabled: true,
+                is_default: !hasDefaultEmbedding,
+                models: ["text-embedding-3-small", "BAAI/bge-m3"],
+                model_mapping: {},
+                embedding_model: "text-embedding-3-small",
+                batch_size: 32,
+                dimensions: 1536
+            });
+            selectedEndpoint = { client, index: 0 };
+            render();
+        }
+
+        window.setAsDefaultEmbedding = async function(client, index) {
+            const endpoint = config.clients[client].endpoints[index];
+            if (endpoint?.purpose !== 'embedding') return;
+            const previous = config.clients[client].endpoints.map(ep => ({
+                purpose: ep.purpose,
+                is_default: ep.is_default === true,
+            }));
+            config.clients[client].endpoints.forEach((ep, i) => {
+                if (ep.purpose === 'embedding') ep.is_default = (i === index);
+            });
+            render();
+            const saved = await saveConfig({ client, scope: 'default-embedding' });
+            if (!saved) {
+                config.clients[client].endpoints.forEach((ep, i) => {
+                    if (previous[i]?.purpose === 'embedding') ep.is_default = previous[i].is_default;
+                });
+                render();
+            }
+        }
+
         window.addWebSearchEndpoint = function(client) {
             config.clients[client].endpoints = config.clients[client].endpoints || [];
             const hasDefaultSearch = config.clients[client].endpoints.some(
@@ -3445,7 +3525,7 @@ experimental_bearer_token = "dummy"</pre>
 
         window.setAsDefault = async function(client, index) {
             const purpose = config.clients[client].endpoints[index]?.purpose;
-            if (purpose === 'vision_fallback' || purpose === 'web_search') return;
+            if (['vision_fallback', 'web_search', 'embedding'].includes(purpose)) return;
             const previousDefaults = config.clients[client].endpoints.map(ep => ep.is_default === true);
             const previousSlots = client === 'code'
                 ? structuredClone(config.clients.code.model_slots || {})
@@ -3629,6 +3709,12 @@ experimental_bearer_token = "dummy"</pre>
            const endpoint = config.clients?.[client]?.endpoints?.[index];
            const btn = document.getElementById(`save-node-${client}-${index}`);
            if (!endpoint || !btn) return;
+            if (endpoint.purpose === 'embedding') {
+                if (!endpoint.embedding_model && (!endpoint.models || endpoint.models.length === 0)) {
+                    showToast('请先为向量模型节点添加或选择一个模型', 'error');
+                    return;
+                }
+            }
             if (endpoint.purpose === 'web_search') {
                 if (!endpoint.provider) {
                     showToast('请先选择搜索提供商', 'error');

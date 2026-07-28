@@ -12,6 +12,8 @@ import {
   loadGatewayState,
   saveGatewayState,
   selectExposedEndpoints,
+  selectEmbeddingEndpoints,
+  selectDefaultEmbeddingEndpoint,
   validateGatewayConfig,
 } from "../../lib/config/gateway-config-store.mjs";
 
@@ -390,4 +392,52 @@ test("Claude Code generated routes use mappings before same-named upstream model
     result.routes.get("anthropic.gateway.ep_code.public-model").upstream_model,
     "upstream-model",
   );
+});
+
+test("embedding endpoints are excluded from exposed model selection", () => {
+  const endpoints = [
+    { id: "normal", models: ["glm-5.2"] },
+    {
+      id: "embed",
+      purpose: "embedding",
+      expose_models: true,
+      models: ["text-embedding-3-small"],
+    },
+  ];
+  assert.deepEqual(selectExposedEndpoints(endpoints).map((item) => item.id), ["normal"]);
+});
+
+test("selectDefaultEmbeddingEndpoint selects default or first enabled embedding node", () => {
+  const endpoints = [
+    { id: "ep1", purpose: "embedding", enabled: true, is_default: false },
+    { id: "ep2", purpose: "embedding", enabled: true, is_default: true },
+  ];
+  assert.equal(selectDefaultEmbeddingEndpoint(endpoints)?.id, "ep2");
+});
+
+test("validateGatewayConfig checks embedding endpoints for default uniqueness and model selection", () => {
+  const duplicateDefaults = {
+    clients: {
+      codex: {
+        endpoints: [
+          { id: "ep1", purpose: "embedding", is_default: true, models: ["bge-m3"] },
+          { id: "ep2", purpose: "embedding", is_default: true, models: ["bge-m3"] },
+        ],
+      },
+    },
+  };
+  const issues1 = validateGatewayConfig(duplicateDefaults);
+  assert.ok(issues1.some((issue) => issue.code === "multiple_default_embedding_endpoints"));
+
+  const invalidModel = {
+    clients: {
+      codex: {
+        endpoints: [
+          { id: "ep1", purpose: "embedding", embedding_model: "invalid-model", models: ["bge-m3"] },
+        ],
+      },
+    },
+  };
+  const issues2 = validateGatewayConfig(invalidModel);
+  assert.ok(issues2.some((issue) => issue.code === "invalid_embedding_model"));
 });
