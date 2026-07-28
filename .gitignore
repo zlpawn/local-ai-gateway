@@ -55,3 +55,5 @@ gateway.secrets.8788.json
 gateway.8788.pid
 antigravity.secrets.json
 antigravity.secrets.*.json
+antigravity-signatures.json
+antigravity-signatures.*.json

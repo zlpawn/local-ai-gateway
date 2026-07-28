@@ -8,11 +8,13 @@ import {
   getSignature,
   computeSessionFingerprint,
   saveSignaturesToDisk,
+  getStoragePath,
   _clearSignatureCache,
   _reloadSignaturesFromDisk,
   _signatureCacheSize,
   _sessionCount,
 } from "../../lib/antigravity/signature-cache.mjs";
+
 
 const SIG = "a".repeat(120);
 const FP = "sess-aaa";
@@ -146,4 +148,11 @@ test("fingerprint falls back to _default when no message text", () => {
   assert.equal(computeSessionFingerprint([]), "_default");
   assert.equal(computeSessionFingerprint([{ type: "function_call", name: "x", call_id: "c" }]), "_default");
 });
+
+test("getStoragePath honors env overrides and resolves config/data/source dirs", () => {
+  assert.equal(getStoragePath({ ANTIGRAVITY_SIGNATURES_FILE: "/tmp/custom.json" }), "/tmp/custom.json");
+  assert.equal(getStoragePath({ GATEWAY_CONFIG_FILE: "/var/conf/gateway.config.json" }), "/var/conf/antigravity-signatures.json");
+  assert.equal(getStoragePath({ GATEWAY_DATA_DIR: "/var/data" }), "/var/data/antigravity-signatures.json");
+});
+
 
