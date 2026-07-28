@@ -256,3 +256,10 @@ test("Codex capability updates preserve unrelated fields and do not copy secrets
   assert.equal(config.clients.codex.endpoints[0].api_key, sentinel);
   assert.equal(JSON.stringify(config).split(sentinel).length - 1, 1);
 });
+
+test("tools tab nav item and section exist alongside skills", async () => {
+  const html = await readFile(path.join(ROOT, "desktop", "config-panel.html"), "utf8");
+  assert.match(html, /href="#tools"[\s\S]*onclick="switchTab\('tools'\)"/);
+  assert.match(html, /<section id="section-tools" class="tab-section"/);
+  assert.match(html, /小工具/);
+});
