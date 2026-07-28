@@ -4,7 +4,10 @@ import {
   loadOfficialCodexIds,
   validateCodexEndpoints,
 } from "../lib/codex/config-validation.mjs";
-import { validateGatewayConfig } from "../lib/config/gateway-config-store.mjs";
+import {
+  isCapabilityEndpoint,
+  validateGatewayConfig,
+} from "../lib/config/gateway-config-store.mjs";
 
 const VALID_PROVIDER_TYPES = new Set(["anthropic", "openai-chat", "openai-responses", "grok", "antigravity"]);
 const VALID_AUTH_SCHEMES = new Set(["bearer", "x-api-key", "none", ""]);
@@ -46,7 +49,9 @@ if (config.server) {
 
 const codexEndpoints = config.clients?.codex?.endpoints;
 const codexValidation = validateCodexEndpoints({
-  endpoints: Array.isArray(codexEndpoints) ? codexEndpoints : [],
+  endpoints: Array.isArray(codexEndpoints)
+    ? codexEndpoints.filter((endpoint) => !isCapabilityEndpoint(endpoint))
+    : [],
   officialIds: loadOfficialCodexIds({ warnings }),
 });
 errors.push(...codexValidation.errors);
@@ -89,6 +94,12 @@ function validateEndpoint(label, endpoint) {
     errors.push(`${label} must be an object.`);
     return;
   }
+  if ("api_key" in endpoint || "api_key_env" in endpoint) {
+    errors.push(`${label} contains an API key field; store credentials in gateway.secrets.json.`);
+  }
+  if (!endpoint.id || typeof endpoint.id !== "string") errors.push(`${label} must set string id.`);
+  if (endpoint.purpose === "web_search") return;
+
   const type = endpoint.type || "openai-chat";
   if (!VALID_PROVIDER_TYPES.has(type)) {
     errors.push(`${label} has unsupported type '${endpoint.type}'.`);
@@ -98,10 +109,6 @@ function validateEndpoint(label, endpoint) {
   if (endpoint.auth && !VALID_AUTH_SCHEMES.has(String(endpoint.auth).toLowerCase())) {
     errors.push(`${label} has unsupported auth '${endpoint.auth}'.`);
   }
-  if ("api_key" in endpoint || "api_key_env" in endpoint) {
-    errors.push(`${label} contains an API key field; store credentials in gateway.secrets.json.`);
-  }
-  if (!endpoint.id || typeof endpoint.id !== "string") errors.push(`${label} must set string id.`);
   if (endpoint.models != null && !Array.isArray(endpoint.models)) {
     errors.push(`${label} models must be an array.`);
   }

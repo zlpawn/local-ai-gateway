@@ -256,3 +256,52 @@ test("validate-config continues after official ID lookup failure without leaking
     rmSync(tempDir, { recursive: true, force: true });
   }
 });
+
+test("validate-config accepts Codex capability nodes without chat-provider fields", () => {
+  const tempDir = mkdtempSync(path.join(os.tmpdir(), "codex-capability-validation-"));
+  const configPath = path.join(tempDir, "gateway.config.json");
+  writeFileSync(configPath, JSON.stringify({
+    clients: {
+      codex: {
+        endpoints: [
+          {
+            id: "ep_search",
+            purpose: "web_search",
+            provider: "tavily",
+            enabled: true,
+            is_default: true,
+          },
+          {
+            id: "ep_embedding",
+            purpose: "embedding",
+            type: "openai-chat",
+            base_url: "https://example.invalid/v1",
+            models: ["text-embedding"],
+            embedding_model: "text-embedding",
+            enabled: true,
+            is_default: true,
+          },
+        ],
+      },
+    },
+  }));
+
+  try {
+    const result = spawnSync(
+      process.execPath,
+      ["scripts/validate-config.mjs", configPath],
+      {
+        cwd: path.resolve("."),
+        encoding: "utf8",
+        env: { ...process.env, PATH: tempDir },
+        timeout: 5_000,
+      },
+    );
+    const output = `${result.stdout}\n${result.stderr}`;
+
+    assert.equal(result.status, 0, output);
+    assert.equal(output.includes("Config OK"), true);
+  } finally {
+    rmSync(tempDir, { recursive: true, force: true });
+  }
+});
