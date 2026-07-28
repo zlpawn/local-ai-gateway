@@ -456,4 +456,20 @@ test("validateGatewayConfig checks embedding endpoints for default uniqueness an
   };
   const issues3 = validateGatewayConfig(invalidType);
   assert.ok(issues3.some((issue) => issue.code === "unsupported_embedding_endpoint_type"));
+
+  const missingBaseUrl = {
+    clients: {
+      codex: {
+        endpoints: [{
+          id: "ep1",
+          purpose: "embedding",
+          type: "openai-chat",
+          embedding_model: "bge-m3",
+          models: ["bge-m3"],
+        }],
+      },
+    },
+  };
+  const issues4 = validateGatewayConfig(missingBaseUrl);
+  assert.ok(issues4.some((issue) => issue.code === "missing_embedding_base_url"));
 });

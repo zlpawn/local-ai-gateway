@@ -3725,7 +3725,7 @@ experimental_bearer_token = "dummy"</pre>
                 name: "向量模型节点",
                 purpose: 'embedding',
                 type: 'openai-chat',
-                base_url: "https://api.openai.com/v1",
+                base_url: "",
                 api_key: "",
                 enabled: true,
                 is_default: !hasDefaultEmbedding,
@@ -4018,6 +4018,10 @@ experimental_bearer_token = "dummy"</pre>
            const btn = document.getElementById(`save-node-${client}-${index}`);
            if (!endpoint || !btn) return;
             if (endpoint.purpose === 'embedding') {
+                if (!String(endpoint.base_url || '').trim()) {
+                    showToast('请先填写向量模型节点的 Base URL', 'error');
+                    return;
+                }
                 if (!endpoint.embedding_model && (!endpoint.models || endpoint.models.length === 0)) {
                     showToast('请先为向量模型节点添加或选择一个模型', 'error');
                     return;

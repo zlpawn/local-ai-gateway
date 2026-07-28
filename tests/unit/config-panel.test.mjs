@@ -114,7 +114,9 @@ test("new embedding node starts without preset models or task-level options", as
   assert.doesNotMatch(addEmbeddingSource, /dimensions/);
   assert.match(addEmbeddingSource, /models:\s*\[\]/);
   assert.match(addEmbeddingSource, /embedding_model:\s*""/);
+  assert.match(addEmbeddingSource, /base_url:\s*""/);
   assert.doesNotMatch(addEmbeddingSource, /text-embedding-3-small|BAAI\/bge-m3/);
+  assert.match(html, /请先填写向量模型节点的 Base URL/);
 });
 
 test("section header actions stay compact and wrap cleanly on narrow screens", async () => {

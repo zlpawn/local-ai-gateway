@@ -484,7 +484,16 @@ async function forwardOpenAIEmbeddings(body, req, res, context) {
   }
 
   const apiKey = getEndpointApiKey(embeddingEndpoint, GATEWAY_SECRETS);
-  let upstreamUrl = embeddingEndpoint.base_url || "https://api.openai.com/v1";
+  let upstreamUrl = String(embeddingEndpoint.base_url || "").trim();
+  if (!upstreamUrl) {
+    sendJson(res, 500, {
+      error: {
+        type: "gateway_config_error",
+        message: "Embedding endpoint '" + embeddingEndpoint.id + "' is missing base_url.",
+      },
+    });
+    return;
+  }
   if (!upstreamUrl.endsWith("/embeddings")) {
     upstreamUrl = upstreamUrl.replace(/\/+$/, "") + "/embeddings";
   }
