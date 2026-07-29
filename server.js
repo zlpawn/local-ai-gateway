@@ -1324,8 +1324,11 @@ function collectGroupedModelsFromConfig(config) {
     try {
       const query = String(url.searchParams.get("q") || "").trim();
       const probe = url.searchParams.get("probe") === "1" || url.searchParams.get("probe") === "true";
+      const viewRaw = String(url.searchParams.get("view") || "recommended").toLowerCase();
+      const view = viewRaw === "all" ? "all" : "recommended";
       const ignored = CliSourceConfig.listIgnored();
-      const result = await discoverInstalledClis({ query, probe, ignored });
+      const favorites = CliSourceConfig.listFavorites();
+      const result = await discoverInstalledClis({ query, probe, ignored, favorites, view });
       sendJson(res, 200, { success: true, ...result });
     } catch (err) {
       sendJson(res, 500, { error: err.message || String(err) });
@@ -1453,6 +1456,45 @@ function collectGroupedModelsFromConfig(config) {
     return;
   }
   // --- xterm static assets (served locally, no CDN) ---
+
+  // --- CLI favorites: user pins uncommon CLIs into recommended ---
+  if (reqPath === "/v1/cli/favorite" && req.method === "GET") {
+    if (!checkLocalAuth(req, res)) return;
+    try {
+      sendJson(res, 200, { success: true, favorites: CliSourceConfig.listFavorites() });
+    } catch (err) {
+      sendJson(res, 500, { error: err.message || String(err) });
+    }
+    return;
+  }
+
+  if (reqPath === "/v1/cli/favorite" && req.method === "POST") {
+    if (!checkLocalAuth(req, res)) return;
+    try {
+      const payload = JSON.parse(await readText(req) || "{}");
+      const name = String(payload.name || "").trim();
+      if (!name) { sendJson(res, 400, { error: "name is required" }); return; }
+      const favorites = CliSourceConfig.addFavorite(name);
+      sendJson(res, 200, { success: true, favorites });
+    } catch (err) {
+      sendJson(res, 400, { error: err.message || String(err) });
+    }
+    return;
+  }
+
+  if (reqPath === "/v1/cli/favorite" && req.method === "DELETE") {
+    if (!checkLocalAuth(req, res)) return;
+    try {
+      const name = String(url.searchParams.get("name") || "").trim();
+      if (!name) { sendJson(res, 400, { error: "name is required" }); return; }
+      const favorites = CliSourceConfig.removeFavorite(name);
+      sendJson(res, 200, { success: true, favorites });
+    } catch (err) {
+      sendJson(res, 500, { error: err.message || String(err) });
+    }
+    return;
+  }
+
   if (reqPath.startsWith("/xterm/") && req.method === "GET") {
     const seg = reqPath.slice("/xterm/".length);
     const candidates = {
