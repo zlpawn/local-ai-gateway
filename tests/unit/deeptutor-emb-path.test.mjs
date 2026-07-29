@@ -241,6 +241,18 @@ test("DeepTutor emb base URL serves embeddings and rejects chat; chat ignores em
   assert.deepEqual(embJson.data[0].embedding, [0.1, 0.2, 0.3]);
   assert.match(String(hitPath || ""), /\/embeddings$/);
 
+  // DeepTutor posts probes to the configured base_url verbatim.
+  hitPath = null;
+  const embRootRes = await fetch(`http://127.0.0.1:${gatewayPort}/deeptutor/emb`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ input: "hello", model: "text-embedding-3-large" }),
+  });
+  const embRootJson = await embRootRes.json();
+  assert.equal(embRootRes.status, 200, JSON.stringify(embRootJson));
+  assert.deepEqual(embRootJson.data[0].embedding, [0.1, 0.2, 0.3]);
+  assert.match(String(hitPath || ""), /\/embeddings$/);
+
   const chatOnEmb = await fetch(`http://127.0.0.1:${gatewayPort}/deeptutor/emb/chat/completions`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },

@@ -279,7 +279,7 @@ test("DeepTutor section exposes a copy-from-codex action and a connection guide"
   assert.match(html, /\/v1\/config\/copy-client/);
   assert.match(html, /从 Codex 复制节点/);
   assert.match(html, /大语言模型 base_url：[\s\S]*?\/deeptutor\//);
-  assert.match(html, /向量模型 base_url：[\s\S]*?\/deeptutor\/emb\//);
+  assert.match(html, /向量模型 base_url：[\s\S]*?\/deeptutor\/emb\/embeddings/);
 });
 
 test("DeepTutor is included in the render loop and default config", async () => {

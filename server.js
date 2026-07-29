@@ -730,27 +730,39 @@ async function route(req, res) {
   const context = getRequestContext(req);
   req.gatewayContext = context;
   const url = context.url;
-  const reqPath = context.path;
 
   // DeepTutor embedding surface (/deeptutor/emb/*) only serves models + embeddings.
+  // DeepTutor posts embedding probes to the configured base_url verbatim (no
+  // /embeddings suffix), so treat POST /deeptutor/emb[/] as /v1/embeddings.
+  if (
+    context.client === "deeptutor"
+    && context.capability === "embedding"
+    && req.method === "POST"
+    && (context.path === "/" || context.path === "")
+  ) {
+    context.path = "/v1/embeddings";
+  }
+  const embReqPath = context.path;
   if (
     context.client === "deeptutor"
     && context.capability === "embedding"
     && req.method !== "OPTIONS"
     && !(
-      (reqPath === "/v1/models" && req.method === "GET")
-      || (reqPath === "/v1/embeddings" && req.method === "POST")
-      || (reqPath === "/health" && req.method === "GET")
+      (embReqPath === "/v1/models" && req.method === "GET")
+      || (embReqPath === "/v1/embeddings" && req.method === "POST")
+      || (embReqPath === "/health" && req.method === "GET")
     )
   ) {
     sendJson(res, 404, {
       error: {
         type: "not_found",
-        message: `${req.method} ${url.pathname} is not available on the DeepTutor embedding base URL. Use /deeptutor/ for chat models and /deeptutor/emb/ for embeddings.`,
+        message: `${req.method} ${url.pathname} is not available on the DeepTutor embedding base URL. Use /deeptutor/ for chat models and /deeptutor/emb or /deeptutor/emb/embeddings for embeddings.`,
       },
     });
     return;
   }
+
+  const reqPath = context.path;
 
   if ((reqPath === "/" || reqPath === "/config") && req.method === "GET") {
     const htmlPath = path.join(PROJECT_ROOT, "desktop", "config-panel.html");
