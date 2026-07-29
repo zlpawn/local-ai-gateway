@@ -318,6 +318,162 @@
           "proxy": "http://127.0.0.1:7897"
         }
       ]
+    },
+    "deeptutor": {
+      "endpoints": [
+        {
+          "id": "ep_4dddad42-92a9-4398-a45d-be96144eb0be",
+          "name": "向量模型节点",
+          "purpose": "embedding",
+          "type": "openai-chat",
+          "base_url": "https://openapi-ait.ke.com",
+          "enabled": true,
+          "is_default": true,
+          "models": [
+            "text-embedding-3-large"
+          ],
+          "model_mapping": {},
+          "embedding_model": "text-embedding-3-large",
+          "dimensions": 1024
+        },
+        {
+          "id": "ep_83eb6724-bd3a-4a8c-805e-ffb507dc2f21",
+          "name": "ait",
+          "type": "openai-chat",
+          "base_url": "https://openapi-ait.ke.com",
+          "auth": "bearer",
+          "models": [
+            "claude-opus-5",
+            "claude-opus-4-8"
+          ],
+          "model_mapping": {},
+          "capabilities": {
+            "input_modalities": [
+              "text",
+              "image"
+            ],
+            "reasoning": true,
+            "tools": true
+          }
+        },
+        {
+          "id": "ep_dbea219a-0658-40c5-8842-73cba84c410b",
+          "name": "联网搜索节点",
+          "purpose": "web_search",
+          "provider": "tavily",
+          "enabled": true,
+          "is_default": true,
+          "auth": "bearer",
+          "options": {
+            "search_depth": "basic",
+            "max_results": 5,
+            "topic": "general",
+            "include_answer": false,
+            "include_raw_content": false,
+            "country": "china"
+          },
+          "models": [],
+          "model_mapping": {}
+        },
+        {
+          "id": "ep_fea15525-f2cd-4c83-90eb-9e4928e471f4",
+          "name": "视觉兜底节点",
+          "purpose": "vision_fallback",
+          "vision_fallback_enabled": true,
+          "vision_model": "minimax-m3",
+          "type": "openai-responses",
+          "base_url": "https://ark.cn-beijing.volces.com/api/coding/v3",
+          "auth": "bearer",
+          "models": [
+            "minimax-m3"
+          ],
+          "model_mapping": {}
+        },
+        {
+          "id": "ep_2307f181-5b6f-497c-8ae8-bb81a662ec8c",
+          "name": "how88.top",
+          "type": "anthropic",
+          "base_url": "https://how88.top",
+          "auth": "bearer",
+          "models": [
+            "claude-opus-4-8-max",
+            "claude-opus-4-7-max"
+          ],
+          "model_mapping": {},
+          "capabilities": {
+            "input_modalities": [
+              "text",
+              "image"
+            ],
+            "reasoning": false,
+            "tools": true
+          }
+        },
+        {
+          "id": "ep_05615efd-1340-4828-925f-2bfa56798a87",
+          "name": "grok-subscription",
+          "type": "grok",
+          "base_url": "https://cli-chat-proxy.grok.com/v1",
+          "models": [
+            "grok-4.5"
+          ],
+          "model_mapping": {},
+          "capabilities": {
+            "input_modalities": [
+              "text",
+              "image"
+            ],
+            "reasoning": true,
+            "tools": true
+          }
+        },
+        {
+          "name": "huoshan-codingplan",
+          "type": "openai-responses",
+          "base_url": "https://ark.cn-beijing.volces.com/api/coding/v3",
+          "models": [
+            "glm-5.2",
+            "minimax-m3",
+            "deepseek-v4-pro"
+          ],
+          "model_mapping": {},
+          "capabilities": {
+            "input_modalities": [
+              "text",
+              "image"
+            ],
+            "reasoning": true,
+            "tools": true
+          },
+          "is_default": true,
+          "id": "ep_f812a9c4-1a56-4964-b56f-881b69483ee2",
+          "model_capabilities": {
+            "glm-5.2": {
+              "image": false
+            }
+          }
+        },
+        {
+          "id": "ep_19caa0bf-f2c8-4925-8999-4ed6bd2d2efd",
+          "name": "Antigravity",
+          "type": "antigravity",
+          "models": [
+            "gemini-3.6-flash-high",
+            "gemini-3.6-flash-medium",
+            "gemini-3.6-flash-low"
+          ],
+          "model_mapping": {},
+          "capabilities": {
+            "input_modalities": [
+              "text",
+              "image"
+            ],
+            "reasoning": true,
+            "tools": true
+          },
+          "proxy": "http://127.0.0.1:7897"
+        }
+      ]
     }
   }
 }
