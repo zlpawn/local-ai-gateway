@@ -1877,10 +1877,41 @@
         .embed-dims-row {
             display: flex;
             align-items: center;
-            gap: 8px;
+            flex-wrap: wrap;
+            gap: 10px;
             font-size: 13px;
             color: var(--text-secondary);
         }
+        .embed-dims-value { font-weight: 600; color: var(--text-primary); }
+        .embed-dims-pill {
+            display: inline-flex;
+            align-items: center;
+            gap: 4px;
+            background: var(--input-bg);
+            border: 1px solid var(--border-color);
+            border-radius: 999px;
+            color: var(--text-secondary);
+            cursor: pointer;
+            font-size: 12px;
+            padding: 3px 10px;
+            transition: color var(--transition-fast), border-color var(--transition-fast), background var(--transition-fast);
+        }
+        .embed-dims-pill:hover { color: var(--text-primary); border-color: var(--text-secondary); }
+        .embed-dims-pill.active {
+            background: var(--brand-primary);
+            color: var(--brand-text);
+            border-color: var(--brand-primary);
+        }
+        .embed-dims-input {
+            width: 90px;
+            background: var(--input-bg);
+            border: 1px solid var(--border-color);
+            border-radius: var(--radius-md);
+            color: var(--text-primary);
+            padding: 4px 8px;
+            font-size: 13px;
+        }
+        .embed-dims-input:focus { outline: none; border-color: var(--text-secondary); }
         .embed-dims-row input[type="number"] {
             width: 80px;
             background: var(--input-bg);
@@ -1917,16 +1948,32 @@
             color: var(--text-secondary);
             line-height: 1.5;
         }
-        .embed-vector-toggle {
+        .embed-vector-head {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            gap: 8px;
+            margin-top: 8px;
+        }
+        .embed-vector-label {
+            font-size: 12px;
+            color: var(--text-secondary);
+            font-weight: 600;
+        }
+        .embed-vector-actions { display: flex; gap: 6px; }
+        .embed-vector-btn {
             background: none;
             border: 1px solid var(--border-color);
             border-radius: var(--radius-md);
             color: var(--text-secondary);
             cursor: pointer;
             font-size: 12px;
-            padding: 4px 10px;
+            padding: 3px 8px;
+            display: inline-flex;
+            align-items: center;
+            gap: 4px;
         }
-        .embed-vector-toggle:hover { color: var(--text-primary); }
+        .embed-vector-btn:hover { color: var(--text-primary); border-color: var(--text-secondary); }
         .embed-vector {
             font-family: var(--font-mono);
             font-size: 12px;
@@ -1935,9 +1982,11 @@
             border: 1px solid var(--border-color);
             border-radius: var(--radius-md);
             padding: 8px;
+            margin-top: 6px;
             word-break: break-all;
-            max-height: 200px;
+            max-height: 240px;
             overflow-y: auto;
+            white-space: pre-wrap;
         }
         .embed-meta {
             font-size: 12px;
@@ -3955,9 +4004,9 @@ experimental_bearer_token = "dummy"</pre>
                         <div class="embed-form-group">
                             <label>维度</label>
                             <div class="embed-dims-row">
-                                <span>节点维度: <strong>${escapeHtml(nodeDims)}</strong></span>
-                                <label style="margin:0;"><input type="checkbox" id="embed-custom-dims" ${embedState.customDims?'checked':''} onchange="onEmbedCustomDimsToggle(this.checked)" /> 自定义</label>
-                                ${embedState.customDims ? '<input type="number" id="embed-dims-input" min="1" placeholder="如 1024" value="' + escapeHtml(String(embedState.dimensions)) + '" onchange="embedState.dimensions=this.value; renderToolsDetail();" />' : ''}
+                                <span>节点维度: <strong class="embed-dims-value">${escapeHtml(nodeDims)}</strong></span>
+                                <button type="button" class="embed-dims-pill ${embedState.customDims?'active':''}" onclick="onEmbedCustomDimsToggle(!embedState.customDims)" title="覆盖节点默认维度">自定义</button>
+                                ${embedState.customDims ? '<input type="number" class="embed-dims-input" id="embed-dims-input" min="1" placeholder="如 1024" value="' + escapeHtml(String(embedState.dimensions)) + '" onchange="embedState.dimensions=this.value; renderToolsDetail();" />' : ''}
                             </div>
                         </div>
                         <div class="embed-mode-switch">
@@ -4100,13 +4149,21 @@ experimental_bearer_token = "dummy"</pre>
 
             const r = embedState.result;
             const vectorHtml = (label, info) => {
-                const preview = info.vector.slice(0, 8).map(v => v.toFixed(6)).join(', ');
-                const more = info.vector.length > 8 ? ', ...共 ' + info.vector.length + ' 维' : '';
+                const fullVec = '[' + info.vector.map(v => v.toFixed(6)).join(', ') + ']';
                 const elapsed = r.mode === 'single' ? r.elapsedMs : (label === 'A' ? r.elapsedMsA : r.elapsedMsB);
                 return `
                     <div style="margin-top:8px;">
-                        <button class="embed-vector-toggle" onclick="toggleEmbedVector('${label}')">${label} 向量 ▾</button>
-                        <div class="embed-vector" id="embed-vec-${label}" style="display:none;">[${preview}${more}]</div>
+                        <div class="embed-vector-head">
+                            <span class="embed-vector-label">${label} 向量 (${info.dimensions} 维)</span>
+                            <div class="embed-vector-actions">
+                                <button class="embed-vector-btn" onclick="toggleEmbedVector('${label}')">收起</button>
+                                <button class="embed-vector-btn" onclick="copyEmbedVector('${label}')">
+                                    <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="9" width="13" height="13" rx="2" ry="2"></rect><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"></path></svg>
+                                    复制
+                                </button>
+                            </div>
+                        </div>
+                        <div class="embed-vector" id="embed-vec-${label}">${escapeHtml(fullVec)}</div>
                         <div class="embed-meta" style="margin-top:4px;">
                             <span>模型: ${escapeHtml(info.model)}</span>
                             <span>维度: ${info.dimensions}</span>
@@ -4135,7 +4192,21 @@ experimental_bearer_token = "dummy"</pre>
 
         window.toggleEmbedVector = function(label) {
             const el = document.getElementById('embed-vec-' + label);
-            if (el) el.style.display = el.style.display === 'none' ? 'block' : 'none';
+            if (!el) return;
+            const hidden = el.style.display === 'none';
+            el.style.display = hidden ? 'block' : 'none';
+            const btn = el.previousElementSibling?.querySelector('button');
+            if (btn) btn.textContent = hidden ? '收起' : '展开';
+        };
+
+        window.copyEmbedVector = function(label) {
+            const el = document.getElementById('embed-vec-' + label);
+            if (!el) return;
+            const text = el.textContent;
+            navigator.clipboard.writeText(text).then(
+                () => showToast('已复制 ' + label + ' 向量(' + text.length + ' 字符)', 'success'),
+                () => showToast('复制失败', 'danger')
+            );
         };
 
         window.addEventListener('load', () => {

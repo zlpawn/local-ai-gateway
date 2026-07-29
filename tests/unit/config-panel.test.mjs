@@ -278,7 +278,8 @@ test("text embedding tool detail renders form, mode switch, and similarity formu
   assert.match(html, /embed-client-select/);
   assert.match(html, /embed-node-select/);
   assert.match(html, /embed-model-select/);
-  assert.match(html, /embed-custom-dims/);
+  assert.match(html, /embed-dims-pill/);
+  assert.match(html, /onEmbedCustomDimsToggle/);
   assert.match(html, /embed-mode-single/);
   assert.match(html, /embed-mode-similarity/);
   assert.match(html, /余弦相似度 = \(A·B\) \/ \(‖A‖ × ‖B‖\)/);
