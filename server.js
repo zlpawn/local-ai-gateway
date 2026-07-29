@@ -51,6 +51,7 @@ import {
   selectDefaultEmbeddingEndpoint,
   selectEmbeddingEndpoints,
   isCapabilityEndpoint,
+  copyClientEndpoints,
 } from "./lib/config/gateway-config-store.mjs";
 import { syncClaudeCodeSettings } from "./lib/config/claude-code-settings.mjs";
 import { SkillInstaller } from "./lib/session-sync/skill-installer.mjs";
@@ -58,6 +59,9 @@ import { SessionWatcherDaemon } from "./lib/session-sync/watcher-daemon.mjs";
 import { WebSocketServer } from "ws";
 import * as nodePty from "node-pty";
 import { InstallHistory } from "./lib/skills/install-history.mjs";
+import { CliInstallHistory } from "./lib/cli/install-history.mjs";
+import { discoverInstalledClis } from "./lib/cli/discovery.mjs";
+import { CliSourceConfig } from "./lib/cli/source-config.mjs";
 import {
   collectImages,
   containsImages,
@@ -399,6 +403,139 @@ server.on("upgrade", (req, socket, head) => {
 });
 // --- end skills install PTY ---
 
+// --- CLI install: interactive PTY over WebSocket ---
+const cliPtySessions = new Map(); // recordId -> { pty, ws, beforePaths }
+
+function startCliPtyForRecord(recordId, opts = {}) {
+  const record = CliInstallHistory.get(recordId);
+  if (!record || record.status !== "running") return false;
+  if (cliPtySessions.has(recordId)) return true;
+
+  const homeDir = os.homedir();
+  const beforePaths = new Set();
+  try {
+    for (const dir of (process.env.PATH || process.env.Path || "").split(process.platform === "win32" ? ";" : ":")) {
+      const trimmed = (dir || "").trim();
+      if (!trimmed) continue;
+      try { for (const f of fs.readdirSync(trimmed)) beforePaths.add(f); } catch {}
+    }
+  } catch {
+    // best-effort snapshot
+  }
+
+  const isWin = process.platform === "win32";
+  const file = isWin ? "cmd.exe" : "/bin/sh";
+  const args = isWin ? ["/c", record.command] : ["-c", record.command];
+
+  const cols = Number.isFinite(Number(opts.cols)) ? Math.max(20, Math.min(400, Number(opts.cols))) : 100;
+  const rows = Number.isFinite(Number(opts.rows)) ? Math.max(5, Math.min(120, Number(opts.rows))) : 24;
+
+  let pty;
+  try {
+    pty = nodePty.spawn(file, args, {
+      name: "xterm-color",
+      cols,
+      rows,
+      cwd: homeDir,
+      env: { ...process.env, FORCE_COLOR: "0" },
+    });
+  } catch (err) {
+    console.error("[cli-pty] spawn failed:", err && err.message ? err.message : err);
+    CliInstallHistory.finish(recordId, { exitCode: -1, cliName: record.cliName });
+    return false;
+  }
+
+  const session = { pty, ws: null, beforePaths };
+  cliPtySessions.set(recordId, session);
+
+  pty.onData((data) => {
+    const sess = cliPtySessions.get(recordId);
+    if (sess?.ws && sess.ws.readyState === 1) {
+      sess.ws.send(data);
+    }
+  });
+
+  pty.onExit(({ exitCode }) => {
+    const sess = cliPtySessions.get(recordId);
+    // Infer the CLI name from a PATH diff if the user did not provide one.
+    let cliName = record.cliName;
+    if (!cliName) {
+      try {
+        const after = new Set();
+        for (const dir of (process.env.PATH || process.env.Path || "").split(process.platform === "win32" ? ";" : ":")) {
+          const trimmed = (dir || "").trim();
+          if (!trimmed) continue;
+          try { for (const f of fs.readdirSync(trimmed)) after.add(f); } catch {}
+        }
+        for (const name of after.keys()) {
+          if (!beforePaths.has(name)) {
+            const base = name.replace(/\.(exe|cmd|bat)$/i, "");
+            if (base) { cliName = base; break; }
+          }
+        }
+      } catch {
+        // ignore
+      }
+    }
+    const finished = CliInstallHistory.finish(recordId, { exitCode, cliName });
+    if (sess?.ws && sess.ws.readyState === 1) {
+      sess.ws.send(JSON.stringify({ type: "exit", exitCode, cliName: finished?.cliName || null }));
+      sess.ws.close();
+    }
+    cliPtySessions.delete(recordId);
+  });
+
+  return true;
+}
+
+server.on("upgrade", (req, socket, head) => {
+  const url = new URL(req.url || "/", "http://localhost");
+  if (url.pathname !== "/v1/cli/pty") {
+    // Not a CLI pty upgrade; the skills pty handler (registered first) and
+    // other upgrade listeners take precedence. Ignore here.
+    return;
+  }
+  const recordId = url.searchParams.get("recordId");
+  if (!recordId) {
+    socket.destroy();
+    return;
+  }
+  const cols = url.searchParams.get("cols");
+  const rows = url.searchParams.get("rows");
+  wsServer.handleUpgrade(req, socket, head, (ws) => {
+    if (!startCliPtyForRecord(recordId, { cols, rows })) {
+      ws.close();
+      return;
+    }
+    const session = cliPtySessions.get(recordId);
+    session.ws = ws;
+    ws.on("message", (msg) => {
+      try {
+        const textMsg = typeof msg === "string" ? msg : msg.toString();
+        let ctrl = null;
+        try { ctrl = JSON.parse(textMsg); } catch { /* not JSON -> raw input */ }
+        if (ctrl && ctrl.type === "resize" && session.pty) {
+          const c = Number(ctrl.cols), r = Number(ctrl.rows);
+          if (Number.isFinite(c) && Number.isFinite(r)) {
+            try { session.pty.resize(Math.max(20, Math.min(400, c)), Math.max(5, Math.min(120, r))); } catch {}
+          }
+          return;
+        }
+        session.pty.write(textMsg);
+      } catch {
+        // pty may be gone
+      }
+    });
+    ws.on("close", () => {
+      const sess = cliPtySessions.get(recordId);
+      if (sess?.pty) {
+        try { sess.pty.kill(); } catch {}
+      }
+    });
+  });
+});
+// --- end CLI install PTY ---
+
 server.listen(LISTEN_PORT, LISTEN_HOST, () => {
   const host = LISTEN_HOST === "0.0.0.0" ? "127.0.0.1" : LISTEN_HOST;
   const url = `http://${host}:${LISTEN_PORT}/`;
@@ -676,6 +813,51 @@ async function route(req, res) {
           write_enabled: CODEX_WRITE_MODEL_CATALOG,
         },
       });
+    } catch (error) {
+      if (error instanceof GatewayConfigError) {
+        sendJson(res, 400, {
+          error: {
+            type: error.code,
+            message: "Gateway configuration is invalid.",
+            issues: error.issues,
+          },
+        });
+      } else {
+        sendJson(res, 500, { error: error.message });
+      }
+    }
+    return;
+  }
+
+  if (reqPath === "/v1/config/copy-client" && req.method === "POST") {
+    if (!checkLocalAuth(req, res)) return;
+    try {
+      const payload = JSON.parse(await readText(req) || "{}");
+      const from = String(payload.from || "codex").trim();
+      const to = String(payload.to || "deeptutor").trim();
+      if (!from || !to) { sendJson(res, 400, { error: "from and to are required" }); return; }
+      if (from === to) { sendJson(res, 400, { error: "from and to must differ" }); return; }
+      if (!GATEWAY_CONFIG.clients?.[from]) {
+        sendJson(res, 400, { error: "client '" + from + "' not found" });
+        return;
+      }
+      const result = copyClientEndpoints({
+        config: structuredClone(GATEWAY_CONFIG),
+        secrets: structuredClone(GATEWAY_SECRETS),
+        from,
+        to,
+      });
+      const saved = saveGatewayState({
+        configPath: GATEWAY_CONFIG_FILE,
+        secretsPath: GATEWAY_SECRETS_FILE,
+        config: result.config,
+        officialCodexIds: OFFICIAL_CODEX_MODEL_IDS,
+      });
+      GATEWAY_CONFIG = saved.config;
+      GATEWAY_SECRETS = saved.secrets;
+      reloadGatewayConfig({ reloadFiles: false });
+      logInfo("gateway_config_client_copied", { from, to, copied: result.copied });
+      sendJson(res, 200, { success: true, from, to, copied: result.copied });
     } catch (error) {
       if (error instanceof GatewayConfigError) {
         sendJson(res, 400, {
@@ -1099,6 +1281,140 @@ function collectGroupedModelsFromConfig(config) {
     return;
   }
 
+  // --- CLI discovery + install history (parallel to skills) ---
+  if (reqPath === "/v1/cli/discover" && req.method === "GET") {
+    if (!checkLocalAuth(req, res)) return;
+    try {
+      const query = String(url.searchParams.get("q") || "").trim();
+      const probe = url.searchParams.get("probe") === "1" || url.searchParams.get("probe") === "true";
+      const ignored = CliSourceConfig.listIgnored();
+      const result = await discoverInstalledClis({ query, probe, ignored });
+      sendJson(res, 200, { success: true, ...result });
+    } catch (err) {
+      sendJson(res, 500, { error: err.message || String(err) });
+    }
+    return;
+  }
+
+  if (reqPath === "/v1/cli/install-history" && req.method === "GET") {
+    if (!checkLocalAuth(req, res)) return;
+    try {
+      sendJson(res, 200, {
+        success: true,
+        records: CliInstallHistory.list(),
+        filePath: CliInstallHistory.filePath(),
+      });
+    } catch (err) {
+      sendJson(res, 500, { error: err.message || String(err) });
+    }
+    return;
+  }
+
+  if (reqPath === "/v1/cli/install-history" && req.method === "DELETE") {
+    if (!checkLocalAuth(req, res)) return;
+    try {
+      const id = String(url.searchParams.get("id") || "").trim();
+      if (!id) { sendJson(res, 400, { error: "id is required" }); return; }
+      const removed = CliInstallHistory.remove(id);
+      sendJson(res, 200, { success: true, removed, records: CliInstallHistory.list() });
+    } catch (err) {
+      sendJson(res, 500, { error: err.message || String(err) });
+    }
+    return;
+  }
+
+  if (reqPath === "/v1/cli/install" && req.method === "POST") {
+    if (!checkLocalAuth(req, res)) return;
+    try {
+      const payload = JSON.parse(await readText(req) || "{}");
+      const command = String(payload.command || "").trim();
+      const cliName = payload.cliName ? String(payload.cliName).trim() : "";
+      if (!command) { sendJson(res, 400, { error: "command is required" }); return; }
+      const record = CliInstallHistory.create({ command, cliName });
+      sendJson(res, 200, { success: true, record });
+    } catch (err) {
+      sendJson(res, 400, { error: err.message || String(err) });
+    }
+    return;
+  }
+
+
+  // --- CLI scan sources (configurable discovery directories) ---
+  if (reqPath === "/v1/cli/sources" && req.method === "GET") {
+    if (!checkLocalAuth(req, res)) return;
+    try {
+      sendJson(res, 200, {
+        success: true,
+        sources: CliSourceConfig.list(),
+        filePath: CliSourceConfig.filePath(),
+      });
+    } catch (err) {
+      sendJson(res, 500, { error: err.message || String(err) });
+    }
+    return;
+  }
+
+  if (reqPath === "/v1/cli/sources" && req.method === "POST") {
+    if (!checkLocalAuth(req, res)) return;
+    try {
+      const payload = JSON.parse(await readText(req) || "{}");
+      const sources = Array.isArray(payload.sources) ? payload.sources : [];
+      const saved = CliSourceConfig.save(sources);
+      sendJson(res, 200, { success: true, sources: saved, filePath: CliSourceConfig.filePath() });
+    } catch (err) {
+      sendJson(res, 400, { error: err.message || String(err) });
+    }
+    return;
+  }
+
+  if (reqPath === "/v1/cli/sources/reset" && req.method === "POST") {
+    if (!checkLocalAuth(req, res)) return;
+    try {
+      const sources = CliSourceConfig.reset();
+      sendJson(res, 200, { success: true, sources, filePath: CliSourceConfig.filePath() });
+    } catch (err) {
+      sendJson(res, 500, { error: err.message || String(err) });
+    }
+    return;
+  }
+
+  // --- CLI ignore list (user opts out of scanning certain CLIs) ---
+  if (reqPath === "/v1/cli/ignore" && req.method === "GET") {
+    if (!checkLocalAuth(req, res)) return;
+    try {
+      sendJson(res, 200, { success: true, ignored: CliSourceConfig.listIgnored() });
+    } catch (err) {
+      sendJson(res, 500, { error: err.message || String(err) });
+    }
+    return;
+  }
+
+  if (reqPath === "/v1/cli/ignore" && req.method === "POST") {
+    if (!checkLocalAuth(req, res)) return;
+    try {
+      const payload = JSON.parse(await readText(req) || "{}");
+      const name = String(payload.name || "").trim();
+      if (!name) { sendJson(res, 400, { error: "name is required" }); return; }
+      const ignored = CliSourceConfig.addIgnored(name);
+      sendJson(res, 200, { success: true, ignored });
+    } catch (err) {
+      sendJson(res, 400, { error: err.message || String(err) });
+    }
+    return;
+  }
+
+  if (reqPath === "/v1/cli/ignore" && req.method === "DELETE") {
+    if (!checkLocalAuth(req, res)) return;
+    try {
+      const name = String(url.searchParams.get("name") || "").trim();
+      if (!name) { sendJson(res, 400, { error: "name is required" }); return; }
+      const ignored = CliSourceConfig.removeIgnored(name);
+      sendJson(res, 200, { success: true, ignored });
+    } catch (err) {
+      sendJson(res, 500, { error: err.message || String(err) });
+    }
+    return;
+  }
   // --- xterm static assets (served locally, no CDN) ---
   if (reqPath.startsWith("/xterm/") && req.method === "GET") {
     const seg = reqPath.slice("/xterm/".length);
@@ -1168,15 +1484,17 @@ function collectGroupedModelsFromConfig(config) {
     const healthModels =
       context.client === "codex"
         ? codexModelDiscovery().data.map((model) => model.id)
-        : modelDiscovery().data.map((model) => model.id);
+        : context.client === "deeptutor"
+          ? deeptutorModelDiscovery().data.map((model) => model.id)
+          : modelDiscovery().data.map((model) => model.id);
     sendJson(res, 200, {
       ok: true,
       service: "local-ai-gateway",
       process_id: process.pid,
       instance_id: process.env.GATEWAY_INSTANCE_ID || null,
       client: context.client,
-      upstream: context.client === "codex" ? ARK_CODEX_BASE_URL : ARK_MESSAGES_URL,
-      protocol: context.client === "codex" ? "openai-compatible" : "anthropic-messages",
+      upstream: isOpenAIClient(context.client) ? ARK_CODEX_BASE_URL : ARK_MESSAGES_URL,
+      protocol: isOpenAIClient(context.client) ? "openai-compatible" : "anthropic-messages",
       models: healthModels,
     });
     return;
@@ -1192,6 +1510,8 @@ function collectGroupedModelsFromConfig(config) {
     });
     if (context.client === "codex") {
       sendJson(res, 200, await codexModelDiscoveryFresh(context.client));
+    } else if (context.client === "deeptutor") {
+      sendJson(res, 200, deeptutorModelDiscovery());
     } else {
       sendJson(res, 200, modelDiscovery(context.client));
     }
@@ -1375,7 +1695,7 @@ async function forwardAnthropicMessagesResolved(body, clientReq, clientRes, cont
             { ...loopBody, stream: false },
             clientReq,
             signal,
-            context.client !== "codex",
+            !isOpenAIClient(context.client),
           );
           upstream = await maybeRetryAfterImageError({
             upstream,
@@ -1392,7 +1712,7 @@ async function forwardAnthropicMessagesResolved(body, clientReq, clientRes, cont
               },
               clientReq,
               signal,
-              context.client !== "codex",
+              !isOpenAIClient(context.client),
             ),
           });
           if (!upstream.ok) {
@@ -1704,7 +2024,7 @@ async function forwardOpenAIChatCompletionsResolved(body, clientReq, clientRes, 
             { ...loopBody, model: resolvedModel, stream: false },
             clientReq,
             signal,
-            context.client !== "codex",
+            !isOpenAIClient(context.client),
           );
           upstream = await maybeRetryAfterImageError({
             upstream,
@@ -1718,7 +2038,7 @@ async function forwardOpenAIChatCompletionsResolved(body, clientReq, clientRes, 
               { ...withoutStreamFlag(retryBody), model: resolvedModel, stream: false },
               clientReq,
               signal,
-              context.client !== "codex",
+              !isOpenAIClient(context.client),
             ),
           });
           if (!upstream.ok) {
@@ -1835,7 +2155,7 @@ async function forwardOpenAIChatCompletionsResolved(body, clientReq, clientRes, 
             { ...loopBody, model: resolvedModel, stream: false },
             clientReq,
             signal,
-            context.client !== "codex",
+            !isOpenAIClient(context.client),
           );
           upstream = await maybeRetryAfterImageError({
             upstream,
@@ -1849,7 +2169,7 @@ async function forwardOpenAIChatCompletionsResolved(body, clientReq, clientRes, 
               withoutStreamFlag(openAIChatCompletionsToResponses(retryBody, resolvedModel)),
               clientReq,
               signal,
-              context.client !== "codex",
+              !isOpenAIClient(context.client),
             ),
           });
           if (!upstream.ok) {
@@ -2443,7 +2763,7 @@ async function forwardResolvedCodexResponse({
             chatRequest.body,
             clientReq,
             signal,
-            context.client !== "codex",
+            !isOpenAIClient(context.client),
           );
           upstream = await maybeRetryAfterImageError({
             upstream,
@@ -2459,7 +2779,7 @@ async function forwardResolvedCodexResponse({
                 retryRequest.body,
                 clientReq,
                 signal,
-                context.client !== "codex",
+                !isOpenAIClient(context.client),
               );
             },
           });
@@ -2505,7 +2825,7 @@ async function forwardResolvedCodexResponse({
       chatRequest.body,
       clientReq,
       signal,
-      context.client !== "codex",
+      !isOpenAIClient(context.client),
     );
     upstream = await maybeRetryAfterImageError({
       upstream,
@@ -2521,7 +2841,7 @@ async function forwardResolvedCodexResponse({
           retryRequest.body,
           clientReq,
           signal,
-          context.client !== "codex",
+          !isOpenAIClient(context.client),
         );
       },
     });
@@ -2700,7 +3020,7 @@ async function forwardResolvedCodexResponse({
           sanitizeResponsesInput({ ...loopBody, model: resolvedModel, stream: false }),
           clientReq,
           signal,
-          context.client !== "codex",
+          !isOpenAIClient(context.client),
         );
         upstream = await maybeRetryAfterImageError({
           upstream,
@@ -2714,7 +3034,7 @@ async function forwardResolvedCodexResponse({
             sanitizeResponsesInput({ ...retryBody, model: resolvedModel, stream: false }),
             clientReq,
             signal,
-            context.client !== "codex",
+            !isOpenAIClient(context.client),
           ),
         });
         if (!upstream.ok) {
@@ -2758,7 +3078,7 @@ async function forwardResolvedCodexResponse({
         upstreamBody,
         clientReq,
         signal,
-        context.client !== "codex",
+        !isOpenAIClient(context.client),
     )
     : await fetchArkOpenAI("/responses", upstreamBody, clientReq, signal);
   if (route?.provider) {
@@ -2774,7 +3094,7 @@ async function forwardResolvedCodexResponse({
         sanitizeResponsesInput({ ...retryBody, model: resolvedModel }),
         clientReq,
         signal,
-        context.client !== "codex",
+        !isOpenAIClient(context.client),
       ),
     });
   }
@@ -6650,6 +6970,17 @@ function isTruthy(value) {
   return ["1", "true", "yes", "on"].includes(String(value || "").trim().toLowerCase());
 }
 
+const OPENAI_V1_PATHS = new Set([
+  "/models",
+  "/messages",
+  "/chat/completions",
+  "/responses",
+  "/embeddings",
+  "/images/generations",
+  "/images/edits",
+  "/messages/count_tokens",
+]);
+
 function getRequestContext(req) {
   const url = new URL(req.url || "/", `http://${req.headers.host || "localhost"}`);
   const originalPath = url.pathname;
@@ -6658,11 +6989,19 @@ function getRequestContext(req) {
   const queryClient = normalizeClientName(url.searchParams.get("client"));
   const inferredClient = inferClientFromUserAgent(req.headers["user-agent"] || "");
   const client = normalized.client || headerClient || queryClient || inferredClient || "unknown";
+  // Auto-append /v1 for client-prefixed OpenAI paths so callers can use a
+  // cleaner base_url like http://host/deeptutor/ (the SDK then appends e.g.
+  // /chat/completions). Paths that already include /v1, or root routes such
+  // as /health and /config, are left untouched.
+  let path = normalized.path;
+  if (normalized.client && OPENAI_V1_PATHS.has(path)) {
+    path = "/v1" + path;
+  }
 
   return {
     url,
     originalPath,
-    path: normalized.path,
+    path,
     client,
     requestId: req.headers["x-request-id"] || randomUUID(),
   };
@@ -6685,7 +7024,48 @@ function normalizeClientName(value) {
   if (["code", "claude-code", "claude_code"].includes(text)) return "code";
   if (["desktop", "claude-desktop", "claude_desktop", "claude"].includes(text)) return "desktop";
   if (["codex", "codex-desktop", "codex_desktop"].includes(text)) return "codex";
+  if (["deeptutor", "deep-tutor", "deep_tutor", "deeptutor-desktop", "deeptutor_desktop"].includes(text)) return "deeptutor";
   return "";
+}
+
+function isOpenAIClient(client) {
+  return client === "codex" || client === "deeptutor";
+}
+
+// DeepTutor exposes only its own configured models (no official Codex catalog).
+function deeptutorModelDiscovery() {
+  const now = Math.floor(Date.now() / 1000);
+  const endpoints = GATEWAY_CONFIG.clients?.deeptutor?.endpoints || [];
+  const merged = new Map();
+  for (const endpoint of endpoints) {
+    if (isCapabilityEndpoint(endpoint)) continue;
+    const publicModels = new Set([
+      ...(endpoint.models || []),
+      ...Object.keys(endpoint.model_mapping || {}),
+    ]);
+    for (const modelId of publicModels) {
+      if (!modelId || merged.has(modelId)) continue;
+      merged.set(modelId, {
+        id: modelId,
+        object: "model",
+        created: now,
+        owned_by: endpoint.id || "deeptutor",
+      });
+    }
+  }
+  const data = [...merged.values()];
+  return {
+    object: "list",
+    data,
+    models: data.map((model) => ({
+      slug: model.id,
+      display_name: model.id,
+      visibility: "list",
+      supported_in_api: true,
+      input_modalities: ["text"],
+      owned_by: model.owned_by,
+    })),
+  };
 }
 
 function inferClientFromUserAgent(userAgent) {

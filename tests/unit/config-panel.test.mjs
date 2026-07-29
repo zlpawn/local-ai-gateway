@@ -256,6 +256,63 @@ test("Codex capability updates preserve unrelated fields and do not copy secrets
   assert.equal(config.clients.codex.endpoints[0].api_key, sentinel);
   assert.equal(JSON.stringify(config).split(sentinel).length - 1, 1);
 });
+const readHtml = () => readFile(path.join(ROOT, "desktop", "config-panel.html"), "utf8");
+
+
+
+test("DeepTutor client has a nav tab and a node section mirroring Codex", async () => {
+  const html = await readHtml();
+  assert.match(html, /href="#deeptutor"[\s\S]*?DeepTutor 代理/);
+  assert.match(html, /id="section-deeptutor"/);
+  assert.match(html, /id="deeptutor-endpoints"/);
+  assert.match(html, /data-client="deeptutor"/);
+  assert.match(html, /toggleAddNodeMenu\('deeptutor'/);
+});
+
+test("DeepTutor section exposes a copy-from-codex action and a connection guide", async () => {
+  const html = await readHtml();
+  assert.match(html, /copyClientFromCodex/);
+  assert.match(html, /\/v1\/config\/copy-client/);
+  assert.match(html, /从 Codex 复制节点/);
+  assert.match(html, /大语言模型 base_url：[\s\S]*?\/deeptutor\//);
+});
+
+test("DeepTutor is included in the render loop and default config", async () => {
+  const html = await readHtml();
+  assert.match(html, /\['code', 'desktop', 'codex', 'deeptutor'\]\.forEach/);
+  assert.match(html, /deeptutor: \{ endpoints: \[\] \}/);
+  assert.match(html, /deeptutor: data\.clients\.deeptutor/);
+});
+
+test("DeepTutor endpoints show the capability editor like Codex", async () => {
+  const html = await readHtml();
+  assert.match(html, /\(client === 'codex' \|\| client === 'deeptutor'\) && !isCapabilityNode/);
+});
+
+test("Preset CLI module has a nav group, a discovery section, and an install-history sub-tab", async () => {
+  const html = await readHtml();
+  assert.match(html, /id="nav-cli-group"/);
+  assert.match(html, /href="#cli"[\s\S]*?本机 CLI/);
+  assert.match(html, /href="#cli-install-history"/);
+  assert.match(html, /id="section-cli"/);
+  assert.match(html, /id="section-cli-install-history"/);
+  assert.match(html, /refreshCliLibrary/);
+  assert.match(html, /\/v1\/cli\/discover/);
+  assert.match(html, /\/v1\/cli\/install-history/);
+  assert.match(html, /\/v1\/cli\/install/);
+  assert.match(html, /startCliInstallFromForm/);
+});
+
+test("CLI scan sources sub-tab and management endpoints exist", async () => {
+  const html = await readHtml();
+  assert.match(html, /href="#cli-sources"[\s\S]*?扫描来源/);
+  assert.match(html, /id="section-cli-sources"/);
+  assert.match(html, /refreshCliSources/);
+  assert.match(html, /saveCliSources/);
+  assert.match(html, /\/v1\/cli\/sources/);
+  assert.match(html, /\/v1\/cli\/sources\/reset/);
+  assert.match(html, /addCliSourceRow/);
+});
 
 test("tools tab nav item and section exist alongside skills", async () => {
   const html = await readFile(path.join(ROOT, "desktop", "config-panel.html"), "utf8");
