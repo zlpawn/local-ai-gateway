@@ -788,6 +788,18 @@ git commit -m "test(cli): add agent bootstrap integration flow"
 
 ---
 
+### Task 14a: Multi-machine GitHub/package rename checklist (docs already specify)
+
+When executing the rename, follow design §13.2 exactly. Minimum agent checklist:
+
+- [ ] GitHub repo renamed to `shrimp`
+- [ ] every existing clone: `git remote set-url origin .../shrimp.git` then `git fetch`
+- [ ] no machine is told to re-clone unless git metadata is broken
+- [ ] `package.json` name/bin/repository/homepage/bugs updated to `@wuhezhizhong/shrimp` / `shrimp`
+- [ ] data dir constant becomes `~/.shrimp`
+- [ ] README install/use examples updated
+- [ ] local smoke: `shrimp doctor` / `shrimp status`
+
 ### Task 14: Docs + panel copy UX follow-through
 
 Also finalize user-facing naming:

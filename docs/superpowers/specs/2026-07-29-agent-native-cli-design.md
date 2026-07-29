@@ -784,12 +784,97 @@ Each step returns JSON the agent can branch on.
 
 ## 13. Migration & compatibility
 
+### 13.1 CLI / config compatibility
+
 1. Existing human scripts using text output may need `--format pretty`
 2. No-arg `start` preserved
 3. Existing npm scripts (`gateway:start`, `doctor`, etc.) keep working; can later delegate to new CLI
 4. `copy-client` API remains; CLI becomes preferred agent entry
 5. DeepTutor auto-seed retained in v1 for compatibility, documented as legacy
-6. Product rename later is mechanical if domain code uses constants for bin/data-dir/service names
+6. Brand strings (`shrimp`, `@wuhezhizhong/shrimp`, `~/.shrimp`, service id) live in constants so rename PRs stay mechanical
+
+### 13.2 GitHub repo rename runbook (multi-machine)
+
+Because there are no external users yet, treat GitHub rename as a clean cutover. **Do not re-clone source on every machine.** Existing working copies remain valid; only remotes/docs/package identity need updating.
+
+#### A. One-time on GitHub (owner)
+
+1. Rename repository `local-ai-gateway` -> `shrimp`
+2. Confirm old URL redirects to the new URL
+3. Update repo description/topics if desired
+4. If GitHub Pages, Actions secrets, or branch protection reference the old name, re-check them after rename
+
+#### B. On every computer that already cloned the repo
+
+Run inside that machine's existing checkout:
+
+```bash
+# 1) optional: stop local gateway if this checkout is currently serving
+# shrimp stop   # or: node bin/cli.js stop
+
+# 2) inspect current remote
+git remote -v
+
+# 3) point origin at the renamed repo
+# HTTPS:
+git remote set-url origin https://github.com/zlpawn/shrimp.git
+# SSH:
+# git remote set-url origin git@github.com:zlpawn/shrimp.git
+
+# 4) verify fetch/push still works
+git fetch origin
+git status -sb
+
+# 5) optional: rename local folder for sanity
+#   Windows PowerShell:
+#     cd ..
+#     Rename-Item local-ai-gateway shrimp
+#     cd shrimp
+#   macOS/Linux:
+#     cd .. && mv local-ai-gateway shrimp && cd shrimp
+```
+
+Notes for agents executing this later:
+
+- Re-cloning is **not** required unless the local git metadata is broken or the user only has a zip export
+- Old GitHub URLs usually redirect, but agents should still update `origin` rather than relying on redirects forever
+- Local uncommitted work survives rename; do not delete the working tree
+- If a machine has multiple worktrees, update/fetch in the main checkout and each linked worktree as needed; `git remote set-url` is per-clone repository metadata
+
+#### C. After code rename lands on the branch
+
+On each machine, after pulling the rename commit(s):
+
+```bash
+git pull
+
+# clean local identity (author is the only tester today)
+# preferred: recreate config under ~/.shrimp
+# or manually move old test data:
+#   mv ~/.local-ai-gateway ~/.shrimp
+
+# reinstall local bin link if using npm link / global install from source
+npm link
+# or:
+# npm install -g .
+
+shrimp status
+shrimp doctor
+```
+
+#### D. Package / install identity checklist
+
+When implementing the rename PR, update all of:
+
+- `package.json` `name` = `@wuhezhizhong/shrimp`
+- `package.json` `bin.shrimp`
+- `package.json` `repository` / `homepage` / `bugs`
+- data dir default `~/.shrimp`
+- health/service identity strings
+- README install examples: `npm i -g @wuhezhizhong/shrimp`
+- tests asserting old names
+
+No multi-user migration matrix is required in v1.
 
 ## 14. Phased delivery
 
