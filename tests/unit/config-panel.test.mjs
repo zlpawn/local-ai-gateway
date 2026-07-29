@@ -322,7 +322,7 @@ test("tools tab nav item and section exist alongside skills", async () => {
   const html = await readFile(path.join(ROOT, "desktop", "config-panel.html"), "utf8");
   assert.match(html, /href="#tools"[\s\S]*onclick="switchTab\('tools'\)"/);
   assert.match(html, /<section id="section-tools" class="tab-section"/);
-  assert.match(html, /小工具/);
+  assert.match(html, /迷你工具/);
 });
 
 test("tools cards list renders text embedding card", async () => {
