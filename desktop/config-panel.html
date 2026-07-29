@@ -1749,6 +1749,262 @@
             font-size: 13px;
         }
 
+        .tools-cards {
+            display: grid;
+            grid-template-columns: repeat(auto-fill, minmax(260px, 1fr));
+            gap: 16px;
+        }
+        .tools-card {
+            background: var(--surface);
+            border: 1px solid var(--border-color);
+            border-radius: var(--radius-lg);
+            padding: 20px;
+            cursor: pointer;
+            transition: var(--transition-fast);
+            display: flex;
+            flex-direction: column;
+            gap: 8px;
+        }
+        .tools-card:hover {
+            background: var(--surface-hover);
+            border-color: var(--text-secondary);
+        }
+        .tools-card-icon {
+            width: 36px;
+            height: 36px;
+            border-radius: var(--radius-md);
+            background: var(--input-bg);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            color: var(--text-primary);
+        }
+        .tools-card-name {
+            font-weight: 600;
+            font-size: 15px;
+            color: var(--text-primary);
+        }
+        .tools-card-desc {
+            font-size: 13px;
+            color: var(--text-secondary);
+            line-height: 1.5;
+        }
+        .tools-detail-back {
+            display: inline-flex;
+            align-items: center;
+            gap: 6px;
+            background: none;
+            border: none;
+            color: var(--text-secondary);
+            cursor: pointer;
+            font-size: 13px;
+            padding: 4px 0;
+            margin-bottom: 16px;
+        }
+        .tools-detail-back:hover { color: var(--text-primary); }
+        .embed-layout {
+            display: grid;
+            grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+            gap: 20px;
+        }
+        @media (max-width: 900px) {
+            .embed-layout { grid-template-columns: 1fr; }
+        }
+        .embed-panel {
+            background: var(--surface);
+            border: 1px solid var(--border-color);
+            border-radius: var(--radius-lg);
+            padding: 16px;
+        }
+        .embed-panel h3 {
+            margin: 0 0 12px;
+            font-size: 14px;
+            color: var(--text-primary);
+        }
+        .embed-form-group { margin-bottom: 12px; }
+        .embed-form-group label {
+            display: block;
+            font-size: 12px;
+            color: var(--text-secondary);
+            margin-bottom: 4px;
+        }
+        .embed-form-select {
+            width: 100%;
+            box-sizing: border-box;
+            background: var(--input-bg);
+            border: 1px solid var(--border-color);
+            border-radius: var(--radius-md);
+            color: var(--text-primary);
+            font-size: 13px;
+            padding: 6px 8px;
+        }
+        .embed-textarea {
+            width: 100%;
+            min-height: 80px;
+            resize: vertical;
+            box-sizing: border-box;
+            background: var(--input-bg);
+            border: 1px solid var(--border-color);
+            border-radius: var(--radius-md);
+            color: var(--text-primary);
+            font-family: var(--font-sans);
+            font-size: 13px;
+            padding: 8px;
+        }
+        .embed-textarea:focus {
+            outline: none;
+            border-color: var(--text-secondary);
+        }
+        .embed-mode-switch {
+            display: inline-flex;
+            border: 1px solid var(--border-color);
+            border-radius: var(--radius-md);
+            overflow: hidden;
+            margin-bottom: 12px;
+        }
+        .embed-mode-btn {
+            background: none;
+            border: none;
+            padding: 6px 14px;
+            font-size: 13px;
+            color: var(--text-secondary);
+            cursor: pointer;
+        }
+        .embed-mode-btn.active {
+            background: var(--brand-primary);
+            color: var(--brand-text);
+        }
+        .embed-dims-row {
+            display: flex;
+            align-items: center;
+            flex-wrap: wrap;
+            gap: 10px;
+            font-size: 13px;
+            color: var(--text-secondary);
+        }
+        .embed-dims-value { font-weight: 600; color: var(--text-primary); }
+        .embed-dims-pill {
+            display: inline-flex;
+            align-items: center;
+            gap: 4px;
+            background: var(--input-bg);
+            border: 1px solid var(--border-color);
+            border-radius: 999px;
+            color: var(--text-secondary);
+            cursor: pointer;
+            font-size: 12px;
+            padding: 3px 10px;
+            transition: color var(--transition-fast), border-color var(--transition-fast), background var(--transition-fast);
+        }
+        .embed-dims-pill:hover { color: var(--text-primary); border-color: var(--text-secondary); }
+        .embed-dims-pill.active {
+            background: var(--brand-primary);
+            color: var(--brand-text);
+            border-color: var(--brand-primary);
+        }
+        .embed-dims-input {
+            width: 90px;
+            background: var(--input-bg);
+            border: 1px solid var(--border-color);
+            border-radius: var(--radius-md);
+            color: var(--text-primary);
+            padding: 4px 8px;
+            font-size: 13px;
+        }
+        .embed-dims-input:focus { outline: none; border-color: var(--text-secondary); }
+        .embed-dims-row input[type="number"] {
+            width: 80px;
+            background: var(--input-bg);
+            border: 1px solid var(--border-color);
+            border-radius: var(--radius-md);
+            color: var(--text-primary);
+            padding: 4px 6px;
+            font-size: 13px;
+        }
+        .embed-result-empty {
+            color: var(--text-secondary);
+            font-size: 13px;
+            text-align: center;
+            padding: 32px 0;
+        }
+        .embed-similarity-score {
+            font-size: 32px;
+            font-weight: 700;
+            color: var(--text-primary);
+            font-family: var(--font-mono);
+        }
+        .embed-formula {
+            font-family: var(--font-mono);
+            font-size: 13px;
+            color: var(--text-secondary);
+            background: var(--input-bg);
+            border: 1px solid var(--border-color);
+            border-radius: var(--radius-md);
+            padding: 8px 10px;
+            margin: 8px 0;
+        }
+        .embed-formula-note {
+            font-size: 12px;
+            color: var(--text-secondary);
+            line-height: 1.5;
+        }
+        .embed-vector-head {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            gap: 8px;
+            margin-top: 8px;
+        }
+        .embed-vector-label {
+            font-size: 12px;
+            color: var(--text-secondary);
+            font-weight: 600;
+        }
+        .embed-vector-actions { display: flex; gap: 6px; }
+        .embed-vector-btn {
+            background: none;
+            border: 1px solid var(--border-color);
+            border-radius: var(--radius-md);
+            color: var(--text-secondary);
+            cursor: pointer;
+            font-size: 12px;
+            padding: 3px 8px;
+            display: inline-flex;
+            align-items: center;
+            gap: 4px;
+        }
+        .embed-vector-btn:hover { color: var(--text-primary); border-color: var(--text-secondary); }
+        .embed-vector {
+            font-family: var(--font-mono);
+            font-size: 12px;
+            color: var(--text-secondary);
+            background: var(--input-bg);
+            border: 1px solid var(--border-color);
+            border-radius: var(--radius-md);
+            padding: 8px;
+            margin-top: 6px;
+            word-break: break-all;
+            max-height: 240px;
+            overflow-y: auto;
+            white-space: pre-wrap;
+        }
+        .embed-meta {
+            font-size: 12px;
+            color: var(--text-secondary);
+            display: flex;
+            flex-wrap: wrap;
+            gap: 12px;
+        }
+        .embed-error {
+            color: var(--danger);
+            background: var(--danger-bg);
+            border: 1px solid var(--danger);
+            border-radius: var(--radius-md);
+            padding: 10px;
+            font-size: 13px;
+        }
+
+
     </style>
     <script>
         // Prevent FOUC by setting theme early
@@ -1788,6 +2044,10 @@
                     <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="margin-right: 8px;"><path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z"></path></svg>
                     Codex 代理
                 </a>
+                <a href="#deeptutor" class="nav-item" onclick="switchTab('deeptutor')">
+                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="margin-right: 8px;"><path d="M22 10v6M2 10l10-5 10 5-10 5z"></path><path d="M6 12v5c3 3 9 3 12 0v-5"></path></svg>
+                    DeepTutor 代理
+                </a>
 
                 <div class="nav-group-title">系统扩展</div>
                 <a href="#sync" class="nav-item" onclick="switchTab('sync')">
@@ -1805,6 +2065,27 @@
                     <div class="nav-children">
                         <a href="#install-history" class="nav-item nav-child" onclick="switchTab('install-history')">
                             <span class="nav-child-dot">└</span>安装记录
+                        </a>
+                    </div>
+                </div>
+                <a href="#tools" class="nav-item" onclick="switchTab('tools')">
+                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="margin-right: 8px;"><path d="M14.7 6.3a1 1 0 0 0 0 1.4l1.6 1.6a1 1 0 0 0 1.4 0l3.77-3.77a6 6 0 0 1-7.94 7.94l-6.91 6.91a2.12 2.12 0 0 1-3-3l6.91-6.91a6 6 0 0 1 7.94-7.94l-3.76 3.76z"></path></svg>
+                    小工具
+                </a>
+                <div class="nav-collapsible" id="nav-cli-group">
+                    <div class="nav-parent-row">
+                        <a href="#cli" class="nav-item" onclick="switchTab('cli')">
+                            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="margin-right: 8px;"><polyline points="4 17 10 11 4 5"></polyline><line x1="12" y1="19" x2="20" y2="19"></line></svg>
+                            本机 CLI (Local CLI)
+                        </a>
+                        <button class="nav-caret-btn" title="展开/收起" onclick="toggleNavGroup('nav-cli-group', event)"><span class="nav-caret">▶</span></button>
+                    </div>
+                    <div class="nav-children">
+                        <a href="#cli-install-history" class="nav-item nav-child" onclick="switchTab('cli-install-history')">
+                            <span class="nav-child-dot">└</span>安装记录
+                        </a>
+                        <a href="#cli-sources" class="nav-item nav-child" onclick="switchTab('cli-sources')">
+                            <span class="nav-child-dot">└</span>扫描来源
                         </a>
                     </div>
                 </div>
@@ -1952,6 +2233,42 @@ experimental_bearer_token = "dummy"</pre>
                 </div>
 
                 <div class="endpoints-grid" id="codex-endpoints"></div>
+            </section>
+
+            <!-- DeepTutor Section -->
+            <section id="section-deeptutor" class="tab-section" style="display: none;">
+                <div class="section-header">
+                    <div>
+                        <h2>DeepTutor 代理</h2>
+                        <p>为 DeepTutor 客户端提供 OpenAI 兼容的下游代理支持。默认从 Codex 复制节点与密钥。</p>
+                    </div>
+                    <div class="section-header-actions">
+                        <button class="btn" id="deeptutor-copy-btn" onclick="copyClientFromCodex()" title="把 Codex 的全部节点（含密钥）以新 ID 复制到 DeepTutor，覆盖现有 DeepTutor 节点">
+                            从 Codex 复制节点
+                        </button>
+                        <div class="add-node-dropdown" id="add-node-dropdown-deeptutor">
+                            <button type="button" class="btn add-node-trigger" aria-expanded="false" aria-haspopup="menu" onclick="toggleAddNodeMenu('deeptutor', event)">
+                                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="12" y1="5" x2="12" y2="19"></line><line x1="5" y1="12" x2="19" y2="12"></line></svg>
+                                添加节点
+                                <svg class="add-node-chevron" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 12 15 18 9"></polyline></svg>
+                            </button>
+                            <div class="add-node-popover" role="menu" data-client="deeptutor"></div>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="usage-guide">
+                    <h3>🚀 如何连接此网关？</h3>
+                    <p>DeepTutor 走 OpenAI 兼容协议。把下面的 base_url 填入 DeepTutor 对应配置（网关会自动补全 /v1 前缀，无需手动填写）：</p>
+                    <div class="code-snippet" style="margin-top: 10px;">
+                        <pre style="margin: 0; color: inherit; font-family: inherit; font-size: inherit; background: transparent; padding: 0; overflow-x: auto;">
+大语言模型 base_url：http://<span class="cfg-host">127.0.0.1</span>:<span class="cfg-port">8787</span>/deeptutor/
+向量模型 base_url：http://<span class="cfg-host">127.0.0.1</span>:<span class="cfg-port">8787</span>/deeptutor/</pre>
+                    </div>
+                    <p style="font-size: 12px; margin-top: 8px; margin-bottom: 0; color: var(--text-secondary);">首次进入时若 DeepTutor 为空，网关会自动从 Codex 复制节点与密钥。也可点右上角「从 Codex 复制节点」重新覆盖。</p>
+                </div>
+
+                <div class="endpoints-grid" id="deeptutor-endpoints"></div>
             </section>
 
             <!-- Session Sync Section -->
@@ -2124,6 +2441,105 @@ experimental_bearer_token = "dummy"</pre>
                 <div id="install-history-list"><div class="skill-detail-empty">暂无安装记录</div></div>
             </section>
 
+            <!-- Tools Section -->
+            <section id="section-tools" class="tab-section" style="display: none;">
+                <div class="section-header">
+                    <div>
+                        <h2>小工具</h2>
+                        <p>实验性小工具集合,提供文本向量化等便捷能力。</p>
+                    </div>
+                </div>
+                <div id="tools-cards" class="tools-cards"></div>
+                <div id="tools-detail"></div>
+            </section>
+
+            <!-- Preset CLI Section -->
+            <section id="section-cli" class="tab-section" style="display: none;">
+                <div class="section-header">
+                    <div>
+                        <h2>本机 CLI (Local CLI)</h2>
+                        <p>扫描 PATH 中已安装的 CLI 工具，查看版本与路径。如需安装新 CLI，请到「安装记录」标签页手动执行。</p>
+                    </div>
+                    <button class="btn" title="重新扫描系统 CLI" onclick="refreshCliLibrary(true)">
+                        刷新 CLI 列表
+                    </button>
+                </div>
+
+                <div class="usage-guide">
+                    <h3>💡 使用说明</h3>
+                    <p>网关扫描 PATH（及 Windows 常见安装目录）中的可执行文件，列出本机已安装的 CLI 及其版本与路径。</p>
+                </div>
+
+                <div class="skills-toolbar">
+                    <input id="cli-search-input" class="skills-search" type="search" placeholder="搜索 CLI 名称..." oninput="onCliSearchInput(this.value)" />
+                    <span class="skills-filter-chip" id="cli-stats-chip">已安装 0 个</span>
+                </div>
+
+                <div id="cli-list" class="skills-list"></div>
+            </section>
+
+            <section id="section-cli-install-history" class="tab-section" style="display: none;">
+                <div class="section-header">
+                    <div>
+                        <h2>安装记录</h2>
+                        <p>通过网关命令行安装的 CLI 记录。每条可一键重新执行当时的安装命令。记录文件：<code class="path-pill" id="cli-install-history-filepath"></code></p>
+                    </div>
+                    <button class="btn" onclick="refreshCliInstallHistory()">刷新</button>
+                </div>
+
+                <div class="usage-guide">
+                    <p><strong>使用方式</strong>：填写安装命令（如 <code>npm install -g @anthropic-ai/claude-code</code>），CLI 名可留空——安装完成后会自动用 PATH 新增的可执行文件名补全。命令在网关侧用伪终端交互式执行。</p>
+                </div>
+
+                <div class="install-form">
+                    <input id="cli-install-cmd" class="install-cmd" placeholder="安装命令，如 npm install -g @anthropic-ai/claude-code" />
+                    <input id="cli-install-name" placeholder="CLI 名（可选，留空自动推断）" />
+                    <button class="btn btn-primary" onclick="startCliInstallFromForm()">安装</button>
+                </div>
+
+                <div class="install-terminal-wrap" id="cli-install-terminal-wrap">
+                    <div class="install-terminal-header">
+                        <span id="cli-install-terminal-title">安装终端</span>
+                        <span id="cli-install-terminal-hint" style="color:#f59e0b;font-size:11px;margin-left:8px;flex:1;"></span>
+                        <button class="btn" title="关闭安装终端并终止运行中的进程" onclick="closeCliInstallTerminal()">关闭</button>
+                    </div>
+                    <div id="cli-xterm-container"></div>
+                </div>
+
+                <div style="font-size:12px;font-weight:600;color:var(--text-secondary);margin-bottom:8px;">安装记录</div>
+                <div id="cli-install-history-list"><div class="skill-detail-empty">暂无安装记录</div></div>
+            </section>
+
+            <!-- CLI Scan Sources Section -->
+            <section id="section-cli-sources" class="tab-section" style="display: none;">
+                <div class="section-header">
+                    <div>
+                        <h2>扫描来源</h2>
+                        <p>管理 CLI 扫描的安装来源及其目录。默认包含 uv、npm、curl、homebrew、winget、irm、PATH，可新增自定义来源（如 chocolatey）。</p>
+                    </div>
+                    <div style="display:flex;gap:8px;">
+                        <button class="btn" title="恢复为系统默认来源" onclick="resetCliSources()">恢复默认</button>
+                        <button class="btn" onclick="refreshCliSources()">刷新</button>
+                        <button class="btn btn-primary" onclick="saveCliSources()">保存</button>
+                    </div>
+                </div>
+
+                <div class="usage-guide">
+                    <h3>💡 使用说明</h3>
+                    <p>每个来源包含名称、标签、是否启用、以及一个或多个扫描目录。目录支持 <code>~</code>、环境变量（<code>HOME</code> / <code>%APPDATA%</code>）和通配符 <code>*</code>（如 <code>~/.nvm/versions/node/*/bin</code>）。特殊值 <code>PATH</code> 表示扫描系统 PATH 目录。</p>
+                    <p>来源按列表顺序优先扫描，先扫到的二进制优先归属该来源。例如 uv 来源排在 npm 之前，一个同时被两者安装的 CLI 会标记为 uv。</p>
+                </div>
+
+                <div class="install-form" style="margin-bottom:16px;">
+                    <input id="cli-source-new-name" placeholder="来源名称（如 chocolatey）" style="flex:0 0 180px;" />
+                    <input id="cli-source-new-label" placeholder="标签（如 Chocolatey 安装）" style="flex:0 0 200px;" />
+                    <input id="cli-source-new-dirs" placeholder="目录，多个用分号分隔" style="flex:1;" />
+                    <button class="btn btn-primary" onclick="addCliSourceRow()">新增来源</button>
+                </div>
+
+                <div id="cli-sources-list" class="skills-list"></div>
+            </section>
+
         </main>
     </div>
 
@@ -2144,13 +2560,27 @@ experimental_bearer_token = "dummy"</pre>
     <script>
         let config = {
             server: { host: "127.0.0.1", port: 8787 },
-            clients: { code: { endpoints: [], model_slots: {} }, desktop: { endpoints: [] }, codex: { endpoints: [] } }
+            clients: { code: { endpoints: [], model_slots: {} }, desktop: { endpoints: [] }, codex: { endpoints: [] }, deeptutor: { endpoints: [] } }
         };
         let codexModelCatalogPath = "~/.codex/gateway-model-catalog.json";
 
         // Craft-style navigation: null = card list, {client,index} = detail editor
         let selectedEndpoint = null;
         let activeClient = 'code';
+        let toolsView = 'cards'; // 'cards' | 'embedding'
+        const embedState = {
+            client: 'codex',
+            endpointId: '',
+            model: '',
+            customDims: false,
+            dimensions: '',
+            mode: 'single', // 'single' | 'similarity'
+            textA: '',
+            textB: '',
+            result: null,
+            loading: false,
+            error: ''
+        };
         let lastLoadedSyncTargets = { antigravity: true, claude: true, codex: true };
 
         const ENDPOINT_TYPES = [
@@ -2256,7 +2686,8 @@ experimental_bearer_token = "dummy"</pre>
                         }
                     },
                     desktop: { endpoints: [desktopEndpoint] },
-                    codex: { endpoints: [] }
+                    codex: { endpoints: [] },
+                    deeptutor: { endpoints: [] }
                 }
             };
             render();
@@ -2266,6 +2697,62 @@ experimental_bearer_token = "dummy"</pre>
                 render();
             }
         }
+
+        // Reload the public config from the gateway and re-render.
+        async function loadConfig() {
+            try {
+                const res = await fetch('/v1/config');
+                if (res.ok) {
+                    const data = await res.json();
+                    if (data && data.clients) {
+                        config = {
+                            ...config,
+                            ...data,
+                            clients: {
+                                code: data.clients.code || { endpoints: [], model_slots: {} },
+                                desktop: data.clients.desktop || { endpoints: [] },
+                                codex: data.clients.codex || { endpoints: [] },
+                                deeptutor: data.clients.deeptutor || { endpoints: [] }
+                            }
+                        };
+                        if (data?.codex_model_catalog?.path_posix) {
+                            codexModelCatalogPath = data.codex_model_catalog.path_posix;
+                        } else if (data?.codex_model_catalog?.path) {
+                            codexModelCatalogPath = String(data.codex_model_catalog.path).replaceAll('\\', '/');
+                        }
+                    }
+                }
+            } catch (e) {
+                console.warn('加载配置失败。');
+            }
+            render();
+        }
+
+        // ===== DeepTutor: copy nodes (incl. secrets) from Codex =====
+        window.copyClientFromCodex = async function() {
+            const ok = await showSkillConfirmModal(
+                '从 Codex 复制节点',
+                '把 Codex 的全部节点（含密钥）以新 ID 复制到 DeepTutor，<strong>覆盖现有 DeepTutor 节点</strong>。确认继续？'
+            );
+            if (!ok) return;
+            const btn = document.getElementById('deeptutor-copy-btn');
+            try {
+                if (btn) { btn.disabled = true; btn.textContent = '复制中...'; }
+                const res = await fetch('/v1/config/copy-client', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json', 'X-Gateway-Config-Client': 'deeptutor' },
+                    body: JSON.stringify({ from: 'codex', to: 'deeptutor' })
+                });
+                const data = await res.json();
+                if (!data.success) throw new Error(data.error?.message || data.error || '失败');
+                await loadConfig();
+                showToast('已从 Codex 复制 ' + (data.copied ?? 0) + ' 个节点到 DeepTutor', 'success');
+            } catch (err) {
+                showToast('复制失败: ' + err.message, 'danger');
+            } finally {
+                if (btn) { btn.disabled = false; btn.textContent = '从 Codex 复制节点'; }
+            }
+        };
 
         async function init() {
             try {
@@ -2279,7 +2766,8 @@ experimental_bearer_token = "dummy"</pre>
                             clients: {
                                 code: data.clients.code || { endpoints: [], model_slots: {} },
                                 desktop: data.clients.desktop || { endpoints: [] },
-                                codex: data.clients.codex || { endpoints: [] }
+                                codex: data.clients.codex || { endpoints: [] },
+                                deeptutor: data.clients.deeptutor || { endpoints: [] }
                             }
                         };
                     }
@@ -2547,6 +3035,380 @@ experimental_bearer_token = "dummy"</pre>
                 showToast('已删除', 'success');
             } catch (err) { showToast('删除失败: ' + err.message, 'danger'); }
         };
+        // ===== Preset CLI: discovery + install history (mirrors skills) =====
+        let cliLibraryState = { loaded: false, loading: false, query: "", items: [], stats: { total: 0, installed: 0, shown: 0 } };
+        let cliSearchTimer = null;
+        let cliIgnoredState = [];
+
+        async function loadCliIgnored() {
+            try {
+                const res = await fetch('/v1/cli/ignore');
+                const data = await res.json();
+                if (data.success) cliIgnoredState = data.ignored || [];
+            } catch {}
+        }
+
+        async function toggleCliIgnore(name) {
+            const isIgnored = cliIgnoredState.includes(name);
+            try {
+                const method = isIgnored ? 'DELETE' : 'POST';
+                const url = isIgnored ? '/v1/cli/ignore?name=' + encodeURIComponent(name) : '/v1/cli/ignore';
+                const body = isIgnored ? null : JSON.stringify({ name: name });
+                const res = await fetch(url, { method: method, headers: isIgnored ? {} : { 'Content-Type': 'application/json' }, body: body });
+                const data = await res.json();
+                if (!data.success) throw new Error(data.error || '失败');
+                cliIgnoredState = data.ignored || [];
+                cliLibraryState.loaded = false;
+                refreshCliLibrary(false);
+                showToast(isIgnored ? '已取消忽略 ' + name : '已忽略 ' + name + '，后续不再扫描', 'success');
+            } catch (err) {
+                showToast('操作失败: ' + err.message, 'danger');
+            }
+        }
+
+        async function refreshCliLibrary(force) {
+            if (cliLibraryState.loading) return;
+            if (cliLibraryState.loaded && !force) { renderCliLibrary(); return; }
+            cliLibraryState.loading = true;
+            try {
+                if (force) await loadCliIgnored();
+                const probeParam = force ? '&probe=1' : '';
+                const res = await fetch('/v1/cli/discover?q=' + encodeURIComponent(cliLibraryState.query || '') + probeParam);
+                const data = await res.json();
+                if (!data.success) throw new Error(data.error || '失败');
+                cliLibraryState.items = data.items || [];
+                cliLibraryState.stats = data.stats || { total: 0, installed: 0, shown: cliLibraryState.items.length };
+                cliLibraryState.loaded = true;
+                renderCliLibrary();
+            } catch (err) {
+                showToast('加载 CLI 列表失败: ' + err.message, 'danger');
+            } finally {
+                cliLibraryState.loading = false;
+            }
+        }
+
+        function onCliSearchInput(value) {
+            cliLibraryState.query = value || '';
+            clearTimeout(cliSearchTimer);
+            cliSearchTimer = setTimeout(() => { cliLibraryState.loaded = false; refreshCliLibrary(false); }, 250);
+        }
+
+        function renderCliLibrary() {
+            const host = document.getElementById('cli-list');
+            if (!host) return;
+            const chip = document.getElementById('cli-stats-chip');
+            if (chip) chip.textContent = '已安装 ' + (cliLibraryState.stats.total || 0) + ' 个';
+            const items = cliLibraryState.items || [];
+            if (!items.length) {
+                host.innerHTML = '<div class="skill-detail-empty">没有匹配的 CLI。</div>';
+                return;
+            }
+            host.innerHTML = items.map(function(item) {
+                const version = item.version ? escapeHtml(item.version) : '<span style=\"color:var(--text-secondary);\">-</span>';
+                const pathLine = item.path ? escapeHtml(item.path) : '<span style=\"color:var(--text-secondary);\">未在 PATH 中找到</span>';
+                const ignored = cliIgnoredState.indexOf(item.name) >= 0;
+                return '<div class=\"install-record\">' +
+                    '<div class=\"install-record-head\">' +
+                    '<div style=\"min-width:0;flex:1;\">' +
+                    '<div class=\"install-record-skill\">' + escapeHtml(item.name) + (item.source ? ' <span class=\"skill-pill\" style=\"background:var(--input-bg);color:var(--text-secondary);\">' + escapeHtml(item.source) + '</span>' : '') + '</div>' +
+                    '<div class=\"install-record-cmd\">$ ' + escapeHtml(item.command) + ' --version</div>' +
+                    '<div class=\"install-record-meta\">版本: ' + version + '</div>' +
+                    '<div class=\"install-record-meta\">' + pathLine + '</div>' +
+                    '</div>' +
+                    '<div class=\"install-record-actions\">' +
+                    '<button class=\"btn\" style=\"padding:4px 10px;font-size:12px;' + (ignored ? 'color:var(--text-secondary);' : '') + '\" title=\"' + (ignored ? '取消忽略，恢复扫描' : '忽略此 CLI，以后不再扫描') + '\" onclick=\"toggleCliIgnore(' + String.fromCharCode(39) + escapeHtml(item.name) + String.fromCharCode(39) + ')\">' + (ignored ? '已忽略' : '忽略') + '</button>' +
+                    '</div>' +
+                    '</div></div>';
+            }).join('');
+        }
+
+        // ===== CLI Scan Sources management =====
+        let cliSourcesState = { loaded: false, loading: false, sources: [] };
+
+        async function refreshCliSources() {
+            cliSourcesState.loading = true;
+            try {
+                const res = await fetch('/v1/cli/sources');
+                const data = await res.json();
+                if (!data.success) throw new Error(data.error || '失败');
+                cliSourcesState.sources = data.sources || [];
+                cliSourcesState.loaded = true;
+                renderCliSources();
+            } catch (err) {
+                showToast('加载扫描来源失败: ' + err.message, 'danger');
+            } finally {
+                cliSourcesState.loading = false;
+            }
+        }
+
+        function renderCliSources() {
+            const host = document.getElementById('cli-sources-list');
+            if (!host) return;
+            const sources = cliSourcesState.sources || [];
+            if (!sources.length) {
+                host.innerHTML = '<div class="skill-detail-empty">暂无来源，点击「新增来源」添加。</div>';
+                return;
+            }
+            host.innerHTML = sources.map(function(src, i) {
+                const enabled = src.enabled !== false;
+                const dirs = (src.dirs || []).join('; ');
+                return '<div class="install-record" data-source-index="' + i + '">' +
+                    '<div class="install-record-head">' +
+                    '<div style="min-width:0;flex:1;display:flex;flex-direction:column;gap:6px;">' +
+                    '<div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;">' +
+                    '<input class="cli-source-name" value="' + escapeHtml(src.name || '') + '" placeholder="名称" style="width:120px;font-weight:600;" />' +
+                    '<input class="cli-source-label" value="' + escapeHtml(src.label || '') + '" placeholder="标签" style="width:160px;" />' +
+                    '<label class="node-card-switch" title="+'+(enabled ? '已启用' : '已禁用')+'">' +
+                    '<input type="checkbox" class="cli-source-enabled"' + (enabled ? ' checked' : '') + ' />' +
+                    '<span class="node-card-switch-track" aria-hidden="true"></span>' +
+                    '</label>' +
+                    '<button class="btn" style="padding:2px 8px;font-size:12px;" onclick="moveCliSource(' + i + ', -1)">↑</button>' +
+                    '<button class="btn" style="padding:2px 8px;font-size:12px;" onclick="moveCliSource(' + i + ', 1)">↓</button>' +
+                    '<button class="btn" style="padding:2px 8px;font-size:12px;color:#e53e3e;" onclick="removeCliSource(' + i + ')">删除</button>' +
+                    '</div>' +
+                    '<input class="cli-source-dirs" value="' + escapeHtml(dirs) + '" placeholder="目录，多个用分号分隔" style="width:100%;font-size:12px;" />' +
+                    '</div>' +
+                    '</div></div>';
+            }).join('');
+        }
+
+        function addCliSourceRow() {
+            const name = (document.getElementById('cli-source-new-name').value || '').trim();
+            const label = (document.getElementById('cli-source-new-label').value || '').trim();
+            const dirsRaw = (document.getElementById('cli-source-new-dirs').value || '').trim();
+            if (!name) { showToast('请填写来源名称', 'danger'); return; }
+            const dirs = dirsRaw ? dirsRaw.split(';').map(function(d) { return d.trim(); }).filter(Boolean) : [];
+            cliSourcesState.sources.push({ name: name, label: label || name, enabled: true, dirs: dirs });
+            document.getElementById('cli-source-new-name').value = '';
+            document.getElementById('cli-source-new-label').value = '';
+            document.getElementById('cli-source-new-dirs').value = '';
+            renderCliSources();
+        }
+
+        function moveCliSource(index, delta) {
+            const arr = cliSourcesState.sources;
+            const ni = index + delta;
+            if (ni < 0 || ni >= arr.length) return;
+            const tmp = arr[index]; arr[index] = arr[ni]; arr[ni] = tmp;
+            renderCliSources();
+        }
+
+        function removeCliSource(index) {
+            cliSourcesState.sources.splice(index, 1);
+            renderCliSources();
+        }
+
+        function collectCliSourcesFromDom() {
+            const rows = document.querySelectorAll('#cli-sources-list .install-record');
+            return Array.from(rows).map(function(row, i) {
+                const old = cliSourcesState.sources[i] || {};
+                return {
+                    id: old.id || undefined,
+                    name: (row.querySelector('.cli-source-name').value || '').trim(),
+                    label: (row.querySelector('.cli-source-label').value || '').trim(),
+                    enabled: row.querySelector('.cli-source-enabled').checked,
+                    dirs: (row.querySelector('.cli-source-dirs').value || '').split(';').map(function(d) { return d.trim(); }).filter(Boolean),
+                };
+            });
+        }
+
+        async function saveCliSources() {
+            const sources = collectCliSourcesFromDom();
+            try {
+                const res = await fetch('/v1/cli/sources', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ sources: sources }),
+                });
+                const data = await res.json();
+                if (!data.success) throw new Error(data.error || '保存失败');
+                cliSourcesState.sources = data.sources || [];
+                renderCliSources();
+                showToast('扫描来源已保存', 'success');
+                if (cliLibraryState.loaded) refreshCliLibrary(true);
+            } catch (err) {
+                showToast('保存失败: ' + err.message, 'danger');
+            }
+        }
+
+        async function resetCliSources() {
+            const ok = await showSkillConfirmModal('恢复默认', '确定恢复为系统默认来源？当前自定义来源将丢失。');
+            if (!ok) return;
+            try {
+                const res = await fetch('/v1/cli/sources/reset', { method: 'POST' });
+                const data = await res.json();
+                if (!data.success) throw new Error(data.error || '失败');
+                cliSourcesState.sources = data.sources || [];
+                renderCliSources();
+                showToast('已恢复默认来源', 'success');
+                if (cliLibraryState.loaded) refreshCliLibrary(true);
+            } catch (err) {
+                showToast('恢复失败: ' + err.message, 'danger');
+            }
+        }
+
+        function installCliByName(name, command) {
+            // Prefill the install form in the install-history tab and switch to it.
+            switchTab('cli-install-history');
+            const cmdInput = document.getElementById('cli-install-cmd');
+            const nameInput = document.getElementById('cli-install-name');
+            if (cmdInput) cmdInput.value = 'npm install -g ' + command;
+            if (nameInput) nameInput.value = name;
+            if (cmdInput) cmdInput.focus();
+        }
+
+        // CLI install terminal + history (parallel to the skills install flow)
+        let cliXterm = null;
+        let cliXtermFit = null;
+        let currentCliInstallWs = null;
+
+        async function refreshCliInstallHistory() {
+            try {
+                const res = await fetch('/v1/cli/install-history');
+                const data = await res.json();
+                if (!data.success) throw new Error(data.error || '失败');
+                const fp = document.getElementById('cli-install-history-filepath');
+                if (fp) fp.textContent = data.filePath || '';
+                renderCliInstallHistoryList(data.records || []);
+            } catch (err) {
+                showToast('加载安装记录失败: ' + err.message, 'danger');
+            }
+        }
+
+        function renderCliInstallHistoryList(records) {
+            const host = document.getElementById('cli-install-history-list');
+            if (!host) return;
+            if (!records.length) { host.innerHTML = '<div class="skill-detail-empty">暂无安装记录</div>'; return; }
+            host.innerHTML = records.map(function(r) {
+                const statusLabel = r.status === 'success' ? '成功' : (r.status === 'failed' ? '失败' : '运行中');
+                const meta = fmtInstallDate(r.startedAt) + (r.finishedAt ? (' -> ' + fmtInstallDate(r.finishedAt)) : '') + (r.exitCode !== null ? (' · 退出 ' + r.exitCode) : '');
+                return '<div class="install-record">' +
+                    '<div class="install-record-head">' +
+                    '<div style="min-width:0;flex:1;">' +
+                    '<div class="install-record-skill">' + escapeHtml(r.cliName || '(未关联 CLI)') + ' <span class="skill-pill status-' + r.status + '">' + statusLabel + '</span></div>' +
+                    '<div class="install-record-cmd">$ ' + escapeHtml(r.command) + '</div>' +
+                    '<div class="install-record-meta">' + escapeHtml(meta) + '</div>' +
+                    '</div>' +
+                    '<div class="install-record-actions">' +
+                    '<button class="btn" style="padding:4px 10px;font-size:12px;" onclick="reinstallCliRecord(\'' + r.id + '\')">重新安装</button>' +
+                    '<button class="btn" style="padding:4px 10px;font-size:12px;" onclick="deleteCliInstallRecord(\'' + r.id + '\')">删除</button>' +
+                    '</div>' +
+                    '</div></div>';
+            }).join('');
+        }
+
+        function openCliInstallTerminal() {
+            const wrap = document.getElementById('cli-install-terminal-wrap');
+            wrap.classList.add('open');
+            if (!cliXterm) {
+                cliXterm = new Terminal({ cols: 100, rows: 24, fontFamily: 'Consolas, monospace', fontSize: 13, theme: { background: '#0c0c0c' } });
+                cliXtermFit = new FitAddon.FitAddon();
+                cliXterm.loadAddon(cliXtermFit);
+                cliXterm.open(document.getElementById('cli-xterm-container'));
+                const xtermHost = document.getElementById('cli-xterm-container');
+                xtermHost.addEventListener('wheel', function(e) {
+                    const buf = cliXterm.buffer.active;
+                    const atTop = buf.viewportY <= 0;
+                    const atBottom = buf.viewportY >= buf.baseY;
+                    if ((e.deltaY < 0 && atTop) || (e.deltaY > 0 && atBottom)) e.stopImmediatePropagation();
+                }, { capture: true, passive: true });
+                cliXterm.onData(function(d) {
+                    if (currentCliInstallWs && currentCliInstallWs.readyState === 1) currentCliInstallWs.send(d);
+                });
+                cliXterm.onResize(function(size) {
+                    if (currentCliInstallWs && currentCliInstallWs.readyState === 1) {
+                        currentCliInstallWs.send(JSON.stringify({ type: 'resize', cols: size.cols, rows: size.rows }));
+                    }
+                });
+            }
+            cliXterm.reset();
+            try { cliXtermFit.fit(); } catch (e) {}
+            cliXterm.focus();
+        }
+
+        function closeCliInstallTerminal() {
+            const wrap = document.getElementById('cli-install-terminal-wrap');
+            wrap.classList.remove('open');
+            if (currentCliInstallWs) { try { currentCliInstallWs.close(); } catch (e) {} currentCliInstallWs = null; }
+        }
+        window.closeCliInstallTerminal = closeCliInstallTerminal;
+
+        async function startCliInstallWithCommand(command, cliName) {
+            const cmd = String(command || '').trim();
+            if (!cmd) { showToast('请填写安装命令', 'danger'); return false; }
+            let record;
+            try {
+                const res = await fetch('/v1/cli/install', {
+                    method: 'POST', headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ command: cmd, cliName: cliName || '' })
+                });
+                const data = await res.json();
+                if (!data.success) throw new Error(data.error || '失败');
+                record = data.record;
+            } catch (err) { showToast('启动安装失败: ' + err.message, 'danger'); return false; }
+
+            openCliInstallTerminal();
+            const title = document.getElementById('cli-install-terminal-title');
+            if (title) title.textContent = '安装终端 · ' + record.id;
+            cliXterm.writeln('$ ' + cmd);
+
+            const wsUrl = 'ws://' + location.host + '/v1/cli/pty?recordId=' + record.id
+                + '&cols=' + cliXterm.cols + '&rows=' + cliXterm.rows;
+            const ws = new WebSocket(wsUrl);
+            currentCliInstallWs = ws;
+            const hint = document.getElementById('cli-install-terminal-hint');
+            if (hint) hint.textContent = '运行中 · 如出现 Ok to proceed? (y) 请输入 y 并回车';
+            ws.onopen = function() {
+                cliXterm.focus();
+                try { cliXtermFit.fit(); } catch (e) {}
+                if (ws.readyState === 1) ws.send(JSON.stringify({ type: 'resize', cols: cliXterm.cols, rows: cliXterm.rows }));
+            };
+            ws.onmessage = function(e) {
+                let parsed = null;
+                if (typeof e.data === 'string') { try { parsed = JSON.parse(e.data); } catch (err) {} }
+                if (parsed && parsed.type === 'exit') {
+                    if (hint) hint.textContent = '';
+                    cliXterm.writeln('\r\n[进程退出 code=' + parsed.exitCode + ']' + (parsed.cliName ? (' 关联 CLI: ' + parsed.cliName) : ''));
+                    refreshCliInstallHistory();
+                    if (cliLibraryState.loaded) refreshCliLibrary(true);
+                } else {
+                    cliXterm.write(typeof e.data === 'string' ? e.data : '');
+                }
+            };
+            ws.onclose = function() { if (hint) hint.textContent = ''; refreshCliInstallHistory(); };
+            ws.onerror = function() { cliXterm.writeln('\r\n[连接错误]'); };
+            return true;
+        }
+
+        window.startCliInstallFromForm = async function() {
+            const cmd = document.getElementById('cli-install-cmd').value;
+            const cliName = document.getElementById('cli-install-name').value;
+            const ok = await startCliInstallWithCommand(cmd, cliName);
+            if (ok) { document.getElementById('cli-install-cmd').value = ''; document.getElementById('cli-install-name').value = ''; }
+        };
+
+        window.reinstallCliRecord = async function(id) {
+            const res = await fetch('/v1/cli/install-history');
+            const data = await res.json();
+            const rec = (data.records || []).find(function(r) { return r.id === id; });
+            if (!rec) { showToast('记录不存在', 'danger'); return; }
+            const ok = await showSkillConfirmModal('重新安装', '用当时的命令重新执行？<br><code>' + escapeHtml(rec.command) + '</code>' + (rec.cliName ? ('<br>CLI: ' + escapeHtml(rec.cliName)) : ''));
+            if (!ok) return;
+            await startCliInstallWithCommand(rec.command, rec.cliName || '');
+        };
+
+        window.deleteCliInstallRecord = async function(id) {
+            const ok = await showSkillConfirmModal('删除记录', '确认删除这条安装记录？');
+            if (!ok) return;
+            try {
+                const res = await fetch('/v1/cli/install-history?id=' + encodeURIComponent(id), { method: 'DELETE' });
+                const data = await res.json();
+                if (!data.success) throw new Error(data.error || '失败');
+                renderCliInstallHistoryList(data.records || []);
+                showToast('已删除', 'success');
+            } catch (err) { showToast('删除失败: ' + err.message, 'danger'); }
+        };
+
         let skillsLibraryState = {
             loaded: false,
             loading: false,
@@ -3265,7 +4127,7 @@ experimental_bearer_token = "dummy"</pre>
                                     </button>
                                 </div>
                             </div>
-                            ${client === 'codex' && !isCapabilityNode ? `
+                            ${(client === 'codex' || client === 'deeptutor') && !isCapabilityNode ? `
                             <div class="form-group full">
                                 <label>Codex 能力</label>
                                 <div class="capability-options">
@@ -3479,7 +4341,7 @@ experimental_bearer_token = "dummy"</pre>
                 }
             }
 
-            ['code', 'desktop', 'codex'].forEach(client => {
+            ['code', 'desktop', 'codex', 'deeptutor'].forEach(client => {
                 const container = document.getElementById(`${client}-endpoints`);
                 const eps = config.clients[client].endpoints || [];
                 const inDetail = selectedEndpoint && selectedEndpoint.client === client;
@@ -3615,14 +4477,330 @@ experimental_bearer_token = "dummy"</pre>
                 const g = document.getElementById('nav-skills-group');
                 if (g) g.classList.add('open');
             }
+            if (tabId === 'tools') {
+                toolsView = 'cards';
+                renderToolsCards();
+            }
+            if (tabId === 'cli') {
+                refreshCliLibrary(false);
+            }
+            if (tabId === 'cli-install-history') {
+                refreshCliInstallHistory();
+            }
+            if (tabId === 'cli-sources') {
+                refreshCliSources();
+            }
+            if (tabId === 'cli' || tabId === 'cli-install-history' || tabId === 'cli-sources') {
+                const g = document.getElementById('nav-cli-group');
+                if (g) g.classList.add('open');
+            }
 
             // Scroll to top
             document.querySelector('.content-area').scrollTop = 0;
         }
 
+        window.renderToolsCards = function() {
+            const cards = document.getElementById('tools-cards');
+            const detail = document.getElementById('tools-detail');
+            if (!cards || !detail) return;
+            detail.innerHTML = '';
+            cards.style.display = '';
+            cards.innerHTML = `
+                <div class="tools-card" onclick="openTool('embedding')">
+                    <div class="tools-card-icon">
+                        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z"></path></svg>
+                    </div>
+                    <div class="tools-card-name">文本向量化</div>
+                    <div class="tools-card-desc">选择已配置的向量模型,对文本生成向量或计算两段文本的余弦相似度。</div>
+                </div>
+            `;
+        };
+
+        window.openTool = function(toolId) {
+            toolsView = toolId;
+            renderToolsDetail();
+        };
+
+        window.backToToolsCards = function() {
+            toolsView = 'cards';
+            const cards = document.getElementById('tools-cards');
+            const detail = document.getElementById('tools-detail');
+            if (cards) cards.style.display = '';
+            if (detail) detail.innerHTML = '';
+            renderToolsCards();
+        };
+
+        function getEmbeddingEndpoints(client) {
+            const eps = (config.clients[client]?.endpoints || []).filter(
+                ep => ep.purpose === 'embedding' && ep.enabled !== false
+            );
+            return eps;
+        }
+
+        window.renderToolsDetail = function() {
+            const cards = document.getElementById('tools-cards');
+            const detail = document.getElementById('tools-detail');
+            if (!cards || !detail) return;
+            cards.style.display = 'none';
+
+            const eps = getEmbeddingEndpoints(embedState.client);
+            const nodeOptions = eps.map(ep => {
+                const dim = ep.dimensions != null ? ep.dimensions + '维' : '默认';
+                const model = ep.embedding_model || (ep.models[0] || '未设置');
+                const sel = ep.id === embedState.endpointId ? 'selected' : '';
+                return '<option value="' + escapeHtml(ep.id) + '" ' + sel + '>' + escapeHtml(ep.name) + ' · ' + escapeHtml(model) + ' · ' + dim + '</option>';
+            }).join('');
+
+            const selectedNode = eps.find(ep => ep.id === embedState.endpointId) || eps[0] || null;
+            if (selectedNode && !embedState.endpointId) embedState.endpointId = selectedNode.id;
+            const models = selectedNode?.models || [];
+            const modelOptions = models.map(m => '<option value="' + escapeHtml(m) + '" ' + (m === embedState.model ? 'selected' : '') + '>' + escapeHtml(m) + '</option>').join('');
+            const nodeDims = selectedNode?.dimensions != null ? String(selectedNode.dimensions) : '默认';
+
+            const noNodeHint = eps.length === 0
+                ? '<div class="embed-error" style="margin-bottom:12px;">该 client 未配置向量节点,请到代理节点 tab 添加 purpose=embedding 的节点。</div>'
+                : '';
+
+            detail.innerHTML = `
+                <button class="tools-detail-back" onclick="backToToolsCards()">
+                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="15 18 9 12 15 6"></polyline></svg>
+                    返回工具列表
+                </button>
+                <div class="embed-layout">
+                    <div class="embed-panel">
+                        <h3>输入</h3>
+                        ${noNodeHint}
+                        <div class="embed-form-group">
+                            <label>Client</label>
+                            <select id="embed-client-select" class="embed-form-select" onchange="onEmbedClientChange(this.value)">
+                                <option value="codex" ${embedState.client==='codex'?'selected':''}>codex</option>
+                                <option value="code" ${embedState.client==='code'?'selected':''}>code</option>
+                                <option value="desktop" ${embedState.client==='desktop'?'selected':''}>desktop</option>
+                            </select>
+                        </div>
+                        <div class="embed-form-group">
+                            <label>向量节点</label>
+                            <select id="embed-node-select" class="embed-form-select" onchange="onEmbedNodeChange(this.value)" ${eps.length===0?'disabled':''}>
+                                ${nodeOptions || '<option value="">无可用节点</option>'}
+                            </select>
+                        </div>
+                        <div class="embed-form-group">
+                            <label>模型</label>
+                            <select id="embed-model-select" class="embed-form-select" onchange="embedState.model=this.value; renderToolsDetail();" ${models.length===0?'disabled':''}>
+                                ${modelOptions || '<option value="' + escapeHtml(selectedNode?.embedding_model||'') + '">' + escapeHtml(selectedNode?.embedding_model||'无') + '</option>'}
+                            </select>
+                        </div>
+                        <div class="embed-form-group">
+                            <label>维度</label>
+                            <div class="embed-dims-row">
+                                <span>节点维度: <strong class="embed-dims-value">${escapeHtml(nodeDims)}</strong></span>
+                                <button type="button" class="embed-dims-pill ${embedState.customDims?'active':''}" onclick="onEmbedCustomDimsToggle(!embedState.customDims)" title="覆盖节点默认维度">自定义</button>
+                                ${embedState.customDims ? '<input type="number" class="embed-dims-input" id="embed-dims-input" min="1" placeholder="如 1024" value="' + escapeHtml(String(embedState.dimensions)) + '" onchange="embedState.dimensions=this.value; renderToolsDetail();" />' : ''}
+                            </div>
+                        </div>
+                        <div class="embed-mode-switch">
+                            <button class="embed-mode-btn ${embedState.mode==='single'?'active':''}" id="embed-mode-single" onclick="setEmbedMode('single')">单段文本</button>
+                            <button class="embed-mode-btn ${embedState.mode==='similarity'?'active':''}" id="embed-mode-similarity" onclick="setEmbedMode('similarity')">两段文本(相似度)</button>
+                        </div>
+                        <div class="embed-form-group">
+                            <label>文本 A</label>
+                            <textarea id="embed-text-a" class="embed-textarea" placeholder="输入要向量化的文本" oninput="embedState.textA=this.value">${escapeHtml(embedState.textA)}</textarea>
+                        </div>
+                        ${embedState.mode === 'similarity' ? `
+                        <div class="embed-form-group">
+                            <label>文本 B</label>
+                            <textarea id="embed-text-b" class="embed-textarea" placeholder="输入第二段文本" oninput="embedState.textB=this.value">${escapeHtml(embedState.textB)}</textarea>
+                        </div>` : ''}
+                        <button class="btn btn-primary" id="embed-run-btn" onclick="runEmbedding()" ${embedState.loading?'disabled':''}>
+                            ${embedState.loading ? '计算中...' : '向量化'}
+                        </button>
+                    </div>
+                    <div class="embed-panel" id="embed-result-panel">
+                        ${renderEmbedResult()}
+                    </div>
+                </div>
+            `;
+        };
+
+        window.onEmbedClientChange = function(client) {
+            embedState.client = client;
+            embedState.endpointId = '';
+            embedState.model = '';
+            embedState.result = null;
+            embedState.error = '';
+            renderToolsDetail();
+        };
+
+        window.onEmbedNodeChange = function(endpointId) {
+            embedState.endpointId = endpointId;
+            const ep = getEmbeddingEndpoints(embedState.client).find(e => e.id === endpointId);
+            embedState.model = ep?.models?.[0] || ep?.embedding_model || '';
+            embedState.result = null;
+            embedState.error = '';
+            renderToolsDetail();
+        };
+
+        window.onEmbedCustomDimsToggle = function(checked) {
+            embedState.customDims = checked;
+            if (!checked) embedState.dimensions = '';
+            embedState.result = null;
+            renderToolsDetail();
+        };
+
+        window.setEmbedMode = function(mode) {
+            embedState.mode = mode;
+            embedState.result = null;
+            embedState.error = '';
+            renderToolsDetail();
+        };
+
+        function cosineSimilarity(a, b) {
+            let dot = 0, normA = 0, normB = 0;
+            for (let i = 0; i < a.length; i++) {
+                dot += a[i] * b[i];
+                normA += a[i] * a[i];
+                normB += b[i] * b[i];
+            }
+            const denom = Math.sqrt(normA) * Math.sqrt(normB);
+            if (denom === 0) return null; // 零向量无法计算
+            return dot / denom;
+        }
+
+        async function callEmbedding(text) {
+            const params = new URLSearchParams();
+            if (embedState.endpointId) params.set('endpoint_id', embedState.endpointId);
+            const body = { input: text };
+            if (embedState.model) body.model = embedState.model;
+            if (embedState.customDims && embedState.dimensions) {
+                body.dimensions = Number(embedState.dimensions);
+            }
+            const res = await fetch('/v1/embeddings?' + params.toString(), {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'X-Gateway-Client': embedState.client,
+                },
+                body: JSON.stringify(body),
+            });
+            const json = await res.json();
+            if (!res.ok) {
+                throw new Error(json?.error?.message || '请求失败 (' + res.status + ')');
+            }
+            const vec = json?.data?.[0]?.embedding;
+            if (!Array.isArray(vec)) throw new Error('返回数据格式异常,未找到向量');
+            return {
+                vector: vec,
+                model: json.model || embedState.model,
+                dimensions: vec.length,
+                tokens: json?.usage?.prompt_tokens ?? null,
+            };
+        }
+
+        window.runEmbedding = async function() {
+            if (!embedState.textA.trim()) {
+                embedState.error = '请输入文本 A';
+                renderToolsDetail();
+                return;
+            }
+            if (embedState.mode === 'similarity' && !embedState.textB.trim()) {
+                embedState.error = '请输入文本 B';
+                renderToolsDetail();
+                return;
+            }
+            embedState.loading = true;
+            embedState.error = '';
+            embedState.result = null;
+            renderToolsDetail();
+            try {
+                const t0 = performance.now();
+                const a = await callEmbedding(embedState.textA);
+                const t1 = performance.now();
+                if (embedState.mode === 'single') {
+                    embedState.result = { mode: 'single', a, elapsedMs: t1 - t0 };
+                } else {
+                    const b = await callEmbedding(embedState.textB);
+                    const t2 = performance.now();
+                    const sim = cosineSimilarity(a.vector, b.vector);
+                    embedState.result = { mode: 'similarity', a, b, similarity: sim, elapsedMsA: t1 - t0, elapsedMsB: t2 - t1 };
+                }
+            } catch (err) {
+                embedState.error = err.message || String(err);
+            } finally {
+                embedState.loading = false;
+                renderToolsDetail();
+            }
+        };
+
+        function renderEmbedResult() {
+            if (embedState.loading) return '<div class="embed-result-empty">计算中...</div>';
+            if (embedState.error) return '<div class="embed-error">' + escapeHtml(embedState.error) + '</div>';
+            if (!embedState.result) return '<div class="embed-result-empty">输入文本后点击「向量化」查看结果。</div>';
+
+            const r = embedState.result;
+            const vectorHtml = (label, info) => {
+                const fullVec = '[' + info.vector.map(v => v.toFixed(6)).join(', ') + ']';
+                const elapsed = r.mode === 'single' ? r.elapsedMs : (label === 'A' ? r.elapsedMsA : r.elapsedMsB);
+                return `
+                    <div style="margin-top:8px;">
+                        <div class="embed-vector-head">
+                            <span class="embed-vector-label">${label} 向量 (${info.dimensions} 维)</span>
+                            <div class="embed-vector-actions">
+                                <button class="embed-vector-btn" onclick="toggleEmbedVector('${label}')">收起</button>
+                                <button class="embed-vector-btn" onclick="copyEmbedVector('${label}')">
+                                    <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="9" width="13" height="13" rx="2" ry="2"></rect><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"></path></svg>
+                                    复制
+                                </button>
+                            </div>
+                        </div>
+                        <div class="embed-vector" id="embed-vec-${label}">${escapeHtml(fullVec)}</div>
+                        <div class="embed-meta" style="margin-top:4px;">
+                            <span>模型: ${escapeHtml(info.model)}</span>
+                            <span>维度: ${info.dimensions}</span>
+                            ${info.tokens != null ? '<span>tokens: ' + info.tokens + '</span>' : ''}
+                            <span>耗时: ${elapsed.toFixed(0)}ms</span>
+                        </div>
+                    </div>`;
+            };
+
+            if (r.mode === 'single') {
+                return `
+                    <h3>结果</h3>
+                    ${vectorHtml('A', r.a)}
+                `;
+            }
+            const score = r.similarity === null ? '无法计算(向量模长为 0)' : r.similarity.toFixed(4);
+            return `
+                <h3>相似度</h3>
+                <div class="embed-similarity-score">${escapeHtml(String(score))}</div>
+                <div class="embed-formula">余弦相似度 = (A·B) / (‖A‖ × ‖B‖)</div>
+                <div class="embed-formula-note">对两段文本分别向量化后计算两个向量的余弦值,范围 -1 到 1,越接近 1 越相似。</div>
+                ${vectorHtml('A', r.a)}
+                ${vectorHtml('B', r.b)}
+            `;
+        }
+
+        window.toggleEmbedVector = function(label) {
+            const el = document.getElementById('embed-vec-' + label);
+            if (!el) return;
+            const hidden = el.style.display === 'none';
+            el.style.display = hidden ? 'block' : 'none';
+            const btn = el.previousElementSibling?.querySelector('button');
+            if (btn) btn.textContent = hidden ? '收起' : '展开';
+        };
+
+        window.copyEmbedVector = function(label) {
+            const el = document.getElementById('embed-vec-' + label);
+            if (!el) return;
+            const text = el.textContent;
+            navigator.clipboard.writeText(text).then(
+                () => showToast('已复制 ' + label + ' 向量(' + text.length + ' 字符)', 'success'),
+                () => showToast('复制失败', 'danger')
+            );
+        };
+
         window.addEventListener('load', () => {
             const hash = window.location.hash.replace('#', '');
-            if (hash === 'code' || hash === 'desktop' || hash === 'codex' || hash === 'sync' || hash === 'skills' || hash === 'install-history') {
+            if (hash === 'code' || hash === 'desktop' || hash === 'codex' || hash === 'sync' || hash === 'skills' || hash === 'install-history' || hash === 'tools') {
                 switchTab(hash);
             }
         });
