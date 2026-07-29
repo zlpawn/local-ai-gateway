@@ -139,3 +139,15 @@ test("CliInstallHistory creates, finishes, lists and removes records", () => {
     rmSync(dir, { recursive: true, force: true });
   }
 });
+test('discoverInstalledClis skips ignored names and defaults probe to false', async () => {
+  const firstPathDir=process.env.PATH.split(';')[0];
+  const sources = [{ name: 'test', label: 't', enabled: true, dirs: [firstPathDir] }];
+  const r1 = await discoverInstalledClis({ sources, probe: false });
+  assert.equal(r1.stats.total, r1.items.length);
+  const someName = r1.items.length ? r1.items[0].name : null;
+  if (someName) {
+    const r2 = await discoverInstalledClis({ sources, probe: false, ignored: new Set([someName]) });
+    assert.ok(!r2.items.find(i => i.name === someName));
+    assert.ok(r2.stats.total < r1.stats.total);
+  }
+});

@@ -2752,13 +2752,42 @@ experimental_bearer_token = "dummy"</pre>
         // ===== Preset CLI: discovery + install history (mirrors skills) =====
         let cliLibraryState = { loaded: false, loading: false, query: "", items: [], stats: { total: 0, installed: 0, shown: 0 } };
         let cliSearchTimer = null;
+        let cliIgnoredState = [];
+
+        async function loadCliIgnored() {
+            try {
+                const res = await fetch('/v1/cli/ignore');
+                const data = await res.json();
+                if (data.success) cliIgnoredState = data.ignored || [];
+            } catch {}
+        }
+
+        async function toggleCliIgnore(name) {
+            const isIgnored = cliIgnoredState.includes(name);
+            try {
+                const method = isIgnored ? 'DELETE' : 'POST';
+                const url = isIgnored ? '/v1/cli/ignore?name=' + encodeURIComponent(name) : '/v1/cli/ignore';
+                const body = isIgnored ? null : JSON.stringify({ name: name });
+                const res = await fetch(url, { method: method, headers: isIgnored ? {} : { 'Content-Type': 'application/json' }, body: body });
+                const data = await res.json();
+                if (!data.success) throw new Error(data.error || '失败');
+                cliIgnoredState = data.ignored || [];
+                cliLibraryState.loaded = false;
+                refreshCliLibrary(false);
+                showToast(isIgnored ? '已取消忽略 ' + name : '已忽略 ' + name + '，后续不再扫描', 'success');
+            } catch (err) {
+                showToast('操作失败: ' + err.message, 'danger');
+            }
+        }
 
         async function refreshCliLibrary(force) {
             if (cliLibraryState.loading) return;
             if (cliLibraryState.loaded && !force) { renderCliLibrary(); return; }
             cliLibraryState.loading = true;
             try {
-                const res = await fetch('/v1/cli/discover?q=' + encodeURIComponent(cliLibraryState.query || ''));
+                if (force) await loadCliIgnored();
+                const probeParam = force ? '&probe=1' : '';
+                const res = await fetch('/v1/cli/discover?q=' + encodeURIComponent(cliLibraryState.query || '') + probeParam);
                 const data = await res.json();
                 if (!data.success) throw new Error(data.error || '失败');
                 cliLibraryState.items = data.items || [];
@@ -2789,15 +2818,19 @@ experimental_bearer_token = "dummy"</pre>
                 return;
             }
             host.innerHTML = items.map(function(item) {
-                const version = item.version ? escapeHtml(item.version) : '<span style="color:var(--text-secondary);">—</span>';
-                const pathLine = item.path ? escapeHtml(item.path) : '<span style="color:var(--text-secondary);">未在 PATH 中找到</span>';
-                return '<div class="install-record">' +
-                    '<div class="install-record-head">' +
-                    '<div style="min-width:0;flex:1;">' +
-                    '<div class="install-record-skill">' + escapeHtml(item.name) + (item.source ? ' <span class="skill-pill" style="background:var(--input-bg);color:var(--text-secondary);">' + escapeHtml(item.source) + '</span>' : '') + '</div>' +
-                    '<div class="install-record-cmd">$ ' + escapeHtml(item.command) + ' --version</div>' +
-                    '<div class="install-record-meta">版本: ' + version + '</div>' +
-                    '<div class="install-record-meta">' + pathLine + '</div>' +
+                const version = item.version ? escapeHtml(item.version) : '<span style=\"color:var(--text-secondary);\">-</span>';
+                const pathLine = item.path ? escapeHtml(item.path) : '<span style=\"color:var(--text-secondary);\">未在 PATH 中找到</span>';
+                const ignored = cliIgnoredState.indexOf(item.name) >= 0;
+                return '<div class=\"install-record\">' +
+                    '<div class=\"install-record-head\">' +
+                    '<div style=\"min-width:0;flex:1;\">' +
+                    '<div class=\"install-record-skill\">' + escapeHtml(item.name) + (item.source ? ' <span class=\"skill-pill\" style=\"background:var(--input-bg);color:var(--text-secondary);\">' + escapeHtml(item.source) + '</span>' : '') + '</div>' +
+                    '<div class=\"install-record-cmd\">$ ' + escapeHtml(item.command) + ' --version</div>' +
+                    '<div class=\"install-record-meta\">版本: ' + version + '</div>' +
+                    '<div class=\"install-record-meta\">' + pathLine + '</div>' +
+                    '</div>' +
+                    '<div class=\"install-record-actions\">' +
+                    '<button class=\"btn\" style=\"padding:4px 10px;font-size:12px;' + (ignored ? 'color:var(--text-secondary);' : '') + '\" title=\"' + (ignored ? '取消忽略，恢复扫描' : '忽略此 CLI，以后不再扫描') + '\" onclick=\"toggleCliIgnore(' + String.fromCharCode(39) + escapeHtml(item.name) + String.fromCharCode(39) + ')\">' + (ignored ? '已忽略' : '忽略') + '</button>' +
                     '</div>' +
                     '</div></div>';
             }).join('');
@@ -2839,8 +2872,9 @@ experimental_bearer_token = "dummy"</pre>
                     '<div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;">' +
                     '<input class="cli-source-name" value="' + escapeHtml(src.name || '') + '" placeholder="名称" style="width:120px;font-weight:600;" />' +
                     '<input class="cli-source-label" value="' + escapeHtml(src.label || '') + '" placeholder="标签" style="width:160px;" />' +
-                    '<label style="display:flex;align-items:center;gap:4px;font-size:12px;color:var(--text-secondary);">' +
-                    '<input type="checkbox" class="cli-source-enabled"' + (enabled ? ' checked' : '') + ' /> 启用' +
+                    '<label class="node-card-switch" title="+'+(enabled ? '已启用' : '已禁用')+'">' +
+                    '<input type="checkbox" class="cli-source-enabled"' + (enabled ? ' checked' : '') + ' />' +
+                    '<span class="node-card-switch-track" aria-hidden="true"></span>' +
                     '</label>' +
                     '<button class="btn" style="padding:2px 8px;font-size:12px;" onclick="moveCliSource(' + i + ', -1)">↑</button>' +
                     '<button class="btn" style="padding:2px 8px;font-size:12px;" onclick="moveCliSource(' + i + ', 1)">↓</button>' +

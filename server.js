@@ -1266,7 +1266,9 @@ function collectGroupedModelsFromConfig(config) {
     if (!checkLocalAuth(req, res)) return;
     try {
       const query = String(url.searchParams.get("q") || "").trim();
-      const result = await discoverInstalledClis({ query });
+      const probe = url.searchParams.get("probe") === "1" || url.searchParams.get("probe") === "true";
+      const ignored = CliSourceConfig.listIgnored();
+      const result = await discoverInstalledClis({ query, probe, ignored });
       sendJson(res, 200, { success: true, ...result });
     } catch (err) {
       sendJson(res, 500, { error: err.message || String(err) });
@@ -1350,6 +1352,44 @@ function collectGroupedModelsFromConfig(config) {
     try {
       const sources = CliSourceConfig.reset();
       sendJson(res, 200, { success: true, sources, filePath: CliSourceConfig.filePath() });
+    } catch (err) {
+      sendJson(res, 500, { error: err.message || String(err) });
+    }
+    return;
+  }
+
+  // --- CLI ignore list (user opts out of scanning certain CLIs) ---
+  if (reqPath === "/v1/cli/ignore" && req.method === "GET") {
+    if (!checkLocalAuth(req, res)) return;
+    try {
+      sendJson(res, 200, { success: true, ignored: CliSourceConfig.listIgnored() });
+    } catch (err) {
+      sendJson(res, 500, { error: err.message || String(err) });
+    }
+    return;
+  }
+
+  if (reqPath === "/v1/cli/ignore" && req.method === "POST") {
+    if (!checkLocalAuth(req, res)) return;
+    try {
+      const payload = JSON.parse(await readText(req) || "{}");
+      const name = String(payload.name || "").trim();
+      if (!name) { sendJson(res, 400, { error: "name is required" }); return; }
+      const ignored = CliSourceConfig.addIgnored(name);
+      sendJson(res, 200, { success: true, ignored });
+    } catch (err) {
+      sendJson(res, 400, { error: err.message || String(err) });
+    }
+    return;
+  }
+
+  if (reqPath === "/v1/cli/ignore" && req.method === "DELETE") {
+    if (!checkLocalAuth(req, res)) return;
+    try {
+      const name = String(url.searchParams.get("name") || "").trim();
+      if (!name) { sendJson(res, 400, { error: "name is required" }); return; }
+      const ignored = CliSourceConfig.removeIgnored(name);
+      sendJson(res, 200, { success: true, ignored });
     } catch (err) {
       sendJson(res, 500, { error: err.message || String(err) });
     }
