@@ -239,3 +239,36 @@ test("request adapter rejects an unsupported message content shape", () => {
     /cannot be represented by Chat Completions/,
   );
 });
+
+test("request adapter converts compaction summary to a system message", () => {
+  const result = responsesRequestToChat({
+    model: "glm-5.2",
+    input: [
+      { type: "compaction", text: "User asked about authentication, assistant implemented JWT login." },
+      { role: "user", content: "Now help me add rate limiting." },
+    ],
+  }, "glm-5.2");
+
+  const messages = result.body.messages;
+  assert.equal(messages.length, 2);
+  assert.equal(messages[0].role, "system");
+  assert.ok(messages[0].content.includes("authentication"));
+  assert.ok(messages[0].content.includes("JWT"));
+  assert.equal(messages[1].role, "user");
+  assert.ok(messages[1].content.includes("rate limiting"));
+});
+
+test("request adapter converts summary-type compaction item", () => {
+  const result = responsesRequestToChat({
+    model: "glm-5.2",
+    input: [
+      { type: "summary", summary: "Prior context about database migrations." },
+      { role: "user", content: "Continue." },
+    ],
+  }, "glm-5.2");
+
+  const messages = result.body.messages;
+  assert.equal(messages.length, 2);
+  assert.equal(messages[0].role, "system");
+  assert.ok(messages[0].content.includes("database migrations"));
+});

@@ -11,6 +11,7 @@ import { Readable } from "node:stream";
 import { HttpsProxyAgent } from "https-proxy-agent";
 import { responsesRequestToChat } from "./lib/codex/chat-request-adapter.mjs";
 import { sanitizeResponsesInput, sanitizeGrokResponsesInput } from "./lib/codex/grok-input-sanitizer.mjs";
+import { extractCompactionSummary } from "./lib/codex/compaction-helper.mjs";
 
 
 
@@ -5254,6 +5255,13 @@ function openAIResponseInputToAnthropic(item) {
         content: responseToolOutputToText(item.output),
       }],
     };
+  }
+
+  // Surface compaction summary as a system message so the Anthropic model
+  // retains the compressed conversation context.
+  const compactionText = extractCompactionSummary(item);
+  if (compactionText) {
+    return { role: "system", text: `[Previous conversation summary]\n${compactionText}` };
   }
 
   return {

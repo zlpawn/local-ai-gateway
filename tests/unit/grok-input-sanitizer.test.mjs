@@ -33,16 +33,51 @@ test("sanitizeResponsesInput converts custom_tool_call and output to standard fu
   assert.equal(clean.tools[1].name, "apply_patch");
 
   // Check input items sanitization
-  assert.equal(clean.input.length, 3);
+  // compaction item is now converted to a system message (was previously dropped)
+  assert.equal(clean.input.length, 4);
   assert.equal(clean.input[0].role, "user");
   assert.equal(clean.input[1].type, "function_call");
   assert.equal(clean.input[1].name, "apply_patch");
   assert.equal(clean.input[1].arguments, '{"input":"*** Patch"}');
   assert.equal(clean.input[2].type, "function_call_output");
   assert.equal(clean.input[2].output, "Success");
+  assert.equal(clean.input[3].type, "message");
+  assert.equal(clean.input[3].role, "system");
+  assert.ok(clean.input[3].content.includes("compacted previous thread"));
 });
 
 test("sanitizeGrokResponsesInput is exported as an alias of sanitizeResponsesInput", () => {
   assert.equal(sanitizeGrokResponsesInput, sanitizeResponsesInput);
 });
 
+
+test("sanitizeResponsesInput converts summary-type compaction to system message", () => {
+  const raw = {
+    model: "grok-4.5",
+    input: [
+      { type: "summary", summary: "Discussed API design patterns." },
+      { role: "user", content: "What about caching?" },
+    ],
+  };
+
+  const clean = sanitizeResponsesInput(raw);
+  assert.equal(clean.input.length, 2);
+  assert.equal(clean.input[0].type, "message");
+  assert.equal(clean.input[0].role, "system");
+  assert.ok(clean.input[0].content.includes("API design patterns"));
+  assert.equal(clean.input[1].role, "user");
+});
+
+test("sanitizeResponsesInput skips compaction with empty text", () => {
+  const raw = {
+    model: "grok-4.5",
+    input: [
+      { type: "compaction", text: "" },
+      { role: "user", content: "Hello" },
+    ],
+  };
+
+  const clean = sanitizeResponsesInput(raw);
+  assert.equal(clean.input.length, 1);
+  assert.equal(clean.input[0].role, "user");
+});
