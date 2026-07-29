@@ -4,7 +4,7 @@
 > Branch: `codex/agent-cli-design`  
 > Worktree: `.worktrees/agent-cli-design`  
 > Date: 2026-07-29  
-> CLI name: `shrimp` (current published binary still `local-ai-gateway` until rename ships)
+> CLI/package name: `shrimp` / `@wuhezhizhong/shrimp`
 
 ## 1. Goal
 
@@ -19,19 +19,27 @@ The CLI must cover essentially the same capability surface as `desktop/config-pa
 
 ### Naming
 
-- chosen CLI binary / command: `shrimp`
-- current published binary (compat): `local-ai-gateway`
-- current package (compat until publish rename): `@wuhezhizhong/local-ai-gateway`
-- target user data dir: `~/.shrimp`
-- current data dir (compat): `~/.local-ai-gateway`
+Locked names:
 
-Rename implementation must update package name, bin, data dir, service identity strings, docs, and tests together. Domain logic should read these from constants so the brand is not hard-coded in business rules. During transition, `local-ai-gateway` may remain as an alias binary.
+- CLI binary / command: `shrimp`
+- npm package: `@wuhezhizhong/shrimp`
+- user data dir: `~/.shrimp`
+- GitHub repo target: `shrimp` (from `local-ai-gateway`)
+- service identity: `shrimp`
+
+Current values to replace during the clean rename (no external users yet):
+
+- binary: `local-ai-gateway`
+- package: `@wuhezhizhong/local-ai-gateway`
+- data dir: `~/.local-ai-gateway`
+
+Prefer a clean rename over long dual-compat. Temporary aliases are optional, not required. Domain logic should still read brand strings from constants.
 
 ## 2. Non-goals
 
 This design does **not**:
 
-1. Finalize npm scope/package rename beyond the chosen CLI name `shrimp` (package can lag the binary name briefly)
+1. Leave historical docs that still mention `local-ai-gateway` until the rename PR lands
 2. Redesign the web UI look-and-feel
 3. Replace the web config panel; CLI and panel share domain services
 4. Add cloud account / multi-user remote management
@@ -104,6 +112,7 @@ Agents and humans both face high manual cost after install:
 | Client clone | Generalize beyond DeepTutor-from-Codex to any client copy |
 | Implementation shape | Agent-native command surface + shared domain services |
 | CLI name | `shrimp` |
+| npm package | `@wuhezhizhong/shrimp` |
 | Top-level Antigravity command | Renamed to `upstream google-oauth` to avoid product/mode ambiguity |
 
 ## 5. Current surface inventory
@@ -844,7 +853,7 @@ These are intentionally unresolved or soft:
 2. **Dynamic custom clients**: allow arbitrary client names beyond code/desktop/codex/deeptutor, or keep fixed set in v1?
 3. **No-arg default**: keep `start`, or eventually move to `status/doctor`?
 4. **Live reload completeness**: which mutations can hot-apply without restart today, and which need explicit restart?
-5. **Package/data-dir rename timing** relative to shipping the `shrimp` binary (CLI name is chosen; npm scope and `~/.shrimp` migration timing remain)
+5. Whether GitHub rename and npm publish of `@wuhezhizhong/shrimp` happen in the same PR as the agent CLI framework, or as a thin preceding rename PR
 6. Whether to ship an agent skill package in-repo in the same milestone as Phase 1
 
 ## 17. Reviewer guide

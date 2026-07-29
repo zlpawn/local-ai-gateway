@@ -10,9 +10,10 @@
 
 ## Global Constraints
 
-- Public CLI command name is `shrimp` (compat alias `local-ai-gateway` allowed during transition).
+- Public CLI command name is `shrimp`.
+- npm package name is `@wuhezhizhong/shrimp`.
+- User data dir is `~/.shrimp` (clean rename; no multi-user migration required).
 - Top-level OAuth command is `upstream google-oauth` (not `antigravity`).
-- Target data dir constant is `~/.shrimp` with compatibility for `~/.local-ai-gateway` during migration.
 - Default CLI output format is JSON (`--format json`).
 - Success stdout envelope: `{ ok: true, command, data, meta, next? }`.
 - Error stderr envelope: `{ ok: false, command, error, meta? }` with stable `error.type` / `error.code`.
@@ -21,7 +22,7 @@
 - `gateway.secrets.json` stays `{ api_keys: ... }` only.
 - `antigravity.secrets.json` remains isolated.
 - Generic client copy replaces DeepTutor-only UX as the primary model.
-- CLI binary name is `shrimp`; use constants for bin/service/data-dir strings. Package/data-dir migration may trail the binary rename. OAuth command surface is `upstream google-oauth`.
+- CLI binary name is `shrimp`; npm package is `@wuhezhizhong/shrimp`; data dir is `~/.shrimp`. Use constants for bin/service/data-dir/package strings. OAuth command surface is `upstream google-oauth`. Because there are no external users yet, prefer clean rename over long dual-compat.
 - Prefer extending existing modules over broad rewrites.
 - TDD: write failing tests before implementation in each task.
 - Frequent atomic commits after each green task.
@@ -314,7 +315,7 @@ node --test tests/integration/gateway-cli.integration.test.mjs
 
 Register: `start stop restart status logs stdout stderr path init setup`
 
-Also introduce naming constants and ensure package bin can expose `shrimp` (alias `local-ai-gateway` ok for transition).
+Also introduce naming constants and set package.bin to `shrimp`; package.name to `@wuhezhizhong/shrimp`.
 
 - [ ] **Step 4: Run lifecycle tests**
 
@@ -791,9 +792,11 @@ git commit -m "test(cli): add agent bootstrap integration flow"
 
 Also finalize user-facing naming:
 
-- `package.json` `bin` field exposes `shrimp` (keep `local-ai-gateway` alias if needed)
-- README examples use `shrimp ...`
-- data dir constant defaults to `~/.shrimp` with migration note from `~/.local-ai-gateway`
+- `package.json` `name` = `@wuhezhizhong/shrimp`
+- `package.json` `bin.shrimp` = `bin/cli.js`
+- repository/homepage/bugs URLs point at the `shrimp` GitHub repo after rename
+- README examples use `npm i -g @wuhezhizhong/shrimp` and `shrimp ...`
+- data dir constant defaults to `~/.shrimp`
 - help/schema show `upstream google-oauth`, not top-level `antigravity`
 
 **Files:**
@@ -896,7 +899,7 @@ git commit -m "fix(cli): address verification sweep issues"
 | Agent e2e flow | Task 13 |
 | Docs + panel generalization | Task 14 |
 | Verification | Task 15 |
-| CLI name `shrimp` + `upstream google-oauth` command | Naming constants + upstream command module (Tasks 3/12/14) |
+| CLI/package `shrimp` / `@wuhezhizhong/shrimp` + `upstream google-oauth` | Naming constants + package.json + upstream command module (Tasks 3/12/14) |
 | Optional bootstrap sugar commands | Not in v1 tasks (YAGNI); can compose from lower-level commands |
 
 Placeholder scan: no TBD implementation steps remain; open product questions are listed in the design for reviewers, not as incomplete engineering steps.
