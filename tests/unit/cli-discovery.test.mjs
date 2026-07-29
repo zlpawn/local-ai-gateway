@@ -1,5 +1,5 @@
-﻿import assert from "node:assert/strict";
-import { mkdtempSync, rmSync, mkdirSync, writeFileSync } from "node:fs";
+import assert from "node:assert/strict";
+import { mkdtempSync, rmSync, mkdirSync, writeFileSync, chmodSync } from "node:fs";
 import os from "node:os";
 import path from "node:path";
 import test from "node:test";
