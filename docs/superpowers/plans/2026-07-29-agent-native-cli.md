@@ -4,7 +4,7 @@
 
 **Goal:** Implement an agent-first CLI that can configure and operate the local AI gateway across the full config-panel surface using a stable JSON protocol.
 
-**Architecture:** Shared domain services under `lib/domain/*`, thin command handlers under `lib/cli/commands/*`, and a lark-cli-style JSON envelope transport. Local file stores handle offline config; live HTTP is used for health/hot state; process management stays in the existing gateway lifecycle layer.
+**Architecture:** Product CLI packaged under `lib/clis/shrimp/` (skills-like layout), with domain services + thin command handlers inside that tree, and a lark-cli-style JSON envelope transport. Local file stores handle offline config; live HTTP is used for health/hot state; process management stays in the existing gateway lifecycle layer.
 
 **Tech Stack:** Node.js >= 18, native `node:test`, existing ESM modules in `lib/`, current `bin/cli.js` entrypoint, no new runtime dependencies unless absolutely necessary.
 
@@ -14,6 +14,8 @@
 - npm package name is `@wuhezhizhong/shrimp`.
 - User data dir is `~/.shrimp` (clean rename; no multi-user migration required).
 - Top-level OAuth command is `upstream google-oauth` (not `antigravity`).
+- Product CLI code lives under `lib/clis/shrimp/` (skills-like multi-CLI layout); `bin/*` stays thin.
+- GitHub repository rename happens **last**, only after code rename verification passes.
 - Default CLI output format is JSON (`--format json`).
 - Success stdout envelope: `{ ok: true, command, data, meta, next? }`.
 - Error stderr envelope: `{ ok: false, command, error, meta? }` with stable `error.type` / `error.code`.
@@ -35,40 +37,40 @@
 
 ### Create
 
-- `lib/cli/protocol.mjs` — envelopes, exit codes, redaction, printers
-- `lib/cli/registry.mjs` — command registration + schema export
-- `lib/cli/parse-args.mjs` — shared argv helpers
-- `lib/cli/commands/lifecycle.mjs`
-- `lib/cli/commands/config.mjs`
-- `lib/cli/commands/endpoint.mjs`
-- `lib/cli/commands/secret.mjs`
-- `lib/cli/commands/client.mjs`
-- `lib/cli/commands/apply.mjs`
-- `lib/cli/commands/sync.mjs`
-- `lib/cli/commands/skill.mjs`
-- `lib/cli/commands/cli-tool.mjs`
-- `lib/cli/commands/tool.mjs`
-- `lib/cli/commands/upstream.mjs`
-- `lib/cli/commands/doctor.mjs`
-- `lib/cli/commands/schema.mjs`
-- `lib/domain/live-gateway.mjs`
-- `lib/domain/config-service.mjs`
-- `lib/domain/endpoint-service.mjs`
-- `lib/domain/secret-service.mjs`
-- `lib/domain/client-service.mjs`
-- `lib/domain/apply-service.mjs`
-- `lib/domain/doctor-service.mjs`
-- `lib/domain/sync-service.mjs`
-- `lib/domain/skill-service.mjs`
-- `lib/domain/cli-tool-service.mjs`
-- `lib/domain/tool-service.mjs`
-- `tests/unit/cli-protocol.test.mjs`
-- `tests/unit/cli-registry.test.mjs`
-- `tests/unit/endpoint-service.test.mjs`
-- `tests/unit/client-copy-service.test.mjs`
-- `tests/unit/secret-service.test.mjs`
-- `tests/unit/doctor-service.test.mjs`
-- `tests/integration/agent-cli.integration.test.mjs`
+- `lib/clis/shrimp/protocol.mjs` — envelopes, exit codes, redaction, printers
+- `lib/clis/shrimp/registry.mjs` — command registration + schema export
+- `lib/clis/shrimp/parse-args.mjs` — shared argv helpers
+- `lib/clis/shrimp/commands/lifecycle.mjs`
+- `lib/clis/shrimp/commands/config.mjs`
+- `lib/clis/shrimp/commands/endpoint.mjs`
+- `lib/clis/shrimp/commands/secret.mjs`
+- `lib/clis/shrimp/commands/client.mjs`
+- `lib/clis/shrimp/commands/apply.mjs`
+- `lib/clis/shrimp/commands/sync.mjs`
+- `lib/clis/shrimp/commands/skill.mjs`
+- `lib/clis/shrimp/commands/cli-tool.mjs`
+- `lib/clis/shrimp/commands/tool.mjs`
+- `lib/clis/shrimp/commands/upstream.mjs`
+- `lib/clis/shrimp/commands/doctor.mjs`
+- `lib/clis/shrimp/commands/schema.mjs`
+- `lib/clis/shrimp/domain/live-gateway.mjs`
+- `lib/clis/shrimp/domain/config-service.mjs`
+- `lib/clis/shrimp/domain/endpoint-service.mjs`
+- `lib/clis/shrimp/domain/secret-service.mjs`
+- `lib/clis/shrimp/domain/client-service.mjs`
+- `lib/clis/shrimp/domain/apply-service.mjs`
+- `lib/clis/shrimp/domain/doctor-service.mjs`
+- `lib/clis/shrimp/domain/sync-service.mjs`
+- `lib/clis/shrimp/domain/skill-service.mjs`
+- `lib/clis/shrimp/domain/cli-tool-service.mjs`
+- `lib/clis/shrimp/domain/tool-service.mjs`
+- `tests/unit/clis/shrimp/protocol.test.mjs`
+- `tests/unit/clis/shrimp/registry.test.mjs`
+- `tests/unit/clis/shrimp/endpoint-service.test.mjs`
+- `tests/unit/clis/shrimp/client-copy-service.test.mjs`
+- `tests/unit/clis/shrimp/secret-service.test.mjs`
+- `tests/unit/clis/shrimp/doctor-service.test.mjs`
+- `tests/integration/shrimp-cli.integration.test.mjs`
 
 ### Modify
 
@@ -84,9 +86,11 @@
 
 ### Task 1: CLI protocol primitives
 
+Create the `lib/clis/shrimp/` package root first (skills-like multi-CLI layout).
+
 **Files:**
-- Create: `lib/cli/protocol.mjs`
-- Test: `tests/unit/cli-protocol.test.mjs`
+- Create: `lib/clis/shrimp/protocol.mjs`
+- Test: `tests/unit/clis/shrimp/protocol.test.mjs`
 
 **Interfaces:**
 - Produces:
@@ -109,7 +113,7 @@ import {
   redactSecrets,
   formatSecretState,
   EXIT,
-} from "../../lib/cli/protocol.mjs";
+} from "../../lib/clis/shrimp/protocol.mjs";
 
 test("success envelope shape", () => {
   const env = successEnvelope({
@@ -160,10 +164,10 @@ test("formatSecretState distinguishes missing/stored/env", () => {
 
 - [ ] **Step 2: Run test to verify it fails**
 
-Run: `node --test tests/unit/cli-protocol.test.mjs`  
+Run: `node --test tests/unit/clis/shrimp/protocol.test.mjs`  
 Expected: FAIL module not found
 
-- [ ] **Step 3: Implement `lib/cli/protocol.mjs`**
+- [ ] **Step 3: Implement `lib/clis/shrimp/protocol.mjs`**
 
 Implement envelope builders, deep redaction for keys matching `/api[_-]?key/i`, `authorization`, `token`, `access_token`, `refresh_token`, `client_secret`, and printers that:
 
@@ -173,13 +177,13 @@ Implement envelope builders, deep redaction for keys matching `/api[_-]?key/i`, 
 
 - [ ] **Step 4: Run tests**
 
-Run: `node --test tests/unit/cli-protocol.test.mjs`  
+Run: `node --test tests/unit/clis/shrimp/protocol.test.mjs`  
 Expected: PASS
 
 - [ ] **Step 5: Commit**
 
 ```bash
-git add lib/cli/protocol.mjs tests/unit/cli-protocol.test.mjs
+git add lib/clis/shrimp/protocol.mjs tests/unit/clis/shrimp/protocol.test.mjs
 git commit -m "feat(cli): add agent JSON protocol helpers"
 ```
 
@@ -188,10 +192,10 @@ git commit -m "feat(cli): add agent JSON protocol helpers"
 ### Task 2: Command registry + schema
 
 **Files:**
-- Create: `lib/cli/registry.mjs`
-- Create: `lib/cli/parse-args.mjs`
-- Create: `lib/cli/commands/schema.mjs`
-- Test: `tests/unit/cli-registry.test.mjs`
+- Create: `lib/clis/shrimp/registry.mjs`
+- Create: `lib/clis/shrimp/parse-args.mjs`
+- Create: `lib/clis/shrimp/commands/schema.mjs`
+- Test: `tests/unit/clis/shrimp/registry.test.mjs`
 
 **Interfaces:**
 - Produces:
@@ -205,7 +209,7 @@ git commit -m "feat(cli): add agent JSON protocol helpers"
 ```js
 import assert from "node:assert/strict";
 import test from "node:test";
-import { createRegistry } from "../../lib/cli/registry.mjs";
+import { createRegistry } from "../../lib/clis/shrimp/registry.mjs";
 
 test("registry dispatches a command and returns handler result", async () => {
   const reg = createRegistry();
@@ -244,7 +248,7 @@ test("schema export includes registered params", () => {
 
 - [ ] **Step 2: Run test to verify fail**
 
-Run: `node --test tests/unit/cli-registry.test.mjs`  
+Run: `node --test tests/unit/clis/shrimp/registry.test.mjs`  
 Expected: FAIL
 
 - [ ] **Step 3: Implement registry + parse helpers**
@@ -258,13 +262,13 @@ Requirements:
 
 - [ ] **Step 4: Run tests**
 
-Run: `node --test tests/unit/cli-registry.test.mjs`  
+Run: `node --test tests/unit/clis/shrimp/registry.test.mjs`  
 Expected: PASS
 
 - [ ] **Step 5: Commit**
 
 ```bash
-git add lib/cli/registry.mjs lib/cli/parse-args.mjs lib/cli/commands/schema.mjs tests/unit/cli-registry.test.mjs
+git add lib/clis/shrimp/registry.mjs lib/clis/shrimp/parse-args.mjs lib/clis/shrimp/commands/schema.mjs tests/unit/clis/shrimp/registry.test.mjs
 git commit -m "feat(cli): add command registry and schema export"
 ```
 
@@ -273,8 +277,8 @@ git commit -m "feat(cli): add command registry and schema export"
 ### Task 3: Wire bin entry + wrap lifecycle commands
 
 **Files:**
-- Modify: `bin/cli.js`
-- Create: `lib/cli/commands/lifecycle.mjs`
+- Modify: `bin/cli.js` (temporary) and/or create thin `bin/shrimp.js` launching `lib/clis/shrimp`
+- Create: `lib/clis/shrimp/commands/lifecycle.mjs`
 - Modify: `lib/cli/gateway-service.mjs` as needed to return structured data
 - Modify: `tests/unit/gateway-service.test.mjs` if assertions depend on text-only output
 - Modify: `tests/integration/gateway-cli.integration.test.mjs` only if necessary for JSON default
@@ -322,7 +326,7 @@ Also introduce naming constants and set package.bin to `shrimp`; package.name to
 Run:
 
 ```bash
-node --test tests/unit/gateway-service.test.mjs tests/unit/cli-protocol.test.mjs tests/unit/cli-registry.test.mjs
+node --test tests/unit/gateway-service.test.mjs tests/unit/clis/shrimp/protocol.test.mjs tests/unit/clis/shrimp/registry.test.mjs
 node --test tests/integration/gateway-cli.integration.test.mjs
 ```
 
@@ -331,7 +335,7 @@ Expected: PASS
 - [ ] **Step 5: Commit**
 
 ```bash
-git add bin/cli.js lib/cli/commands/lifecycle.mjs lib/cli/gateway-service.mjs tests
+git add bin/cli.js lib/clis/shrimp/commands/lifecycle.mjs lib/cli/gateway-service.mjs tests
 git commit -m "feat(cli): route lifecycle commands through agent registry"
 ```
 
@@ -340,9 +344,9 @@ git commit -m "feat(cli): route lifecycle commands through agent registry"
 ### Task 4: Config service + validate/get
 
 **Files:**
-- Create: `lib/domain/config-service.mjs`
-- Create: `lib/cli/commands/config.mjs`
-- Test: extend or create `tests/unit/config-service-cli.test.mjs`
+- Create: `lib/clis/shrimp/domain/config-service.mjs`
+- Create: `lib/clis/shrimp/commands/config.mjs`
+- Test: extend or create `tests/unit/clis/shrimp/config-service.test.mjs`
 
 **Interfaces:**
 - Produces:
@@ -360,7 +364,7 @@ Cover:
 
 - [ ] **Step 2: Run fail**
 
-Run: `node --test tests/unit/config-service-cli.test.mjs`
+Run: `node --test tests/unit/clis/shrimp/config-service.test.mjs`
 
 - [ ] **Step 3: Implement service using `loadGatewayState` / `saveGatewayState` / examples**
 
@@ -377,7 +381,7 @@ Commands:
 - [ ] **Step 5: Commit**
 
 ```bash
-git add lib/domain/config-service.mjs lib/cli/commands/config.mjs tests/unit/config-service-cli.test.mjs
+git add lib/clis/shrimp/domain/config-service.mjs lib/clis/shrimp/commands/config.mjs tests/unit/clis/shrimp/config-service.test.mjs
 git commit -m "feat(cli): add config get/validate/restore commands"
 ```
 
@@ -386,9 +390,9 @@ git commit -m "feat(cli): add config get/validate/restore commands"
 ### Task 5: Endpoint service CRUD
 
 **Files:**
-- Create: `lib/domain/endpoint-service.mjs`
-- Create: `lib/cli/commands/endpoint.mjs`
-- Test: `tests/unit/endpoint-service.test.mjs`
+- Create: `lib/clis/shrimp/domain/endpoint-service.mjs`
+- Create: `lib/clis/shrimp/commands/endpoint.mjs`
+- Test: `tests/unit/clis/shrimp/endpoint-service.test.mjs`
 
 **Interfaces:**
 - Produces:
@@ -415,7 +419,7 @@ Use real filesystem temp dirs and existing validation rules.
 
 - [ ] **Step 2: Run fail**
 
-Run: `node --test tests/unit/endpoint-service.test.mjs`
+Run: `node --test tests/unit/clis/shrimp/endpoint-service.test.mjs`
 
 - [ ] **Step 3: Implement endpoint service**
 
@@ -431,7 +435,7 @@ Implementation notes:
 - [ ] **Step 5: Commit**
 
 ```bash
-git add lib/domain/endpoint-service.mjs lib/cli/commands/endpoint.mjs tests/unit/endpoint-service.test.mjs
+git add lib/clis/shrimp/domain/endpoint-service.mjs lib/clis/shrimp/commands/endpoint.mjs tests/unit/clis/shrimp/endpoint-service.test.mjs
 git commit -m "feat(cli): add endpoint CRUD for agent configuration"
 ```
 
@@ -440,9 +444,9 @@ git commit -m "feat(cli): add endpoint CRUD for agent configuration"
 ### Task 6: Secret service with redaction
 
 **Files:**
-- Create: `lib/domain/secret-service.mjs`
-- Create: `lib/cli/commands/secret.mjs`
-- Test: `tests/unit/secret-service.test.mjs`
+- Create: `lib/clis/shrimp/domain/secret-service.mjs`
+- Create: `lib/clis/shrimp/commands/secret.mjs`
+- Test: `tests/unit/clis/shrimp/secret-service.test.mjs`
 
 **Interfaces:**
 - Produces:
@@ -471,7 +475,7 @@ Reject attempts to store antigravity OAuth fields here.
 - [ ] **Step 5: Commit**
 
 ```bash
-git add lib/domain/secret-service.mjs lib/cli/commands/secret.mjs tests/unit/secret-service.test.mjs
+git add lib/clis/shrimp/domain/secret-service.mjs lib/clis/shrimp/commands/secret.mjs tests/unit/clis/shrimp/secret-service.test.mjs
 git commit -m "feat(cli): add secret set/list with output redaction"
 ```
 
@@ -481,9 +485,9 @@ git commit -m "feat(cli): add secret set/list with output redaction"
 
 **Files:**
 - Modify: `lib/config/gateway-config-store.mjs` (if extending copy helper)
-- Create: `lib/domain/client-service.mjs`
-- Create: `lib/cli/commands/client.mjs` (list/get/copy/add/remove parts)
-- Test: `tests/unit/client-copy-service.test.mjs`
+- Create: `lib/clis/shrimp/domain/client-service.mjs`
+- Create: `lib/clis/shrimp/commands/client.mjs` (list/get/copy/add/remove parts)
+- Test: `tests/unit/clis/shrimp/client-copy-service.test.mjs`
 - Extend: `tests/unit/gateway-config-store.test.mjs` if store behavior changes
 
 **Interfaces:**
@@ -528,7 +532,7 @@ Preserve current replace semantics exactly for compatibility.
 - [ ] **Step 5: Commit**
 
 ```bash
-git add lib/domain/client-service.mjs lib/cli/commands/client.mjs lib/config/gateway-config-store.mjs tests/unit/client-copy-service.test.mjs tests/unit/gateway-config-store.test.mjs
+git add lib/clis/shrimp/domain/client-service.mjs lib/clis/shrimp/commands/client.mjs lib/config/gateway-config-store.mjs tests/unit/clis/shrimp/client-copy-service.test.mjs tests/unit/gateway-config-store.test.mjs
 git commit -m "feat(cli): generalize client endpoint copy modes"
 ```
 
@@ -537,10 +541,10 @@ git commit -m "feat(cli): generalize client endpoint copy modes"
 ### Task 8: Doctor JSON
 
 **Files:**
-- Create: `lib/domain/doctor-service.mjs`
-- Create: `lib/cli/commands/doctor.mjs`
-- Create: `lib/domain/live-gateway.mjs`
-- Test: `tests/unit/doctor-service.test.mjs`
+- Create: `lib/clis/shrimp/domain/doctor-service.mjs`
+- Create: `lib/clis/shrimp/commands/doctor.mjs`
+- Create: `lib/clis/shrimp/domain/live-gateway.mjs`
+- Test: `tests/unit/clis/shrimp/doctor-service.test.mjs`
 - Optionally refactor logic out of `scripts/doctor.mjs` to call the service
 
 **Interfaces:**
@@ -568,7 +572,7 @@ Port useful checks from `scripts/doctor.mjs`, but return structured data. Keep s
 - [ ] **Step 5: Commit**
 
 ```bash
-git add lib/domain/doctor-service.mjs lib/domain/live-gateway.mjs lib/cli/commands/doctor.mjs scripts/doctor.mjs tests/unit/doctor-service.test.mjs
+git add lib/clis/shrimp/domain/doctor-service.mjs lib/clis/shrimp/domain/live-gateway.mjs lib/clis/shrimp/commands/doctor.mjs scripts/doctor.mjs tests/unit/clis/shrimp/doctor-service.test.mjs
 git commit -m "feat(cli): add structured doctor command"
 ```
 
@@ -577,10 +581,10 @@ git commit -m "feat(cli): add structured doctor command"
 ### Task 9: Client apply + slots + codex helpers
 
 **Files:**
-- Create: `lib/domain/apply-service.mjs`
-- Create: `lib/cli/commands/apply.mjs`
+- Create: `lib/clis/shrimp/domain/apply-service.mjs`
+- Create: `lib/clis/shrimp/commands/apply.mjs`
 - Modify/reuse: `lib/config/claude-code-settings.mjs`, codex catalog/history modules
-- Tests: new unit tests under `tests/unit/apply-service.test.mjs` + reuse existing codex/claude tests
+- Tests: new unit tests under `tests/unit/clis/shrimp/apply-service.test.mjs` + reuse existing codex/claude tests
 
 **Interfaces:**
 - Produces:
@@ -625,7 +629,7 @@ Commands:
 - [ ] **Step 5: Commit**
 
 ```bash
-git add lib/domain/apply-service.mjs lib/cli/commands/apply.mjs tests/unit/apply-service.test.mjs
+git add lib/clis/shrimp/domain/apply-service.mjs lib/clis/shrimp/commands/apply.mjs tests/unit/clis/shrimp/apply-service.test.mjs
 git commit -m "feat(cli): add client apply, slots, and codex helpers"
 ```
 
@@ -634,10 +638,10 @@ git commit -m "feat(cli): add client apply, slots, and codex helpers"
 ### Task 10: Session sync command coverage
 
 **Files:**
-- Create: `lib/domain/sync-service.mjs`
-- Create: `lib/cli/commands/sync.mjs`
+- Create: `lib/clis/shrimp/domain/sync-service.mjs`
+- Create: `lib/clis/shrimp/commands/sync.mjs`
 - Modify existing sync handling currently in gateway-service
-- Test: extend `tests/unit/session-sync.test.mjs` or add `tests/unit/sync-service-cli.test.mjs`
+- Test: extend `tests/unit/session-sync.test.mjs` or add `tests/unit/clis/shrimp/sync-service.test.mjs`
 
 **Interfaces:**
 - Produces:
@@ -656,7 +660,7 @@ git commit -m "feat(cli): add client apply, slots, and codex helpers"
 - [ ] **Step 5: Commit**
 
 ```bash
-git add lib/domain/sync-service.mjs lib/cli/commands/sync.mjs tests/unit/sync-service-cli.test.mjs
+git add lib/clis/shrimp/domain/sync-service.mjs lib/clis/shrimp/commands/sync.mjs tests/unit/clis/shrimp/sync-service.test.mjs
 git commit -m "feat(cli): expose full session sync settings"
 ```
 
@@ -665,10 +669,10 @@ git commit -m "feat(cli): expose full session sync settings"
 ### Task 11: Skills + local CLI tool commands
 
 **Files:**
-- Create: `lib/domain/skill-service.mjs`
-- Create: `lib/domain/cli-tool-service.mjs`
-- Create: `lib/cli/commands/skill.mjs`
-- Create: `lib/cli/commands/cli-tool.mjs`
+- Create: `lib/clis/shrimp/domain/skill-service.mjs`
+- Create: `lib/clis/shrimp/domain/cli-tool-service.mjs`
+- Create: `lib/clis/shrimp/commands/skill.mjs`
+- Create: `lib/clis/shrimp/commands/cli-tool.mjs`
 - Reuse: discovery/source-config/install-history/skill installer
 - Tests: extend `tests/unit/skills-library.test.mjs`, `tests/unit/cli-discovery.test.mjs`, add service tests
 
@@ -699,7 +703,7 @@ Prefer extracting shared functions used by server routes if currently inlined in
 - [ ] **Step 5: Commit**
 
 ```bash
-git add lib/domain/skill-service.mjs lib/domain/cli-tool-service.mjs lib/cli/commands/skill.mjs lib/cli/commands/cli-tool.mjs tests
+git add lib/clis/shrimp/domain/skill-service.mjs lib/clis/shrimp/domain/cli-tool-service.mjs lib/clis/shrimp/commands/skill.mjs lib/clis/shrimp/commands/cli-tool.mjs tests
 git commit -m "feat(cli): add skills and local CLI tool management commands"
 ```
 
@@ -708,11 +712,11 @@ git commit -m "feat(cli): add skills and local CLI tool management commands"
 ### Task 12: Mini tools + antigravity command modules
 
 **Files:**
-- Create: `lib/domain/tool-service.mjs`
-- Create: `lib/cli/commands/tool.mjs`
-- Create: `lib/domain/upstream-auth-service.mjs` (thin)
-- Create: `lib/cli/commands/upstream.mjs`
-- Tests: `tests/unit/tool-service.test.mjs`; reuse antigravity unit tests
+- Create: `lib/clis/shrimp/domain/tool-service.mjs`
+- Create: `lib/clis/shrimp/commands/tool.mjs`
+- Create: `lib/clis/shrimp/domain/upstream-auth-service.mjs` (thin)
+- Create: `lib/clis/shrimp/commands/upstream.mjs`
+- Tests: `tests/unit/clis/shrimp/tool-service.test.mjs`; reuse antigravity unit tests
 
 **Interfaces:**
 - `embedText({ client, endpointId, model, text, dimensions? })`
@@ -734,7 +738,7 @@ Wrap existing Google/Antigravity OAuth handlers under `upstream google-oauth` an
 - [ ] **Step 5: Commit**
 
 ```bash
-git add lib/domain/tool-service.mjs lib/cli/commands/tool.mjs lib/domain/upstream-auth-service.mjs lib/cli/commands/upstream.mjs tests
+git add lib/clis/shrimp/domain/tool-service.mjs lib/clis/shrimp/commands/tool.mjs lib/clis/shrimp/domain/upstream-auth-service.mjs lib/clis/shrimp/commands/upstream.mjs tests
 git commit -m "feat(cli): add mini tools and upstream google-oauth commands"
 ```
 
@@ -743,7 +747,7 @@ git commit -m "feat(cli): add mini tools and upstream google-oauth commands"
 ### Task 13: End-to-end agent flow integration test
 
 **Files:**
-- Create: `tests/integration/agent-cli.integration.test.mjs`
+- Create: `tests/integration/shrimp-cli.integration.test.mjs`
 - Modify: `package.json` scripts (`test:cli` include new integration test)
 
 **Interfaces:**
@@ -766,7 +770,7 @@ Because default format is JSON, parse stdout as JSON.
 
 - [ ] **Step 2: Run fail if command surface incomplete**
 
-Run: `node --test tests/integration/agent-cli.integration.test.mjs`
+Run: `node --test tests/integration/shrimp-cli.integration.test.mjs`
 
 - [ ] **Step 3: Fix gaps needed for the flow**
 
@@ -776,29 +780,37 @@ Run:
 
 ```bash
 npm run test:cli
-node --test tests/integration/agent-cli.integration.test.mjs
+node --test tests/integration/shrimp-cli.integration.test.mjs
 ```
 
 - [ ] **Step 5: Commit**
 
 ```bash
-git add tests/integration/agent-cli.integration.test.mjs package.json
+git add tests/integration/shrimp-cli.integration.test.mjs package.json
 git commit -m "test(cli): add agent bootstrap integration flow"
 ```
 
 ---
 
-### Task 14a: Multi-machine GitHub/package rename checklist (docs already specify)
+### Task 14a: Code rename verification, then GitHub rename last
 
-When executing the rename, follow design §13.2 exactly. Minimum agent checklist:
+Follow design §13.2 sequencing and §13.3 runbook.
 
-- [ ] GitHub repo renamed to `shrimp`
-- [ ] every existing clone: `git remote set-url origin .../shrimp.git` then `git fetch`
-- [ ] no machine is told to re-clone unless git metadata is broken
-- [ ] `package.json` name/bin/repository/homepage/bugs updated to `@wuhezhizhong/shrimp` / `shrimp`
-- [ ] data dir constant becomes `~/.shrimp`
-- [ ] README install/use examples updated
-- [ ] local smoke: `shrimp doctor` / `shrimp status`
+Order is mandatory:
+
+1. **Code first**
+   - [ ] product CLI lives under `lib/clis/shrimp/`
+   - [ ] `package.json` name/bin -> `@wuhezhizhong/shrimp` / `shrimp`
+   - [ ] data dir constant -> `~/.shrimp`
+   - [ ] service identity / README examples updated
+2. **Verify before GitHub**
+   - [ ] unit/integration tests pass on existing remote URL
+   - [ ] local smoke: `shrimp doctor`, `shrimp status`, start/stop
+   - [ ] no critical runtime dependency on old GitHub path
+3. **GitHub last**
+   - [ ] rename GitHub repo to `shrimp`
+   - [ ] every existing clone: `git remote set-url origin .../shrimp.git` then `git fetch`
+   - [ ] no machine is told to re-clone unless git metadata is broken
 
 ### Task 14: Docs + panel copy UX follow-through
 
@@ -866,7 +878,7 @@ git commit -m "docs(cli): agent quickstart and generic client copy UI"
 - [ ] **Step 1: Run focused suites**
 
 ```bash
-node --test tests/unit/cli-protocol.test.mjs tests/unit/cli-registry.test.mjs tests/unit/endpoint-service.test.mjs tests/unit/secret-service.test.mjs tests/unit/client-copy-service.test.mjs tests/unit/doctor-service.test.mjs
+node --test tests/unit/clis/shrimp/protocol.test.mjs tests/unit/clis/shrimp/registry.test.mjs tests/unit/clis/shrimp/endpoint-service.test.mjs tests/unit/clis/shrimp/secret-service.test.mjs tests/unit/clis/shrimp/client-copy-service.test.mjs tests/unit/clis/shrimp/doctor-service.test.mjs
 npm run test:cli
 npm run check
 ```
@@ -912,6 +924,8 @@ git commit -m "fix(cli): address verification sweep issues"
 | Docs + panel generalization | Task 14 |
 | Verification | Task 15 |
 | CLI/package `shrimp` / `@wuhezhizhong/shrimp` + `upstream google-oauth` | Naming constants + package.json + upstream command module (Tasks 3/12/14) |
+| Multi-CLI dir layout `lib/clis/shrimp` | Tasks 1-3 scaffold + file plan |
+| GitHub rename last after verification | Task 14a / design §13.2-13.3 |
 | Optional bootstrap sugar commands | Not in v1 tasks (YAGNI); can compose from lower-level commands |
 
 Placeholder scan: no TBD implementation steps remain; open product questions are listed in the design for reviewers, not as incomplete engineering steps.

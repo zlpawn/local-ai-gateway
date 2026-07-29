@@ -198,6 +198,47 @@ Agent / human
               -> process manager
 ```
 
+### 6.1.1 Multi-CLI package layout (like skills)
+
+The repo will grow more than one CLI over time. Do **not** keep dumping every command into a flat `lib/cli/*` bag.
+
+Mirror the skills pattern:
+
+```text
+lib/skills/
+  session-sync/
+  grok-imagine/
+  ...
+
+lib/clis/
+  shrimp/                 # product agent CLI (this design)
+    index.mjs             # register commands + run(argv)
+    constants.mjs         # bin name, package name, data dir, service id
+    protocol.mjs
+    registry.mjs
+    parse-args.mjs
+    commands/
+      lifecycle.mjs
+      config.mjs
+      endpoint.mjs
+      ...
+    domain/               # shrimp-facing services used by this CLI
+      config-service.mjs
+      endpoint-service.mjs
+      ...
+    README.md             # optional agent-oriented command map
+  <future-cli>/           # later sibling CLIs
+    ...
+```
+
+Rules:
+
+1. Each product CLI is a directory under `lib/clis/<cli-name>/`, similar to `lib/skills/<skill-name>/`
+2. `bin/` stays thin: `bin/shrimp.js` (or current `bin/cli.js` during transition) only boots `lib/clis/shrimp`
+3. Shared gateway libraries (`lib/config`, `lib/session-sync`, `lib/antigravity`, server routes) remain outside `lib/clis` and are imported by CLI domain services
+4. Existing `lib/cli/*` helpers that are really “local machine CLI discovery / install history / sources” are **not** the product CLI framework; keep them separate and rename later if needed to avoid confusion (e.g. toward `lib/local-tools/` or leave as-is until touched)
+5. New CLIs add a sibling folder + bin entry; they must not overwrite `shrimp` command modules
+
 ### 6.2 Why hybrid, not pure local or pure HTTP
 
 Pure local:
@@ -700,53 +741,65 @@ Help text and schema both render from the same registry.
 
 ## 10. File / module plan
 
+### Layout principle
+
+Product CLIs live under `lib/clis/<name>/`, analogous to `lib/skills/<name>/`.
+This design implements the first CLI: `lib/clis/shrimp/`.
+
 ### New modules (recommended)
 
 ```text
-lib/cli/protocol.mjs          # envelope, redaction, exit codes
-lib/cli/registry.mjs          # command registry + schema
-lib/cli/parse-args.mjs        # argv parsing shared helpers
-lib/cli/commands/*.mjs        # thin command handlers
-lib/domain/config-service.mjs
-lib/domain/endpoint-service.mjs
-lib/domain/secret-service.mjs
-lib/domain/client-service.mjs
-lib/domain/apply-service.mjs
-lib/domain/sync-service.mjs
-lib/domain/skill-service.mjs
-lib/domain/cli-tool-service.mjs
-lib/domain/tool-service.mjs
-lib/domain/doctor-service.mjs
-lib/domain/upstream-auth-service.mjs
-lib/domain/live-gateway.mjs   # HTTP adapter
+bin/shrimp.js                 # thin launcher (may replace/alias bin/cli.js)
+lib/clis/shrimp/index.mjs
+lib/clis/shrimp/constants.mjs
+lib/clis/shrimp/protocol.mjs
+lib/clis/shrimp/registry.mjs
+lib/clis/shrimp/parse-args.mjs
+lib/clis/shrimp/commands/*.mjs
+lib/clis/shrimp/domain/config-service.mjs
+lib/clis/shrimp/domain/endpoint-service.mjs
+lib/clis/shrimp/domain/secret-service.mjs
+lib/clis/shrimp/domain/client-service.mjs
+lib/clis/shrimp/domain/apply-service.mjs
+lib/clis/shrimp/domain/sync-service.mjs
+lib/clis/shrimp/domain/skill-service.mjs
+lib/clis/shrimp/domain/cli-tool-service.mjs
+lib/clis/shrimp/domain/tool-service.mjs
+lib/clis/shrimp/domain/doctor-service.mjs
+lib/clis/shrimp/domain/upstream-auth-service.mjs
+lib/clis/shrimp/domain/live-gateway.mjs
 ```
 
-### Modified modules
+If a domain service is clearly reusable by server/panel and not CLI-specific, it may instead live under shared `lib/` and be imported by `lib/clis/shrimp`. Prefer shared placement only when there is a second real caller.
+
+### Modified / transitional modules
 
 ```text
-bin/cli.js                    # route through registry
-lib/cli/gateway-service.mjs   # envelope-aware lifecycle integration
-lib/cli/init-config.mjs       # keep bootstrap; maybe expose richer result objects
+bin/cli.js                    # temporary boot alias to lib/clis/shrimp during migration
+lib/cli/gateway-service.mjs   # lifecycle engine reused by shrimp commands (or moved later)
+lib/cli/init-config.mjs       # bootstrap helpers reused by shrimp
+lib/cli/discovery.mjs         # local machine CLI scanner (not product CLI framework)
+lib/cli/source-config.mjs
+lib/cli/install-history.mjs
 lib/config/gateway-config-store.mjs
-  - keep copyClientEndpoints
-  - add merge/fill-empty helpers if not inlined in domain service
-desktop/config-panel.html     # later: generic copy UI (can be same milestone or follow-up)
+desktop/config-panel.html     # later: generic copy UI
+package.json                  # name/bin/repository identity for shrimp
 README.md                     # agent quick start + command map
 ```
 
 ### Tests
 
 ```text
-tests/unit/cli-protocol.test.mjs
-tests/unit/cli-registry.test.mjs
-tests/unit/endpoint-service.test.mjs
-tests/unit/client-copy-service.test.mjs
-tests/unit/secret-redaction.test.mjs
-tests/unit/doctor-service.test.mjs
-tests/integration/agent-cli.integration.test.mjs
+tests/unit/clis/shrimp/protocol.test.mjs
+tests/unit/clis/shrimp/registry.test.mjs
+tests/unit/clis/shrimp/endpoint-service.test.mjs
+tests/unit/clis/shrimp/client-copy-service.test.mjs
+tests/unit/clis/shrimp/secret-service.test.mjs
+tests/unit/clis/shrimp/doctor-service.test.mjs
+tests/integration/shrimp-cli.integration.test.mjs
 ```
 
-Keep existing lifecycle tests green.
+Legacy flat test paths are acceptable during transition if imports point at `lib/clis/shrimp`. Keep existing lifecycle tests green.
 
 ## 11. Agent UX principles
 
@@ -793,9 +846,26 @@ Each step returns JSON the agent can branch on.
 5. DeepTutor auto-seed retained in v1 for compatibility, documented as legacy
 6. Brand strings (`shrimp`, `@wuhezhizhong/shrimp`, `~/.shrimp`, service id) live in constants so rename PRs stay mechanical
 
-### 13.2 GitHub repo rename runbook (multi-machine)
+### 13.2 Rename sequencing (important)
 
-Because there are no external users yet, treat GitHub rename as a clean cutover. **Do not re-clone source on every machine.** Existing working copies remain valid; only remotes/docs/package identity need updating.
+Do **not** rename the GitHub repository first.
+
+Required order:
+
+1. **Code identity rename in tree**
+   - package/bin/constants/data dir/service strings -> `shrimp` / `@wuhezhizhong/shrimp` / `~/.shrimp`
+   - product CLI code moved under `lib/clis/shrimp/`
+2. **Verify on source checkout(s)**
+   - unit/integration tests
+   - manual smoke: `shrimp doctor`, `shrimp status`, start/stop
+   - confirm no critical hard-coded `local-ai-gateway` paths remain in runtime code
+3. **Only then** rename GitHub repo and update remotes on other machines using §13.3
+
+Rationale: if code rename breaks something, fixing it is cheaper while the remote name is still unchanged and all clones keep the same origin URL.
+
+### 13.3 GitHub repo rename runbook (multi-machine, last step)
+
+Because there are no external users yet, treat GitHub rename as a clean cutover after code verification. **Do not re-clone source on every machine.** Existing working copies remain valid; only remotes/docs/package identity need updating.
 
 #### A. One-time on GitHub (owner)
 
@@ -915,6 +985,12 @@ No multi-user migration matrix is required in v1.
 - richer `next` recommendations
 - pretty/table format niceties
 
+### Phase 5 — Code rename verification, then GitHub rename last
+
+1. Land code/package/bin/data-dir rename to `shrimp` under `lib/clis/shrimp/`
+2. Verify tests + local smoke on one or more machines still using the old GitHub remote
+3. Only after verification, rename GitHub repo and run multi-machine remote updates (§13.3)
+
 Each phase must leave the CLI usable and tested.
 
 ## 15. Acceptance criteria
@@ -938,7 +1014,7 @@ These are intentionally unresolved or soft:
 2. **Dynamic custom clients**: allow arbitrary client names beyond code/desktop/codex/deeptutor, or keep fixed set in v1?
 3. **No-arg default**: keep `start`, or eventually move to `status/doctor`?
 4. **Live reload completeness**: which mutations can hot-apply without restart today, and which need explicit restart?
-5. Whether GitHub rename and npm publish of `@wuhezhizhong/shrimp` happen in the same PR as the agent CLI framework, or as a thin preceding rename PR
+5. Exact PR split between (a) agent CLI framework under `lib/clis/shrimp`, (b) code identity rename verification, and (c) final GitHub rename — GitHub rename must be last
 6. Whether to ship an agent skill package in-repo in the same milestone as Phase 1
 
 ## 17. Reviewer guide
