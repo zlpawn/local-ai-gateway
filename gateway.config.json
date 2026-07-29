@@ -366,7 +366,7 @@
           "type": "openai-chat",
           "base_url": "https://ark.cn-beijing.volces.com/api/plan/v3",
           "enabled": true,
-          "is_default": true,
+          "is_default": false,
           "models": [
             "doubao-embedding-vision"
           ],
@@ -380,7 +380,7 @@
           "type": "openai-chat",
           "base_url": "https://openapi-ait.ke.com",
           "enabled": true,
-          "is_default": false,
+          "is_default": true,
           "models": [
             "text-embedding-3-large"
           ],

@@ -606,6 +606,7 @@ async function forwardOpenAIEmbeddings(body, req, res, context) {
 
   // endpoint_id 精确匹配:用户显式指定节点时,严格在该 client 内查找,不跨 client 兜底
   const requestedEndpointId = context.url.searchParams.get("endpoint_id");
+  const requestedModel = body?.model ? String(body.model) : "";
   let embeddingEndpoint;
   if (requestedEndpointId) {
     embeddingEndpoint = selectEmbeddingEndpoints(endpoints).find(
@@ -621,13 +622,15 @@ async function forwardOpenAIEmbeddings(body, req, res, context) {
       return;
     }
   } else {
-    embeddingEndpoint = selectDefaultEmbeddingEndpoint(endpoints);
+    // Prefer an embedding node that actually owns the requested model, then the
+    // configured default. Never force every model through the default node.
+    embeddingEndpoint = selectEmbeddingEndpointForModel(endpoints, requestedModel);
 
     if (!embeddingEndpoint) {
       for (const fallbackClient of ["codex", "code", "desktop"]) {
         if (fallbackClient === clientName) continue;
         const fbEndpoints = GATEWAY_CONFIG.clients?.[fallbackClient]?.endpoints || [];
-        embeddingEndpoint = selectDefaultEmbeddingEndpoint(fbEndpoints);
+        embeddingEndpoint = selectEmbeddingEndpointForModel(fbEndpoints, requestedModel);
         if (embeddingEndpoint) break;
       }
     }
@@ -661,7 +664,9 @@ async function forwardOpenAIEmbeddings(body, req, res, context) {
   }
   if (!upstreamUrl.endsWith("/embeddings")) {
     const cleanBase = upstreamUrl.replace(/\/+$/, "");
-    if (cleanBase.endsWith("/v1")) {
+    // If the configured base already ends with a version segment (/v1, /v3, ...),
+    // only append /embeddings. Otherwise use the OpenAI-compatible /v1/embeddings.
+    if (/\/v\d+$/i.test(cleanBase)) {
       upstreamUrl = cleanBase + "/embeddings";
     } else {
       upstreamUrl = cleanBase + "/v1/embeddings";
@@ -7091,6 +7096,26 @@ function normalizeClientName(value) {
 
 function isOpenAIClient(client) {
   return client === "codex" || client === "deeptutor";
+}
+
+function embeddingEndpointMatchesModel(endpoint, modelId) {
+  const text = String(modelId || "").trim();
+  if (!text || !endpoint) return false;
+  if (endpoint.embedding_model && String(endpoint.embedding_model).trim() === text) return true;
+  if (Array.isArray(endpoint.models) && endpoint.models.includes(text)) return true;
+  if (endpoint.model_mapping && Object.prototype.hasOwnProperty.call(endpoint.model_mapping, text)) return true;
+  return false;
+}
+
+function selectEmbeddingEndpointForModel(endpoints = [], modelId = "") {
+  const candidates = selectEmbeddingEndpoints(endpoints);
+  if (!candidates.length) return null;
+  const text = String(modelId || "").trim();
+  if (text) {
+    const matched = candidates.find((endpoint) => embeddingEndpointMatchesModel(endpoint, text));
+    if (matched) return matched;
+  }
+  return selectDefaultEmbeddingEndpoint(candidates);
 }
 
 // DeepTutor exposes only its own configured models (no official Codex catalog).

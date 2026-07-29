@@ -272,3 +272,176 @@ test("endpoint_id not matching returns 404 without cross-client fallback", async
   assert.equal(res.status, 404);
   assert.match(json.error.message, /ep_MISSING/);
 });
+
+
+test("selects embedding endpoint by requested model instead of always using default", async (t) => {
+  const ROOT = path.resolve(import.meta.dirname, "../..");
+  const tempDir = await mkdtemp(path.join(os.tmpdir(), "gw-embed-model-"));
+
+  const upstream = http.createServer((req, res) => {
+    let data = "";
+    req.on("data", (chunk) => { data += chunk; });
+    req.on("end", () => {
+      const body = JSON.parse(data || "{}");
+      const isTarget = req.url?.includes("/target/");
+      res.writeHead(200, { "Content-Type": "application/json" });
+      res.end(JSON.stringify({
+        object: "list",
+        data: [{ object: "embedding", embedding: isTarget ? [0.4, 0.5, 0.6] : [0.1, 0.2, 0.3], index: 0 }],
+        model: body.model,
+        usage: { prompt_tokens: 1, total_tokens: 1 },
+      }));
+    });
+  });
+  await new Promise((resolve) => upstream.listen(0, "127.0.0.1", resolve));
+  const upstreamPort = upstream.address().port;
+  const gatewayPort = await freePort();
+  const configPath = path.join(tempDir, "gateway.config.json");
+  await writeFile(configPath, JSON.stringify({
+    server: { host: "127.0.0.1", port: gatewayPort },
+    clients: {
+      deeptutor: {
+        endpoints: [
+          {
+            id: "ep_default",
+            name: "default-emb",
+            purpose: "embedding",
+            type: "openai-chat",
+            base_url: "http://127.0.0.1:" + upstreamPort + "/default/v1",
+            enabled: true,
+            is_default: true,
+            models: ["text-embedding-3-small"],
+            embedding_model: "text-embedding-3-small",
+            model_mapping: {},
+          },
+          {
+            id: "ep_target",
+            name: "target-emb",
+            purpose: "embedding",
+            type: "openai-chat",
+            base_url: "http://127.0.0.1:" + upstreamPort + "/target/v1",
+            enabled: true,
+            is_default: false,
+            models: ["text-embedding-3-large"],
+            embedding_model: "text-embedding-3-large",
+            model_mapping: {},
+          },
+        ],
+      },
+    },
+  }));
+  await writeFile(path.join(tempDir, "gateway.secrets.json"), JSON.stringify({ api_keys: { ep_default: "k1", ep_target: "k2" } }));
+
+  const gateway = spawn(process.execPath, ["server.js"], {
+    cwd: ROOT,
+    env: {
+      ...process.env,
+      NODE_ENV: "test",
+      GATEWAY_PORT: String(gatewayPort),
+      GATEWAY_CONFIG_FILE: configPath,
+      GATEWAY_SECRETS_FILE: path.join(tempDir, "gateway.secrets.json"),
+      GATEWAY_NO_OPEN: "1",
+      CLAUDE_3P_SYNC_DISABLED: "1",
+      CLAUDE_CODE_SYNC_DISABLED: "1",
+      CODEX_WRITE_MODEL_CATALOG_DISABLED: "1",
+      LOG_FILE: path.join(tempDir, "gateway.log"),
+    },
+    stdio: ["ignore", "pipe", "pipe"],
+    windowsHide: true,
+  });
+
+  t.after(async () => {
+    gateway.kill();
+    await once(gateway, "exit").catch(() => {});
+    await new Promise((resolve) => upstream.close(resolve));
+    await rm(tempDir, { recursive: true, force: true });
+  });
+
+  await once(gateway, "spawn");
+  await waitForGateway(gatewayPort);
+
+  const res = await fetch("http://127.0.0.1:" + gatewayPort + "/deeptutor/emb", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ input: "hello", model: "text-embedding-3-large" }),
+  });
+  const json = await res.json();
+  assert.equal(res.status, 200, JSON.stringify(json));
+  assert.deepEqual(json.data[0].embedding, [0.4, 0.5, 0.6]);
+});
+
+test("versioned embedding base_url appends /embeddings not /v1/embeddings", async (t) => {
+  const ROOT = path.resolve(import.meta.dirname, "../..");
+  const tempDir = await mkdtemp(path.join(os.tmpdir(), "gw-embed-v3-"));
+  let hitUrl = null;
+  const upstream = http.createServer((req, res) => {
+    hitUrl = req.url;
+    let data = "";
+    req.on("data", (chunk) => { data += chunk; });
+    req.on("end", () => {
+      res.writeHead(200, { "Content-Type": "application/json" });
+      res.end(JSON.stringify({
+        object: "list",
+        data: [{ object: "embedding", embedding: [1, 2, 3], index: 0 }],
+        model: "doubao-embedding-vision",
+        usage: { prompt_tokens: 1, total_tokens: 1 },
+      }));
+    });
+  });
+  await new Promise((resolve) => upstream.listen(0, "127.0.0.1", resolve));
+  const upstreamPort = upstream.address().port;
+  const gatewayPort = await freePort();
+  const configPath = path.join(tempDir, "gateway.config.json");
+  await writeFile(configPath, JSON.stringify({
+    server: { host: "127.0.0.1", port: gatewayPort },
+    clients: {
+      deeptutor: {
+        endpoints: [{
+          id: "ep_v3",
+          name: "volc",
+          purpose: "embedding",
+          type: "openai-chat",
+          base_url: "http://127.0.0.1:" + upstreamPort + "/api/plan/v3",
+          enabled: true,
+          is_default: true,
+          models: ["doubao-embedding-vision"],
+          embedding_model: "doubao-embedding-vision",
+          model_mapping: {},
+        }],
+      },
+    },
+  }));
+  await writeFile(path.join(tempDir, "gateway.secrets.json"), JSON.stringify({ api_keys: { ep_v3: "k" } }));
+  const gateway = spawn(process.execPath, ["server.js"], {
+    cwd: ROOT,
+    env: {
+      ...process.env,
+      NODE_ENV: "test",
+      GATEWAY_PORT: String(gatewayPort),
+      GATEWAY_CONFIG_FILE: configPath,
+      GATEWAY_SECRETS_FILE: path.join(tempDir, "gateway.secrets.json"),
+      GATEWAY_NO_OPEN: "1",
+      CLAUDE_3P_SYNC_DISABLED: "1",
+      CLAUDE_CODE_SYNC_DISABLED: "1",
+      CODEX_WRITE_MODEL_CATALOG_DISABLED: "1",
+      LOG_FILE: path.join(tempDir, "gateway.log"),
+    },
+    stdio: ["ignore", "pipe", "pipe"],
+    windowsHide: true,
+  });
+  t.after(async () => {
+    gateway.kill();
+    await once(gateway, "exit").catch(() => {});
+    await new Promise((resolve) => upstream.close(resolve));
+    await rm(tempDir, { recursive: true, force: true });
+  });
+  await once(gateway, "spawn");
+  await waitForGateway(gatewayPort);
+  const res = await fetch("http://127.0.0.1:" + gatewayPort + "/deeptutor/emb", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ input: "hello", model: "doubao-embedding-vision" }),
+  });
+  assert.equal(res.status, 200);
+  assert.equal(hitUrl, "/api/plan/v3/embeddings");
+});
