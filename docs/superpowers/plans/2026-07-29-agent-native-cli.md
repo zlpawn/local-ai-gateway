@@ -1,4 +1,4 @@
-﻿# Agent-Native CLI Implementation Plan
+# Agent-Native CLI Implementation Plan
 
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
@@ -10,6 +10,9 @@
 
 ## Global Constraints
 
+- Public CLI command name is `shrimp` (compat alias `local-ai-gateway` allowed during transition).
+- Top-level OAuth command is `upstream google-oauth` (not `antigravity`).
+- Target data dir constant is `~/.shrimp` with compatibility for `~/.local-ai-gateway` during migration.
 - Default CLI output format is JSON (`--format json`).
 - Success stdout envelope: `{ ok: true, command, data, meta, next? }`.
 - Error stderr envelope: `{ ok: false, command, error, meta? }` with stable `error.type` / `error.code`.
@@ -18,7 +21,7 @@
 - `gateway.secrets.json` stays `{ api_keys: ... }` only.
 - `antigravity.secrets.json` remains isolated.
 - Generic client copy replaces DeepTutor-only UX as the primary model.
-- Product rename is deferred; use constants for bin/service/data-dir strings.
+- CLI binary name is `shrimp`; use constants for bin/service/data-dir strings. Package/data-dir migration may trail the binary rename. OAuth command surface is `upstream google-oauth`.
 - Prefer extending existing modules over broad rewrites.
 - TDD: write failing tests before implementation in each task.
 - Frequent atomic commits after each green task.
@@ -44,7 +47,7 @@
 - `lib/cli/commands/skill.mjs`
 - `lib/cli/commands/cli-tool.mjs`
 - `lib/cli/commands/tool.mjs`
-- `lib/cli/commands/antigravity.mjs`
+- `lib/cli/commands/upstream.mjs`
 - `lib/cli/commands/doctor.mjs`
 - `lib/cli/commands/schema.mjs`
 - `lib/domain/live-gateway.mjs`
@@ -310,6 +313,8 @@ node --test tests/integration/gateway-cli.integration.test.mjs
 6. print envelope / set exit code
 
 Register: `start stop restart status logs stdout stderr path init setup`
+
+Also introduce naming constants and ensure package bin can expose `shrimp` (alias `local-ai-gateway` ok for transition).
 
 - [ ] **Step 4: Run lifecycle tests**
 
@@ -704,14 +709,14 @@ git commit -m "feat(cli): add skills and local CLI tool management commands"
 **Files:**
 - Create: `lib/domain/tool-service.mjs`
 - Create: `lib/cli/commands/tool.mjs`
-- Create: `lib/domain/antigravity-service.mjs` (thin)
-- Create: `lib/cli/commands/antigravity.mjs`
+- Create: `lib/domain/upstream-auth-service.mjs` (thin)
+- Create: `lib/cli/commands/upstream.mjs`
 - Tests: `tests/unit/tool-service.test.mjs`; reuse antigravity unit tests
 
 **Interfaces:**
 - `embedText({ client, endpointId, model, text, dimensions? })`
 - `embedSimilarity({ client, endpointId, model, textA, textB, dimensions? })`
-- antigravity `login` / `status` structured wrappers
+- `upstream google-oauth login|status` structured wrappers (provider codename may remain Antigravity internally)
 
 - [ ] **Step 1: Write failing embedding similarity unit test with mocked fetch/live gateway**
 
@@ -721,15 +726,15 @@ Compute cosine in service for parity with panel.
 
 - [ ] **Step 3: Implement tool service via live gateway HTTP adapter; if gateway down, runtime error with next start recommendation**
 
-Wrap antigravity existing handlers to return structured data and ensure secrets path remains `antigravity.secrets.json`.
+Wrap existing Google/Antigravity OAuth handlers under `upstream google-oauth` and ensure secrets path remains `antigravity.secrets.json`.
 
 - [ ] **Step 4: Pass tests**
 
 - [ ] **Step 5: Commit**
 
 ```bash
-git add lib/domain/tool-service.mjs lib/cli/commands/tool.mjs lib/domain/antigravity-service.mjs lib/cli/commands/antigravity.mjs tests
-git commit -m "feat(cli): add mini tools and structured antigravity commands"
+git add lib/domain/tool-service.mjs lib/cli/commands/tool.mjs lib/domain/upstream-auth-service.mjs lib/cli/commands/upstream.mjs tests
+git commit -m "feat(cli): add mini tools and upstream google-oauth commands"
 ```
 
 ---
@@ -783,6 +788,13 @@ git commit -m "test(cli): add agent bootstrap integration flow"
 ---
 
 ### Task 14: Docs + panel copy UX follow-through
+
+Also finalize user-facing naming:
+
+- `package.json` `bin` field exposes `shrimp` (keep `local-ai-gateway` alias if needed)
+- README examples use `shrimp ...`
+- data dir constant defaults to `~/.shrimp` with migration note from `~/.local-ai-gateway`
+- help/schema show `upstream google-oauth`, not top-level `antigravity`
 
 **Files:**
 - Modify: `README.md`
@@ -849,6 +861,7 @@ npm run check
 ```bash
 node bin/cli.js schema --format json
 node bin/cli.js doctor --format json
+node bin/cli.js upstream google-oauth status --format json
 node bin/cli.js client copy --help  # or schema client.copy
 ```
 
@@ -883,7 +896,7 @@ git commit -m "fix(cli): address verification sweep issues"
 | Agent e2e flow | Task 13 |
 | Docs + panel generalization | Task 14 |
 | Verification | Task 15 |
-| Product rename | Explicitly deferred in constraints |
+| CLI name `shrimp` + `upstream google-oauth` command | Naming constants + upstream command module (Tasks 3/12/14) |
 | Optional bootstrap sugar commands | Not in v1 tasks (YAGNI); can compose from lower-level commands |
 
 Placeholder scan: no TBD implementation steps remain; open product questions are listed in the design for reviewers, not as incomplete engineering steps.

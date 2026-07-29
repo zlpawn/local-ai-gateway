@@ -1,10 +1,10 @@
-﻿# Agent-Native CLI Design
+# Agent-Native CLI Design
 
 > Status: design for external review  
 > Branch: `codex/agent-cli-design`  
 > Worktree: `.worktrees/agent-cli-design`  
 > Date: 2026-07-29  
-> Product name: deferred (placeholder `<cli>` / current `local-ai-gateway`)
+> CLI name: `shrimp` (current published binary still `local-ai-gateway` until rename ships)
 
 ## 1. Goal
 
@@ -17,22 +17,21 @@ The CLI must cover essentially the same capability surface as `desktop/config-pa
 - Primary: multi-client AI routing hub for Claude Code / Claude Desktop / Codex / DeepTutor / OpenAI-compatible clients
 - Secondary: local one-stop console for install, configure, start, diagnose, and extend
 
-### Naming (explicitly deferred)
+### Naming
 
-Product rename is out of scope for implementation in this design. Documents use:
+- chosen CLI binary / command: `shrimp`
+- current published binary (compat): `local-ai-gateway`
+- current package (compat until publish rename): `@wuhezhizhong/local-ai-gateway`
+- target user data dir: `~/.shrimp`
+- current data dir (compat): `~/.local-ai-gateway`
 
-- binary placeholder: `<cli>`
-- current binary: `local-ai-gateway`
-- current package: `@wuhezhizhong/local-ai-gateway`
-- current data dir: `~/.local-ai-gateway`
-
-A later rename must update package name, bin, data dir, service identity strings, docs, and tests together. The CLI architecture must not hard-code the brand into domain logic.
+Rename implementation must update package name, bin, data dir, service identity strings, docs, and tests together. Domain logic should read these from constants so the brand is not hard-coded in business rules. During transition, `local-ai-gateway` may remain as an alias binary.
 
 ## 2. Non-goals
 
 This design does **not**:
 
-1. Choose or ship a final product name
+1. Finalize npm scope/package rename beyond the chosen CLI name `shrimp` (package can lag the binary name briefly)
 2. Redesign the web UI look-and-feel
 3. Replace the web config panel; CLI and panel share domain services
 4. Add cloud account / multi-user remote management
@@ -69,7 +68,7 @@ Current commands:
 | `sync` | Thin session-sync helpers (`install-skill`, `status`) |
 | `logs` / `stdout` / `stderr` | Tail runtime logs |
 | `path` | Print package/project root |
-| `antigravity` | OAuth login/status for Antigravity; writes `antigravity.secrets.json` |
+| `upstream google-oauth` | OAuth login/status for the Google/Antigravity upstream; writes `antigravity.secrets.json` |
 
 Most real configuration still happens in the web panel:
 
@@ -104,7 +103,8 @@ Agents and humans both face high manual cost after install:
 | Secret input | Allow literal `--api-key`; always redact in outputs/logs |
 | Client clone | Generalize beyond DeepTutor-from-Codex to any client copy |
 | Implementation shape | Agent-native command surface + shared domain services |
-| Naming | Deferred |
+| CLI name | `shrimp` |
+| Top-level Antigravity command | Renamed to `upstream google-oauth` to avoid product/mode ambiguity |
 
 ## 5. Current surface inventory
 
@@ -181,7 +181,7 @@ Client-specific extras:
 
 ```text
 Agent / human
-  -> <cli> argv parser + JSON envelope
+  -> shrimp argv parser + JSON envelope
       -> command handlers
           -> domain services (pure-ish business ops)
               -> local stores/files
@@ -235,7 +235,7 @@ One service module per resource family, UI-agnostic:
 - `SkillService`
 - `CliToolService` (local CLI discovery/install/sources)
 - `ToolService` (mini tools such as embeddings)
-- `AntigravityService`
+- `UpstreamAuthService` (Google/Antigravity OAuth)
 - `DoctorService`
 - `SchemaService`
 
@@ -262,7 +262,7 @@ After local config mutation:
 
 Keep existing verbs working:
 
-- `start|stop|restart|status|logs|stdout|stderr|path|init|setup|sync|antigravity`
+- `start|stop|restart|status|logs|stdout|stderr|path|init|setup|sync|upstream`
 
 Upgrade them onto the new envelope/protocol gradually:
 
@@ -371,9 +371,9 @@ Agents must branch on `ok` and `error.code`, not free-text matching.
 ### 7.6 Schema introspection
 
 ```text
-<cli> schema
-<cli> schema endpoint.add
-<cli> schema client.copy
+shrimp schema
+shrimp schema endpoint.add
+shrimp schema client.copy
 ```
 
 Returns JSON describing:
@@ -400,45 +400,45 @@ For agent mode (default):
 
 ## 8. Command tree
 
-Placeholder binary shown as `<cli>`.
+Binary shown as `shrimp`.
 
 ### 8.1 Lifecycle / ops
 
 ```text
-<cli> start
-<cli> stop [--force]
-<cli> restart
-<cli> status
-<cli> logs [--lines N]
-<cli> stdout [--lines N]
-<cli> stderr [--lines N]
-<cli> path
-<cli> doctor
-<cli> validate
-<cli> init
-<cli> setup            # human interactive only
+shrimp start
+shrimp stop [--force]
+shrimp restart
+shrimp status
+shrimp logs [--lines N]
+shrimp stdout [--lines N]
+shrimp stderr [--lines N]
+shrimp path
+shrimp doctor
+shrimp validate
+shrimp init
+shrimp setup            # human interactive only
 ```
 
 ### 8.2 Config root
 
 ```text
-<cli> config get
-<cli> config set --server-host 127.0.0.1 --server-port 8787
-<cli> config validate
-<cli> config diff --from fileA --to fileB
-<cli> config export --out path
-<cli> config import --in path [--yes]
-<cli> config restore-template [--yes]
+shrimp config get
+shrimp config set --server-host 127.0.0.1 --server-port 8787
+shrimp config validate
+shrimp config diff --from fileA --to fileB
+shrimp config export --out path
+shrimp config import --in path [--yes]
+shrimp config restore-template [--yes]
 ```
 
 ### 8.3 Clients
 
 ```text
-<cli> client list
-<cli> client get --client code
-<cli> client add --client myapp [--copy-from codex]
-<cli> client remove --client myapp [--yes]
-<cli> client copy --from codex --to deeptutor [--mode replace|merge|fill-empty]
+shrimp client list
+shrimp client get --client code
+shrimp client add --client myapp [--copy-from codex]
+shrimp client remove --client myapp [--yes]
+shrimp client copy --from codex --to deeptutor [--mode replace|merge|fill-empty]
 ```
 
 #### Generic client copy (replaces DeepTutor special-case UX)
@@ -460,14 +460,14 @@ Design upgrades:
 ### 8.4 Endpoints
 
 ```text
-<cli> endpoint list [--client code] [--purpose embedding|web_search|vision_fallback|chat]
-<cli> endpoint get --id ep_xxx
-<cli> endpoint add --client code --name ark --type openai-chat --base-url URL --model glm-5.2 [flags]
-<cli> endpoint update --id ep_xxx [--name ...] [--base-url ...] [...]
-<cli> endpoint remove --id ep_xxx [--yes]
-<cli> endpoint set-default --id ep_xxx
-<cli> endpoint enable --id ep_xxx
-<cli> endpoint disable --id ep_xxx
+shrimp endpoint list [--client code] [--purpose embedding|web_search|vision_fallback|chat]
+shrimp endpoint get --id ep_xxx
+shrimp endpoint add --client code --name ark --type openai-chat --base-url URL --model glm-5.2 [flags]
+shrimp endpoint update --id ep_xxx [--name ...] [--base-url ...] [...]
+shrimp endpoint remove --id ep_xxx [--yes]
+shrimp endpoint set-default --id ep_xxx
+shrimp endpoint enable --id ep_xxx
+shrimp endpoint disable --id ep_xxx
 ```
 
 Important flags for add/update:
@@ -496,11 +496,11 @@ Important flags for add/update:
 ### 8.5 Secrets
 
 ```text
-<cli> secret list [--client code]
-<cli> secret get --endpoint-id ep_xxx
-<cli> secret set --endpoint-id ep_xxx --api-key sk-...
-<cli> secret set --endpoint-id ep_xxx --api-key-env ARK_API_KEY
-<cli> secret unset --endpoint-id ep_xxx [--yes]
+shrimp secret list [--client code]
+shrimp secret get --endpoint-id ep_xxx
+shrimp secret set --endpoint-id ep_xxx --api-key sk-...
+shrimp secret set --endpoint-id ep_xxx --api-key-env ARK_API_KEY
+shrimp secret unset --endpoint-id ep_xxx [--yes]
 ```
 
 `gateway.secrets.json` remains `{ "api_keys": { "<endpoint_id>": "..." } }`.
@@ -510,16 +510,16 @@ Antigravity secrets stay separate.
 ### 8.6 Client apply / integration
 
 ```text
-<cli> client apply --client code
-<cli> client apply --client desktop
-<cli> client apply --client codex [--write-config/--snippet-only]
-<cli> client snippet --client codex
-<cli> client slots get --client code
-<cli> client slots set --client code --opus M --sonnet M --haiku M --fable M
-<cli> codex catalog write
-<cli> codex catalog verify
-<cli> codex history unify --dry-run
-<cli> codex history unify --apply [--yes]
+shrimp client apply --client code
+shrimp client apply --client desktop
+shrimp client apply --client codex [--write-config/--snippet-only]
+shrimp client snippet --client codex
+shrimp client slots get --client code
+shrimp client slots set --client code --opus M --sonnet M --haiku M --fable M
+shrimp codex catalog write
+shrimp codex catalog verify
+shrimp codex history unify --dry-run
+shrimp codex history unify --apply [--yes]
 ```
 
 Notes:
@@ -531,23 +531,23 @@ Notes:
 ### 8.7 Session sync
 
 ```text
-<cli> sync status
-<cli> sync enable
-<cli> sync disable
-<cli> sync set --start-date YYYY-MM-DD --end-date YYYY-MM-DD --summary-mode rule|llm --summary-model MODEL
-<cli> sync install-skill
+shrimp sync status
+shrimp sync enable
+shrimp sync disable
+shrimp sync set --start-date YYYY-MM-DD --end-date YYYY-MM-DD --summary-mode rule|llm --summary-model MODEL
+shrimp sync install-skill
 ```
 
 ### 8.8 Skills
 
 ```text
-<cli> skill list [--scope all|installed|managed|local|missing|unified-missing]
-<cli> skill get --name foo
-<cli> skill install --command "npx ..." [--name optional]
-<cli> skill unify [--name foo|--all]
-<cli> skill refresh
-<cli> skill history list
-<cli> skill history rerun --id r_xxx
+shrimp skill list [--scope all|installed|managed|local|missing|unified-missing]
+shrimp skill get --name foo
+shrimp skill install --command "npx ..." [--name optional]
+shrimp skill unify [--name foo|--all]
+shrimp skill refresh
+shrimp skill history list
+shrimp skill history rerun --id r_xxx
 ```
 
 PTY-based interactive install remains supported for human/panel; agent path should prefer non-interactive install commands and capture exit code/logs structurally.
@@ -555,14 +555,14 @@ PTY-based interactive install remains supported for human/panel; agent path shou
 ### 8.9 Local CLI tools
 
 ```text
-<cli> cli-tool list [--query rg] [--probe]
-<cli> cli-tool install --command "npm i -g ..." [--name optional]
-<cli> cli-tool history list
-<cli> cli-tool history rerun --id r_xxx
-<cli> cli-tool source list
-<cli> cli-tool source add --name chocolatey --label "..." --dirs "A;B"
-<cli> cli-tool source save --file sources.json
-<cli> cli-tool source reset
+shrimp cli-tool list [--query rg] [--probe]
+shrimp cli-tool install --command "npm i -g ..." [--name optional]
+shrimp cli-tool history list
+shrimp cli-tool history rerun --id r_xxx
+shrimp cli-tool source list
+shrimp cli-tool source add --name chocolatey --label "..." --dirs "A;B"
+shrimp cli-tool source save --file sources.json
+shrimp cli-tool source reset
 ```
 
 Naming note: top-level `cli-tool` avoids clashing with the product CLI itself.
@@ -570,18 +570,29 @@ Naming note: top-level `cli-tool` avoids clashing with the product CLI itself.
 ### 8.10 Mini tools
 
 ```text
-<cli> tool embedding --client codex --endpoint-id ep_x --model M --text "..."
-<cli> tool embedding-similarity --client codex --endpoint-id ep_x --model M --text-a A --text-b B
+shrimp tool embedding --client codex --endpoint-id ep_x --model M --text "..."
+shrimp tool embedding-similarity --client codex --endpoint-id ep_x --model M --text-a A --text-b B
 ```
 
 These call the gateway embeddings path (local service or live HTTP). If gateway is required and down, return structured runtime error with `next: ["start"]`.
 
-### 8.11 Antigravity
+### 8.11 Upstream auth (Google / Antigravity provider)
+
+Top-level command is **not** named `antigravity`, because that reads like a product mode or third client and confuses agents/humans.
+
+Use an explicit upstream-auth command:
 
 ```text
-<cli> antigravity login
-<cli> antigravity status
+shrimp upstream list
+shrimp upstream google-oauth login
+shrimp upstream google-oauth status
 ```
+
+Compatibility:
+
+- old docs/code may still say Antigravity because that is the upstream protocol/provider codename
+- storage file remains `antigravity.secrets.json` unless later migrated
+- optional hidden alias `shrimp antigravity ...` may exist temporarily, but schema/help should promote `upstream google-oauth`
 
 Writes/reads `antigravity.secrets.json` only.
 
@@ -590,8 +601,8 @@ Writes/reads `antigravity.secrets.json` only.
 Not required for v1 completeness, but recommended soon after core CRUD:
 
 ```text
-<cli> plan bootstrap --client code --provider openrouter
-<cli> apply recommended --client code
+shrimp plan bootstrap --client code --provider openrouter
+shrimp apply recommended --client code
 ```
 
 These compose lower-level commands and return a step plan. Sugar must not be the only way to do something.
@@ -697,7 +708,7 @@ lib/domain/skill-service.mjs
 lib/domain/cli-tool-service.mjs
 lib/domain/tool-service.mjs
 lib/domain/doctor-service.mjs
-lib/domain/antigravity-service.mjs
+lib/domain/upstream-auth-service.mjs
 lib/domain/live-gateway.mjs   # HTTP adapter
 ```
 
@@ -741,13 +752,13 @@ Keep existing lifecycle tests green.
 ### Example agent bootstrap flow
 
 ```text
-<cli> init
-<cli> doctor
-<cli> endpoint add --client code --name openrouter --type openai-chat --base-url https://... --models ... --api-key sk-...
-<cli> client slots set --client code --sonnet my-model
-<cli> client apply --client code
-<cli> start
-<cli> doctor
+shrimp init
+shrimp doctor
+shrimp endpoint add --client code --name openrouter --type openai-chat --base-url https://... --models ... --api-key sk-...
+shrimp client slots set --client code --sonnet my-model
+shrimp client apply --client code
+shrimp start
+shrimp doctor
 ```
 
 Each step returns JSON the agent can branch on.
@@ -833,7 +844,7 @@ These are intentionally unresolved or soft:
 2. **Dynamic custom clients**: allow arbitrary client names beyond code/desktop/codex/deeptutor, or keep fixed set in v1?
 3. **No-arg default**: keep `start`, or eventually move to `status/doctor`?
 4. **Live reload completeness**: which mutations can hot-apply without restart today, and which need explicit restart?
-5. **Product name / data dir rename timing** relative to CLI launch
+5. **Package/data-dir rename timing** relative to shipping the `shrimp` binary (CLI name is chosen; npm scope and `~/.shrimp` migration timing remain)
 6. Whether to ship an agent skill package in-repo in the same milestone as Phase 1
 
 ## 17. Reviewer guide
