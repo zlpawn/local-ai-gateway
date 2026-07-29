@@ -151,3 +151,55 @@ test('discoverInstalledClis skips ignored names and defaults probe to false', as
     assert.ok(r2.stats.total < r1.stats.total);
   }
 });
+
+
+// Build a temp directory tree of fake executables covering the categories of
+// non-CLI entries that must be filtered out, plus a few real CLIs that must
+// survive the filters.
+test("discoverInstalledClis filters GUI apps, helpers, and runtime-internal binaries by name and path", async () => {
+  const dir = mkdtempSync(path.join(os.tmpdir(), "cli-filter-"));
+  const isWin = process.platform === "win32";
+  const ext = isWin ? ".exe" : "";
+  const fakeNames = [
+    "antigravity",        // GUI app launcher (exact-name filter)
+    "javaw",              // Java GUI launcher (exact-name filter)
+    "gitk",               // Git GUI (exact-name filter)
+    "elevate",            // nvm helper shim (exact-name filter)
+    "refreshenv",         // chocolatey helper (exact-name filter)
+    "unity",              // GUI editor (exact-name filter)
+    "helper",             // generic helper (regex filter)
+    "uninstaller",        // uninstaller (regex filter)
+  ];
+  for (const n of fakeNames) {
+    writeFileSync(path.join(dir, n + ext), "");
+  }
+  // Real CLI names that must be kept.
+  for (const n of ["mytool", "node", "git"]) {
+    writeFileSync(path.join(dir, n + ext), "");
+  }
+  if (!isWin) {
+    for (const ent of ["antigravity", "javaw", "gitk", "elevate", "refreshenv", "unity", "helper", "uninstaller", "mytool", "node", "git"]) {
+      try { chmodSync(path.join(dir, ent), 0o755); } catch {}
+    }
+  }
+
+  // Path-filtered entries: place a binary inside a path that matches a fragment.
+  const runtimeDir = path.join(dir, "codex-runtimes", "override");
+  mkdirSync(runtimeDir, { recursive: true });
+  writeFileSync(path.join(runtimeDir, "pdfinfo" + ext), "");
+
+  const sources = [{ name: "test", label: "t", enabled: true, dirs: [dir, runtimeDir] }];
+  const r = await discoverInstalledClis({ sources, probe: false });
+  const names = r.items.map((i) => i.name);
+
+  // Non-CLIs filtered out
+  for (const bad of ["antigravity", "javaw", "gitk", "elevate", "refreshenv", "unity", "helper", "uninstaller", "pdfinfo"]) {
+    assert.ok(!names.includes(bad), `expected ${bad} to be filtered out`);
+  }
+  // Real CLIs kept
+  for (const good of ["mytool", "node", "git"]) {
+    assert.ok(names.includes(good), `expected ${good} to be kept`);
+  }
+
+  rmSync(dir, { recursive: true, force: true });
+});
