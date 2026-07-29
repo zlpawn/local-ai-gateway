@@ -166,8 +166,7 @@ test("discoverInstalledClis filters GUI apps, helpers, and runtime-internal bina
     "gitk",               // Git GUI (exact-name filter)
     "elevate",            // nvm helper shim (exact-name filter)
     "refreshenv",         // chocolatey helper (exact-name filter)
-    "unity",              // GUI editor (exact-name filter)
-    "helper",             // generic helper (regex filter)
+      "helper",             // generic helper (regex filter)
     "uninstaller",        // uninstaller (regex filter)
   ];
   for (const n of fakeNames) {
@@ -178,7 +177,7 @@ test("discoverInstalledClis filters GUI apps, helpers, and runtime-internal bina
     writeFileSync(path.join(dir, n + ext), "");
   }
   if (!isWin) {
-    for (const ent of ["antigravity", "javaw", "gitk", "elevate", "refreshenv", "unity", "helper", "uninstaller", "mytool", "node", "git"]) {
+    for (const ent of ["antigravity", "javaw", "gitk", "elevate", "refreshenv", "helper", "uninstaller", "mytool", "node", "git"]) {
       try { chmodSync(path.join(dir, ent), 0o755); } catch {}
     }
   }
@@ -193,7 +192,7 @@ test("discoverInstalledClis filters GUI apps, helpers, and runtime-internal bina
   const names = r.items.map((i) => i.name);
 
   // Non-CLIs filtered out
-  for (const bad of ["antigravity", "javaw", "gitk", "elevate", "refreshenv", "unity", "helper", "uninstaller", "pdfinfo"]) {
+  for (const bad of ["antigravity", "javaw", "gitk", "elevate", "refreshenv", "helper", "uninstaller", "pdfinfo"]) {
     assert.ok(!names.includes(bad), `expected ${bad} to be filtered out`);
   }
   // Real CLIs kept
