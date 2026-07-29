@@ -46,6 +46,47 @@ test("sanitizeResponsesInput converts custom_tool_call and output to standard fu
   assert.ok(clean.input[3].content.includes("compacted previous thread"));
 });
 
+test("sanitizeGrokResponsesInput maps assistant content parts to output_text and user content parts to input_text", () => {
+  const raw = {
+    model: "grok-4.5",
+    input: [
+      { type: "message", role: "user", content: [{ type: "input_text", text: "hello" }] },
+      { type: "message", role: "assistant", content: [{ type: "input_text", text: "hi there" }] },
+    ],
+  };
+
+  const clean = sanitizeGrokResponsesInput(raw);
+
+  assert.equal(clean.input.length, 2);
+  assert.equal(clean.input[0].role, "user");
+  assert.equal(clean.input[0].content[0].type, "input_text");
+  assert.equal(clean.input[1].role, "assistant");
+  assert.equal(clean.input[1].content[0].type, "output_text");
+  assert.equal(clean.input[1].content[0].text, "hi there");
+});
+
+test("sanitizeGrokResponsesInput maps image content parts to input_image with string url", () => {
+  const raw = {
+    model: "grok-4.5",
+    input: [
+      {
+        type: "message",
+        role: "user",
+        content: [
+          { type: "input_text", text: "what is this" },
+          { type: "image_url", image_url: { url: "data:image/png;base64,123" } },
+        ],
+      },
+    ],
+  };
+
+  const clean = sanitizeGrokResponsesInput(raw);
+
+  assert.equal(clean.input.length, 1);
+  assert.equal(clean.input[0].content[1].type, "input_image");
+  assert.equal(clean.input[0].content[1].image_url, "data:image/png;base64,123");
+});
+
 test("sanitizeGrokResponsesInput is exported as an alias of sanitizeResponsesInput", () => {
   assert.equal(sanitizeGrokResponsesInput, sanitizeResponsesInput);
 });
