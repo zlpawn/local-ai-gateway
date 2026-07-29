@@ -1345,6 +1345,14 @@
             gap: 4px;
             margin-left: 4px;
         }
+        .tag .model-capability-actions button,
+        .tag .ctx-window-trigger {
+            opacity: 1 !important;
+            color: #000 !important;
+            font-weight: 600;
+            font-size: 11px;
+            line-height: 1.2;
+        }
         .tag .model-capability-choice {
             opacity: 1;
             padding: 3px 7px;
@@ -1370,6 +1378,97 @@
             color: var(--danger);
             border-color: color-mix(in srgb, var(--danger) 45%, transparent);
             background: color-mix(in srgb, var(--danger) 10%, transparent);
+        }
+
+        .ctx-window-dropdown {
+            position: relative;
+            display: inline-flex;
+        }
+        .ctx-window-trigger {
+            display: inline-flex;
+            align-items: center;
+            gap: 3px;
+            padding: 3px 8px;
+            border: 1px solid var(--text-secondary);
+            border-radius: 999px;
+            color: #000 !important;
+            background: var(--input-bg);
+            font-family: var(--font-sans);
+            font-size: 11px;
+            line-height: 1.2;
+            font-weight: 600;
+            cursor: pointer;
+        }
+        .ctx-window-trigger:hover {
+            border-color: var(--text-primary);
+            background: var(--surface-hover);
+        }
+        .ctx-window-trigger .ctx-window-chevron {
+            transition: transform 0.15s;
+        }
+        .ctx-window-dropdown.is-open .ctx-window-chevron {
+            transform: rotate(180deg);
+        }
+        .ctx-window-popover {
+            position: absolute;
+            top: calc(100% + 6px);
+            right: 0;
+            z-index: 130;
+            display: none;
+            min-width: 120px;
+            padding: 4px;
+            background: var(--surface);
+            border: 1px solid var(--border-color);
+            border-radius: var(--radius-lg);
+            box-shadow: 0 8px 24px rgba(0, 0, 0, 0.14);
+        }
+        .ctx-window-dropdown.is-open .ctx-window-popover {
+            display: block;
+        }
+        .ctx-window-option {
+            display: flex;
+            align-items: center;
+            gap: 6px;
+            width: 100%;
+            padding: 6px 10px;
+            border: 0;
+            border-radius: var(--radius-md);
+            background: transparent;
+            color: var(--text-primary);
+            font: inherit;
+            font-size: 12px;
+            text-align: left;
+            cursor: pointer;
+        }
+        .ctx-window-option:hover {
+            background: var(--surface-hover);
+        }
+        .ctx-window-option.is-active {
+            font-weight: 600;
+        }
+        .ctx-window-option .ctx-window-check {
+            margin-left: auto;
+            opacity: 0;
+        }
+        .ctx-window-option.is-active .ctx-window-check {
+            opacity: 1;
+        }
+
+        .ctx-window-trigger.is-supported {
+            color: var(--success);
+            border-color: color-mix(in srgb, var(--success) 45%, transparent);
+            background: color-mix(in srgb, var(--success) 10%, transparent);
+        }
+        .ctx-window-trigger.is-unsupported {
+            color: var(--danger);
+            border-color: color-mix(in srgb, var(--danger) 45%, transparent);
+            background: color-mix(in srgb, var(--danger) 10%, transparent);
+        }
+        .ctx-window-trigger.is-supported:hover {
+            background: color-mix(in srgb, var(--success) 18%, transparent);
+        }
+        .ctx-window-trigger.is-unsupported:hover {
+            background: color-mix(in srgb, var(--danger) 18%, transparent);
         }
 
         .card .card-actions {
@@ -4233,15 +4332,58 @@ experimental_bearer_token = "dummy"</pre>
                                             ${escapeHtml(m)}
                                             ${!isVisionFallback ? `
                                             <span class="model-capability-actions">
-                                                <button type="button"
-                                                    class="model-capability-choice ${ep.model_capabilities?.[m]?.image === true ? 'is-supported' : ''}"
-                                                    onclick="updateModelImageCapability('${client}', ${index}, ${i}, true)"
-                                                    title="再次点击可恢复默认（默认按支持视觉处理）">支持视觉</button>
-                                                <button type="button"
-                                                    class="model-capability-choice ${ep.model_capabilities?.[m]?.image === false ? 'is-unsupported' : ''}"
-                                                    onclick="updateModelImageCapability('${client}', ${index}, ${i}, false)"
-                                                    title="再次点击可恢复默认（默认按支持视觉处理）">不支持视觉</button>
+                                                ${(() => {
+    const _img = ep.model_capabilities?.[m]?.image;
+    const _visionState = _img === true ? 'supported' : _img === false ? 'unsupported' : 'auto';
+    const _visionLabel = _visionState === 'supported' ? '支持视觉' : _visionState === 'unsupported' ? '不支持视觉' : '视觉自动';
+    const _visionOpts = [
+        { value: 'auto', label: '视觉自动', desc: '默认按支持视觉处理' },
+        { value: 'supported', label: '支持视觉', desc: '明确标记为支持' },
+        { value: 'unsupported', label: '不支持视觉', desc: '明确标记为不支持' },
+    ];
+    const _optsHtml = _visionOpts.map(o => {
+        const _active = o.value === _visionState;
+        return `<button type="button" class="ctx-window-option${_active ? ' is-active' : ''}"
+            onclick="updateModelImageCapability('${client}', ${index}, ${i}, '${o.value}')">
+            <span>${o.label}</span>
+            <span class="ctx-window-check">${_active ? '\u2713' : ''}</span>
+        </button>`;
+    }).join('');
+    return `<div class="ctx-window-dropdown vision-dropdown" id="ctx-vision-${client}-${index}-${i}">
+        <button type="button" class="ctx-window-trigger ${_visionState === 'supported' ? 'is-supported' : _visionState === 'unsupported' ? 'is-unsupported' : ''}"
+            onclick="toggleCtxVisionMenu('${client}', ${index}, ${i}, event)"
+            title="视觉能力（再次点击可恢复默认）">
+            <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="opacity:0.7"><path d="M2 12s3.5-7 10-7 10 7 10 7-3.5 7-10 7S2 12 2 12z"></path><circle cx="12" cy="12" r="3"></circle></svg>
+            <span>${_visionLabel}</span>
+            <svg class="ctx-window-chevron" width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 12 15 18 9"></polyline></svg>
+        </button>
+        <div class="ctx-window-popover" role="menu">${_optsHtml}</div>
+    </div>`;
+})()}
                                             </span>
+${(() => {
+    const _cw = ep.model_capabilities?.[m]?.context_window;
+    const _ctxOpts = [{"value":1000000,"label":"1M"},{"value":500000,"label":"500K"},{"value":256000,"label":"256K"},{"value":128000,"label":"128K"},{"value":64000,"label":"64K"}];
+    const _current = _ctxOpts.find(o => o.value === _cw) || _ctxOpts[0];
+    const _optsHtml = _ctxOpts.map(o => {
+        const _active = o.value === _current.value;
+        return `<button type="button" class="ctx-window-option${_active ? ' is-active' : ''}"
+            onclick="updateModelContextWindow('${client}', ${index}, ${i}, '${o.value}')">
+            <span>${o.label}</span>
+            <span class="ctx-window-check">${_active ? '\u2713' : ''}</span>
+        </button>`;
+    }).join('');
+    return `<div class="ctx-window-dropdown" id="ctx-win-${client}-${index}-${i}">
+        <button type="button" class="ctx-window-trigger"
+            onclick="toggleCtxWindowMenu('${client}', ${index}, ${i}, event)"
+            title="上下文窗口大小（1M 为默认，不写入配置）">
+            <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="opacity:0.7"><rect x="3" y="3" width="18" height="18" rx="2"></rect><line x1="9" y1="9" x2="15" y2="9"></line><line x1="9" y1="13" x2="15" y2="13"></line><line x1="9" y1="17" x2="13" y2="17"></line></svg>
+            <span>${_current.label}</span>
+            <svg class="ctx-window-chevron" width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 12 15 18 9"></polyline></svg>
+        </button>
+        <div class="ctx-window-popover" role="menu">${_optsHtml}</div>
+    </div>`;
+})()}
                                             ` : ''}
                                             <button type="button" onclick="removeTag('${client}', ${index}, 'models', ${i})" title="移除模型">×</button>
                                         </span>
@@ -5056,26 +5198,84 @@ experimental_bearer_token = "dummy"</pre>
             }
         }
 
-        window.updateModelImageCapability = function(client, index, modelIndex, supported) {
+        window.updateModelImageCapability = function(client, index, modelIndex, state) {
             const endpoint = config.clients[client].endpoints[index];
             const model = endpoint.models?.[modelIndex];
             if (!model) return;
 
-            const current = endpoint.model_capabilities?.[model]?.image;
-            if (current === supported) {
-                delete endpoint.model_capabilities[model].image;
-                if (Object.keys(endpoint.model_capabilities[model]).length === 0) {
-                    delete endpoint.model_capabilities[model];
-                }
-                if (Object.keys(endpoint.model_capabilities).length === 0) {
-                    delete endpoint.model_capabilities;
+            // state: 'auto' | 'supported' | 'unsupported'
+            const desired = state === 'supported' ? true : state === 'unsupported' ? false : undefined;
+
+            if (desired === undefined) {
+                // auto = remove the field
+                if (endpoint.model_capabilities?.[model]?.image != null) {
+                    delete endpoint.model_capabilities[model].image;
+                    if (Object.keys(endpoint.model_capabilities[model]).length === 0) {
+                        delete endpoint.model_capabilities[model];
+                    }
+                    if (endpoint.model_capabilities && Object.keys(endpoint.model_capabilities).length === 0) {
+                        delete endpoint.model_capabilities;
+                    }
                 }
             } else {
                 endpoint.model_capabilities ||= {};
                 endpoint.model_capabilities[model] ||= {};
-                endpoint.model_capabilities[model].image = supported;
+                endpoint.model_capabilities[model].image = desired;
             }
             render();
+        }
+
+        window.toggleCtxVisionMenu = function(client, index, modelIndex, event) {
+            event?.stopPropagation();
+            const dropdown = document.getElementById(`ctx-vision-${client}-${index}-${modelIndex}`);
+            if (!dropdown) return;
+            const shouldOpen = !dropdown.classList.contains('is-open');
+            closeAllCtxVisionMenus();
+            closeAllCtxWindowMenus();
+            dropdown.classList.toggle('is-open', shouldOpen);
+        }
+
+        window.closeAllCtxVisionMenus = function() {
+            document.querySelectorAll('.vision-dropdown.is-open').forEach(d => d.classList.remove('is-open'));
+        }
+
+        window.updateModelContextWindow = function(client, index, modelIndex, value) {
+            const endpoint = config.clients[client].endpoints[index];
+            const model = endpoint.models?.[modelIndex];
+            if (!model) return;
+
+            const cw = Number(value);
+            if (cw === 1000000) {
+                // 1M is the default - remove the field so config stays clean
+                if (endpoint.model_capabilities?.[model]?.context_window != null) {
+                    delete endpoint.model_capabilities[model].context_window;
+                    if (Object.keys(endpoint.model_capabilities[model]).length === 0) {
+                        delete endpoint.model_capabilities[model];
+                    }
+                    if (endpoint.model_capabilities && Object.keys(endpoint.model_capabilities).length === 0) {
+                        delete endpoint.model_capabilities;
+                    }
+                }
+            } else {
+                endpoint.model_capabilities ||= {};
+                endpoint.model_capabilities[model] ||= {};
+                endpoint.model_capabilities[model].context_window = cw;
+            }
+            render();
+        }
+
+        window.toggleCtxWindowMenu = function(client, index, modelIndex, event) {
+            event?.stopPropagation();
+            const dropdown = document.getElementById(`ctx-win-${client}-${index}-${modelIndex}`);
+            if (!dropdown) return;
+            const shouldOpen = !dropdown.classList.contains('is-open');
+            closeAllCtxWindowMenus();
+            closeAllCtxVisionMenus();
+            dropdown.classList.toggle('is-open', shouldOpen);
+        }
+
+        window.closeAllCtxWindowMenus = function() {
+            document.querySelectorAll('.ctx-window-dropdown.is-open').forEach(d => d.classList.remove('is-open'));
         }
 
         window.handleTagInput = function(e, client, index, field) {
@@ -5555,11 +5755,20 @@ experimental_bearer_token = "dummy"</pre>
 
         document.addEventListener('click', (e) => {
             if (!e.target.closest('.add-node-dropdown')) closeAddNodeMenus();
+            if (!e.target.closest('.ctx-window-dropdown')) {
+                closeAllCtxWindowMenus();
+                closeAllCtxVisionMenus();
+            }
         });
 
         document.addEventListener('keydown', (e) => {
             if (e.key === 'Escape' && document.querySelector('.add-node-dropdown.is-open')) {
                 closeAddNodeMenus();
+                return;
+            }
+            if (e.key === 'Escape' && document.querySelector('.ctx-window-dropdown.is-open')) {
+                closeAllCtxWindowMenus();
+                closeAllCtxVisionMenus();
                 return;
             }
             if (e.key === 'Escape' && selectedEndpoint) {

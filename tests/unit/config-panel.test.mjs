@@ -132,11 +132,15 @@ test("section header actions stay compact and wrap cleanly on narrow screens", a
   assert.match(html, />\s*迁移历史会话\s*</);
 });
 
-test("each upstream model exposes supported and unsupported vision choices", async () => {
+test("each upstream model exposes vision capability and context window dropdowns", async () => {
   const html = await readFile(path.join(ROOT, "desktop", "config-panel.html"), "utf8");
   assert.match(html, /updateModelImageCapability/);
-  assert.match(html, />支持视觉</);
-  assert.match(html, />不支持视觉</);
+  assert.match(html, /支持视觉/);
+  assert.match(html, /不支持视觉/);
+  assert.match(html, /toggleCtxVisionMenu/);
+  assert.match(html, /vision-dropdown/);
+  assert.match(html, /toggleCtxWindowMenu/);
+  assert.match(html, /ctx-window-dropdown/);
   assert.match(html, /model_capabilities/);
   assert.match(html, /delete endpoint\.model_capabilities\[model\]/);
 });

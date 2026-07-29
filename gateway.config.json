@@ -58,6 +58,17 @@
     "desktop": {
       "endpoints": [
         {
+          "id": "ep_7c7373fc-bba6-4732-bf0d-ffeea1b4a486",
+          "name": "huoshan-agentplan",
+          "type": "anthropic",
+          "base_url": "https://ark.cn-beijing.volces.com/api/plan",
+          "auth": "bearer",
+          "models": [],
+          "model_mapping": {
+            "claude-haiku-4-7": "glm-5.2"
+          }
+        },
+        {
           "id": "ep_396943be-f876-40a9-9c31-6b56c0d8545b",
           "name": "ait",
           "type": "anthropic",
