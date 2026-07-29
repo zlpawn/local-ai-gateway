@@ -4242,6 +4242,15 @@ experimental_bearer_token = "dummy"</pre>
                                                     onclick="updateModelImageCapability('${client}', ${index}, ${i}, false)"
                                                     title="再次点击可恢复默认（默认按支持视觉处理）">不支持视觉</button>
                                             </span>
+                                            <select class="model-capability-choice"
+                                                onchange="updateModelContextWindow('${client}', ${index}, ${i}, this.value)"
+                                                title="上下文窗口大小（1M 为默认，不写入配置）">
+                                                <option value="1000000" ${(ep.model_capabilities?.[m]?.context_window == null || ep.model_capabilities?.[m]?.context_window === 1000000) ? 'selected' : ''}>1M</option>
+                                                <option value="500000" ${ep.model_capabilities?.[m]?.context_window === 500000 ? 'selected' : ''}>500K</option>
+                                                <option value="256000" ${ep.model_capabilities?.[m]?.context_window === 256000 ? 'selected' : ''}>256K</option>
+                                                <option value="128000" ${ep.model_capabilities?.[m]?.context_window === 128000 ? 'selected' : ''}>128K</option>
+                                                <option value="64000" ${ep.model_capabilities?.[m]?.context_window === 64000 ? 'selected' : ''}>64K</option>
+                                            </select>
                                             ` : ''}
                                             <button type="button" onclick="removeTag('${client}', ${index}, 'models', ${i})" title="移除模型">×</button>
                                         </span>
@@ -5074,6 +5083,31 @@ experimental_bearer_token = "dummy"</pre>
                 endpoint.model_capabilities ||= {};
                 endpoint.model_capabilities[model] ||= {};
                 endpoint.model_capabilities[model].image = supported;
+            }
+            render();
+        }
+
+        window.updateModelContextWindow = function(client, index, modelIndex, value) {
+            const endpoint = config.clients[client].endpoints[index];
+            const model = endpoint.models?.[modelIndex];
+            if (!model) return;
+
+            const cw = Number(value);
+            if (cw === 1000000) {
+                // 1M is the default - remove the field so config stays clean
+                if (endpoint.model_capabilities?.[model]?.context_window != null) {
+                    delete endpoint.model_capabilities[model].context_window;
+                    if (Object.keys(endpoint.model_capabilities[model]).length === 0) {
+                        delete endpoint.model_capabilities[model];
+                    }
+                    if (endpoint.model_capabilities && Object.keys(endpoint.model_capabilities).length === 0) {
+                        delete endpoint.model_capabilities;
+                    }
+                }
+            } else {
+                endpoint.model_capabilities ||= {};
+                endpoint.model_capabilities[model] ||= {};
+                endpoint.model_capabilities[model].context_window = cw;
             }
             render();
         }

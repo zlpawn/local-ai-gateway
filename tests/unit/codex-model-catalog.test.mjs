@@ -305,3 +305,68 @@ test("validate-config accepts Codex capability nodes without chat-provider field
     rmSync(tempDir, { recursive: true, force: true });
   }
 });
+
+test("custom models resolve context_window from model_capabilities", () => {
+  const result = buildCodexCatalog({
+    officialModels,
+    endpoints: [
+      {
+        name: "test",
+        type: "openai-responses",
+        models: ["glm-5.2", "grok-4.5"],
+        model_capabilities: {
+          "glm-5.2": { context_window: 1000000 },
+          "grok-4.5": { context_window: 500000 },
+        },
+      },
+    ],
+  });
+  const glm = result.models.find((m) => m.slug === "glm-5.2");
+  const grok = result.models.find((m) => m.slug === "grok-4.5");
+  assert.equal(glm.context_window, 1000000);
+  assert.equal(glm.max_context_window, 1000000);
+  assert.equal(grok.context_window, 500000);
+  assert.equal(grok.max_context_window, 500000);
+});
+
+test("custom models fall back to 1M when context_window is not configured", () => {
+  const result = buildCodexCatalog({
+    officialModels,
+    endpoints: [
+      {
+        name: "test",
+        type: "openai-responses",
+        models: ["some-model"],
+      },
+    ],
+  });
+  const model = result.models.find((m) => m.slug === "some-model");
+  assert.equal(model.context_window, 1000000);
+  assert.equal(model.max_context_window, 1000000);
+});
+
+test("custom models do not inherit the official 272000 quota", () => {
+  const result = buildCodexCatalog({
+    officialModels,
+    endpoints: [
+      {
+        name: "test",
+        type: "openai-responses",
+        models: ["third-party-model"],
+      },
+    ],
+  });
+  const model = result.models.find((m) => m.slug === "third-party-model");
+  assert.notEqual(model.context_window, 272000);
+  assert.notEqual(model.max_context_window, 272000);
+});
+
+test("official models are unaffected by context_window resolution", () => {
+  const result = buildCodexCatalog({
+    officialModels,
+    endpoints: [],
+  });
+  const official = result.models.find((m) => m.slug === "gpt-5.5");
+  // Official models come from officialModels directly, not buildCustomModel.
+  assert.equal(official.context_window, officialModels[0].context_window);
+});

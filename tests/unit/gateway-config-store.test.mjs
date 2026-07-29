@@ -554,3 +554,81 @@ test("loadGatewayState does not seed DeepTutor when Codex has no endpoints", () 
   }
 });
 
+
+test("buildClaudeInferenceModels derives supports1m from configured context_window", () => {
+  const models = buildClaudeInferenceModels([
+    {
+      model_mapping: {
+        "claude-opus-4-8": "glm-5.2",
+        "claude-opus-4-7": "grok-4.5",
+        "claude-opus-4-6": "some-small-model",
+      },
+      model_capabilities: {
+        "glm-5.2": { context_window: 1000000 },
+        "grok-4.5": { context_window: 500000 },
+        "some-small-model": { context_window: 128000 },
+      },
+    },
+  ]);
+  const glm = models.find((m) => m.name === "claude-opus-4-8");
+  const grok = models.find((m) => m.name === "claude-opus-4-7");
+  const small = models.find((m) => m.name === "claude-opus-4-6");
+  assert.equal(glm.supports1m, true);
+  assert.equal(grok.supports1m, false);
+  assert.equal(small.supports1m, false);
+});
+
+test("buildClaudeInferenceModels defaults supports1m to true when context_window unconfigured", () => {
+  const models = buildClaudeInferenceModels([
+    {
+      model_mapping: {
+        "claude-opus-4-8": "glm-5.2",
+      },
+    },
+  ]);
+  const model = models.find((m) => m.name === "claude-opus-4-8");
+  assert.equal(model.supports1m, true);
+});
+
+test("validateGatewayConfig rejects invalid context_window values", () => {
+  const issues = validateGatewayConfig({
+    clients: {
+      codex: {
+        endpoints: [{
+          id: "ep1",
+          name: "test",
+          is_default: true,
+          models: ["glm-5.2", "grok-4.5"],
+          model_capabilities: {
+            "glm-5.2": { context_window: 0 },
+            "grok-4.5": { context_window: "big" },
+          },
+        }],
+      },
+    },
+  });
+  const ctxIssues = issues.filter((i) => i.code === "invalid_context_window");
+  assert.equal(ctxIssues.length, 2);
+  assert.equal(ctxIssues.some((i) => i.model_id === "glm-5.2"), true);
+  assert.equal(ctxIssues.some((i) => i.model_id === "grok-4.5"), true);
+});
+
+test("validateGatewayConfig accepts valid positive integer context_window", () => {
+  const issues = validateGatewayConfig({
+    clients: {
+      codex: {
+        endpoints: [{
+          id: "ep1",
+          name: "test",
+          is_default: true,
+          models: ["glm-5.2"],
+          model_capabilities: {
+            "glm-5.2": { context_window: 1000000 },
+          },
+        }],
+      },
+    },
+  });
+  const ctxIssues = issues.filter((i) => i.code === "invalid_context_window");
+  assert.equal(ctxIssues.length, 0);
+});
