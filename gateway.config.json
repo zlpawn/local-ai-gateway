@@ -166,6 +166,33 @@
     "codex": {
       "endpoints": [
         {
+          "id": "ep_48cfa1ed-c07a-43bb-bdc4-f5bfd47e3602",
+          "name": "huoshan-agentplan",
+          "purpose": "embedding",
+          "type": "openai-chat",
+          "base_url": "https://ark.cn-beijing.volces.com/api/plan/v3",
+          "enabled": true,
+          "is_default": false,
+          "models": [
+            "doubao-embedding-vision"
+          ],
+          "model_mapping": {},
+          "embedding_model": "doubao-embedding-vision"
+        },
+        {
+          "id": "ep_9bb49155-e9e0-46ff-8e7d-6458943dca61",
+          "name": "huoshan-agentplan",
+          "type": "openai-responses",
+          "base_url": "https://ark.cn-beijing.volces.com/api/plan/v3",
+          "auth": "bearer",
+          "models": [
+            "kimi-k3"
+          ],
+          "model_mapping": {
+            "glm-5.2-ag": "glm-5.2"
+          }
+        },
+        {
           "id": "ep_36e0017d-bb25-4b0d-87f1-2def4971c91e",
           "name": "向量模型节点",
           "purpose": "embedding",
@@ -322,13 +349,27 @@
     "deeptutor": {
       "endpoints": [
         {
+          "id": "ep_876b3ab6-94b7-413b-898c-1af841a583d7",
+          "name": "huoshan-agentplan",
+          "purpose": "embedding",
+          "type": "openai-chat",
+          "base_url": "https://ark.cn-beijing.volces.com/api/plan/v3",
+          "enabled": true,
+          "is_default": true,
+          "models": [
+            "doubao-embedding-vision"
+          ],
+          "model_mapping": {},
+          "embedding_model": "doubao-embedding-vision"
+        },
+        {
           "id": "ep_4dddad42-92a9-4398-a45d-be96144eb0be",
           "name": "向量模型节点",
           "purpose": "embedding",
           "type": "openai-chat",
           "base_url": "https://openapi-ait.ke.com",
           "enabled": true,
-          "is_default": true,
+          "is_default": false,
           "models": [
             "text-embedding-3-large"
           ],
