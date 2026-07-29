@@ -607,6 +607,7 @@ async function forwardOpenAIEmbeddings(body, req, res, context) {
 
   // endpoint_id 精确匹配:用户显式指定节点时,严格在该 client 内查找,不跨 client 兜底
   const requestedEndpointId = context.url.searchParams.get("endpoint_id");
+  const requestedModel = body?.model ? String(body.model) : "";
   let embeddingEndpoint;
   if (requestedEndpointId) {
     embeddingEndpoint = selectEmbeddingEndpoints(endpoints).find(
@@ -622,13 +623,15 @@ async function forwardOpenAIEmbeddings(body, req, res, context) {
       return;
     }
   } else {
-    embeddingEndpoint = selectDefaultEmbeddingEndpoint(endpoints);
+    // Prefer an embedding node that actually owns the requested model, then the
+    // configured default. Never force every model through the default node.
+    embeddingEndpoint = selectEmbeddingEndpointForModel(endpoints, requestedModel);
 
     if (!embeddingEndpoint) {
       for (const fallbackClient of ["codex", "code", "desktop"]) {
         if (fallbackClient === clientName) continue;
         const fbEndpoints = GATEWAY_CONFIG.clients?.[fallbackClient]?.endpoints || [];
-        embeddingEndpoint = selectDefaultEmbeddingEndpoint(fbEndpoints);
+        embeddingEndpoint = selectEmbeddingEndpointForModel(fbEndpoints, requestedModel);
         if (embeddingEndpoint) break;
       }
     }
@@ -662,7 +665,9 @@ async function forwardOpenAIEmbeddings(body, req, res, context) {
   }
   if (!upstreamUrl.endsWith("/embeddings")) {
     const cleanBase = upstreamUrl.replace(/\/+$/, "");
-    if (cleanBase.endsWith("/v1")) {
+    // If the configured base already ends with a version segment (/v1, /v3, ...),
+    // only append /embeddings. Otherwise use the OpenAI-compatible /v1/embeddings.
+    if (/\/v\d+$/i.test(cleanBase)) {
       upstreamUrl = cleanBase + "/embeddings";
     } else {
       upstreamUrl = cleanBase + "/v1/embeddings";
@@ -731,8 +736,39 @@ async function route(req, res) {
   const context = getRequestContext(req);
   req.gatewayContext = context;
   const url = context.url;
-  const reqPath = context.path;
 
+  // DeepTutor embedding surface (/deeptutor/emb/*) only serves models + embeddings.
+  // DeepTutor posts embedding probes to the configured base_url verbatim (no
+  // /embeddings suffix), so treat POST /deeptutor/emb[/] as /v1/embeddings.
+  if (
+    context.client === "deeptutor"
+    && context.capability === "embedding"
+    && req.method === "POST"
+    && (context.path === "/" || context.path === "")
+  ) {
+    context.path = "/v1/embeddings";
+  }
+  const embReqPath = context.path;
+  if (
+    context.client === "deeptutor"
+    && context.capability === "embedding"
+    && req.method !== "OPTIONS"
+    && !(
+      (embReqPath === "/v1/models" && req.method === "GET")
+      || (embReqPath === "/v1/embeddings" && req.method === "POST")
+      || (embReqPath === "/health" && req.method === "GET")
+    )
+  ) {
+    sendJson(res, 404, {
+      error: {
+        type: "not_found",
+        message: `${req.method} ${url.pathname} is not available on the DeepTutor embedding base URL. Use /deeptutor/ for chat models and /deeptutor/emb or /deeptutor/emb/embeddings for embeddings.`,
+      },
+    });
+    return;
+  }
+
+  const reqPath = context.path;
 
   if ((reqPath === "/" || reqPath === "/config") && req.method === "GET") {
     const htmlPath = path.join(PROJECT_ROOT, "desktop", "config-panel.html");
@@ -1512,7 +1548,13 @@ function collectGroupedModelsFromConfig(config) {
     if (context.client === "codex") {
       sendJson(res, 200, await codexModelDiscoveryFresh(context.client));
     } else if (context.client === "deeptutor") {
-      sendJson(res, 200, deeptutorModelDiscovery());
+      sendJson(
+        res,
+        200,
+        context.capability === "embedding"
+          ? deeptutorEmbeddingModelDiscovery()
+          : deeptutorModelDiscovery(),
+      );
     } else {
       sendJson(res, 200, modelDiscovery(context.client));
     }
@@ -5623,8 +5665,10 @@ function resolveConfiguredModel(requestedModel, allowedTypes = [], client = null
 
   for (const c of clientsToCheck) {
     const allEndpoints = GATEWAY_CONFIG.clients?.[c]?.endpoints || [];
+    // Capability nodes (embedding / web_search / vision_fallback) never participate
+    // in chat/model routing, even when marked is_default.
     const endpoints = allEndpoints.filter(ep =>
-      ep.purpose !== "vision_fallback" && ep.purpose !== "web_search" && hasConfiguredApiKey(ep)
+      !isCapabilityEndpoint(ep) && hasConfiguredApiKey(ep)
     );
     
     // Find the default endpoint first
@@ -6998,9 +7042,10 @@ function getRequestContext(req) {
   const inferredClient = inferClientFromUserAgent(req.headers["user-agent"] || "");
   const client = normalized.client || headerClient || queryClient || inferredClient || "unknown";
   // Auto-append /v1 for client-prefixed OpenAI paths so callers can use a
-  // cleaner base_url like http://host/deeptutor/ (the SDK then appends e.g.
-  // /chat/completions). Paths that already include /v1, or root routes such
-  // as /health and /config, are left untouched.
+  // cleaner base_url like http://host/deeptutor/ or http://host/deeptutor/emb/
+  // (the SDK then appends e.g. /chat/completions or /embeddings). Paths that
+  // already include /v1, or root routes such as /health and /config, are left
+  // untouched.
   let path = normalized.path;
   if (normalized.client && OPENAI_V1_PATHS.has(path)) {
     path = "/v1" + path;
@@ -7011,19 +7056,40 @@ function getRequestContext(req) {
     originalPath,
     path,
     client,
+    capability: normalized.capability || "",
     requestId: req.headers["x-request-id"] || randomUUID(),
   };
 }
 
 function normalizeClientPath(pathname) {
   const parts = pathname.split("/").filter(Boolean);
-  if (parts.length === 0) return { client: "", path: "/" };
+  if (parts.length === 0) return { client: "", path: "/", capability: "" };
 
   const client = normalizeClientName(parts[0]);
-  if (!client) return { client: "", path: pathname };
+  if (!client) return { client: "", path: pathname, capability: "" };
 
-  const rest = parts.slice(1).join("/");
-  return { client, path: rest ? `/${rest}` : "/" };
+  let index = 1;
+  let capability = "";
+  // DeepTutor embeds a sub-capability segment so LLM and embedding surfaces can
+  // use separate base URLs:
+  //   /deeptutor/            -> chat models
+  //   /deeptutor/emb/         -> embedding models
+  if (client === "deeptutor" && parts[1]) {
+    const maybeCapability = normalizeDeepTutorCapability(parts[1]);
+    if (maybeCapability) {
+      capability = maybeCapability;
+      index = 2;
+    }
+  }
+
+  const rest = parts.slice(index).join("/");
+  return { client, path: rest ? `/${rest}` : "/", capability };
+}
+
+function normalizeDeepTutorCapability(value) {
+  const text = String(value || "").trim().toLowerCase();
+  if (["emb", "embedding", "embeddings"].includes(text)) return "embedding";
+  return "";
 }
 
 function normalizeClientName(value) {
@@ -7038,6 +7104,26 @@ function normalizeClientName(value) {
 
 function isOpenAIClient(client) {
   return client === "codex" || client === "deeptutor";
+}
+
+function embeddingEndpointMatchesModel(endpoint, modelId) {
+  const text = String(modelId || "").trim();
+  if (!text || !endpoint) return false;
+  if (endpoint.embedding_model && String(endpoint.embedding_model).trim() === text) return true;
+  if (Array.isArray(endpoint.models) && endpoint.models.includes(text)) return true;
+  if (endpoint.model_mapping && Object.prototype.hasOwnProperty.call(endpoint.model_mapping, text)) return true;
+  return false;
+}
+
+function selectEmbeddingEndpointForModel(endpoints = [], modelId = "") {
+  const candidates = selectEmbeddingEndpoints(endpoints);
+  if (!candidates.length) return null;
+  const text = String(modelId || "").trim();
+  if (text) {
+    const matched = candidates.find((endpoint) => embeddingEndpointMatchesModel(endpoint, text));
+    if (matched) return matched;
+  }
+  return selectDefaultEmbeddingEndpoint(candidates);
 }
 
 // DeepTutor exposes only its own configured models (no official Codex catalog).
@@ -7061,6 +7147,37 @@ function deeptutorModelDiscovery() {
       });
     }
   }
+  return formatDeepTutorModelList(merged, now);
+}
+
+// Separate model list for the /deeptutor/emb/ surface.
+function deeptutorEmbeddingModelDiscovery() {
+  const now = Math.floor(Date.now() / 1000);
+  const endpoints = selectEmbeddingEndpoints(
+    GATEWAY_CONFIG.clients?.deeptutor?.endpoints || [],
+  );
+  const merged = new Map();
+  for (const endpoint of endpoints) {
+    const publicModels = new Set([
+      ...(endpoint.models || []),
+      ...Object.keys(endpoint.model_mapping || {}),
+    ]);
+    const embeddingModel = String(endpoint.embedding_model || "").trim();
+    if (embeddingModel) publicModels.add(embeddingModel);
+    for (const modelId of publicModels) {
+      if (!modelId || merged.has(modelId)) continue;
+      merged.set(modelId, {
+        id: modelId,
+        object: "model",
+        created: now,
+        owned_by: endpoint.id || "deeptutor-embedding",
+      });
+    }
+  }
+  return formatDeepTutorModelList(merged, now);
+}
+
+function formatDeepTutorModelList(merged, now = Math.floor(Date.now() / 1000)) {
   const data = [...merged.values()];
   return {
     object: "list",
