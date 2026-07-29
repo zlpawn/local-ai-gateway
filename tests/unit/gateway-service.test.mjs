@@ -1,4 +1,4 @@
-import assert from "node:assert/strict";
+﻿import assert from "node:assert/strict";
 import { mkdtemp, rm, writeFile } from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
@@ -112,7 +112,7 @@ test("managed metadata can be recovered from health when the PID file is missing
   assert.deepEqual(
     recoverMetadataFromHealth(8788, {
       ok: true,
-      service: "local-ai-gateway",
+      service: "shrimp",
       process_id: 456,
       instance_id: "instance-b",
     }),
@@ -159,3 +159,4 @@ test("test environment disables browser and client config synchronization", () =
   assert.equal(env.CODEX_WRITE_MODEL_CATALOG_DISABLED, "1");
   assert.equal(env.LOG_FILE, path.resolve("D:\\runtime", "gateway.log"));
 });
+

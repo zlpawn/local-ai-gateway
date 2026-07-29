@@ -1,4 +1,4 @@
-import fs from "node:fs";
+﻿import fs from "node:fs";
 import http from "node:http";
 import net from "node:net";
 import os from "node:os";
@@ -32,7 +32,7 @@ const serverConfig = config?.server || {};
 const host = process.env.GATEWAY_HOST || process.env.HOST || serverConfig.host || "127.0.0.1";
 const port = Number(process.env.GATEWAY_PORT || process.env.PORT || serverConfig.port || 8787);
 
-console.log("Local AI Gateway Doctor");
+console.log("Shrimp Doctor");
 console.log("=======================");
 console.log(`Project: ${root}`);
 console.log(`Node: ${process.version} (${Number(process.versions.node.split(".")[0]) >= 18 ? "ok" : "too old"})`);
@@ -147,3 +147,4 @@ function getJson(url) {
     req.on("error", (error) => resolve({ ok: false, error: error.message }));
   });
 }
+

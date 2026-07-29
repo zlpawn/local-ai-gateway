@@ -1,4 +1,4 @@
-import http from "node:http";
+﻿import http from "node:http";
 import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
@@ -1526,7 +1526,7 @@ function collectGroupedModelsFromConfig(config) {
           : modelDiscovery().data.map((model) => model.id);
     sendJson(res, 200, {
       ok: true,
-      service: "local-ai-gateway",
+      service: "shrimp",
       process_id: process.pid,
       instance_id: process.env.GATEWAY_INSTANCE_ID || null,
       client: context.client,
@@ -2477,7 +2477,7 @@ async function proxyAntigravityResponse(body, clientRes, context, requestedModel
     });
   } catch (err) {
     sendJson(clientRes, 401, {
-      error: { type: "antigravity_auth_error", message: err?.message || "Antigravity token unavailable. Run: local-ai-gateway antigravity login" },
+      error: { type: "antigravity_auth_error", message: err?.message || "Antigravity token unavailable. Run: shrimp upstream google-oauth login" },
     });
     return;
   }
@@ -7402,7 +7402,7 @@ function writeCodexModelCatalog() {
 
   const catalog = {
     generated_at: new Date().toISOString(),
-    source: "local-ai-gateway",
+    source: "shrimp",
     official_source: fs.existsSync(path.join(os.homedir(), ".codex", "models_cache.json"))
       ? "desktop-models-cache"
       : "bundled-or-fallback",
@@ -8016,3 +8016,4 @@ async function readText(req) {
     req.on("error", reject);
   });
 }
+

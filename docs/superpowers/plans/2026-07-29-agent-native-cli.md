@@ -33,6 +33,52 @@
 
 ---
 
+
+## Implementation Progress
+
+> Updated during implementation on branch `codex/agent-cli-design`.
+
+| Task | Status | Notes |
+|---|---|---|
+| 1 Protocol primitives | done | `lib/clis/shrimp/protocol.mjs` + tests |
+| 2 Registry + schema | done | `registry.mjs` / `parse-args.mjs` / `schema` command |
+| 3 Lifecycle wrap + thin bin | done | `bin/shrimp.js`, `bin/cli.js` compatibility launcher |
+| 4 Config get/validate/restore | done | `config.*` commands |
+| 5 Endpoint CRUD | done | add/list/get/update/remove/enable/disable/set-default |
+| 6 Secret set/list/redaction | done | literal + env ref, output redacted |
+| 7 Generic client copy modes | done | replace/merge/fill-empty |
+| 8 Doctor JSON | done | structured recommendations |
+| 9 Client apply / slots / codex helpers | pending | not implemented yet |
+| 10 Session sync full settings | partial | enable/disable/set/status/install-skill |
+| 11 Skills + local CLI tools | pending | not implemented yet |
+| 12 Mini tools + upstream auth | partial | `upstream google-oauth` + deprecated antigravity alias |
+| 13 E2E agent bootstrap test | done | `tests/integration/shrimp-cli.integration.test.mjs` |
+| 14 Docs/panel/copy UI polish | partial | package identity updated; panel UI later |
+| 14a Code rename then GitHub last | partial | code/package/bin/service -> shrimp; GitHub rename still last |
+| 15 Final verification sweep | partial | shrimp unit/integration + gateway-service/init-config green |
+
+### Current command surface
+
+`shrimp help` / `shrimp schema` expose:
+
+- lifecycle: start/stop/restart/status/logs/stdout/stderr/path/init/setup
+- config: get/validate/restore-template
+- endpoint: list/get/add/update/remove/set-default/enable/disable
+- secret: list/get/set/unset
+- client: list/get/add/remove/copy
+- doctor/validate
+- sync: status/enable/disable/set/install-skill
+- upstream: list / google-oauth login|status
+- schema/help
+
+### Identity landed in code
+
+- package name: `@wuhezhizhong/shrimp`
+- bin: `shrimp` (+ temporary `local-ai-gateway` alias)
+- service id: `shrimp`
+- data dir preference: `~/.shrimp` (legacy fallback remains)
+- GitHub repo rename: **not done yet** by design
+
 ## File structure (target)
 
 ### Create
