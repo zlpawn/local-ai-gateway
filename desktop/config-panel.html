@@ -2078,6 +2078,52 @@
             flex-wrap: wrap;
             margin-top: 12px;
         }
+
+        .metrics-section-head {
+            display: flex;
+            align-items: baseline;
+            justify-content: space-between;
+            gap: 12px;
+            margin: 4px 0 10px;
+        }
+        .metrics-section-head h2 {
+            margin: 0;
+            font-size: 16px;
+            font-weight: 700;
+        }
+        .metrics-section-head p {
+            margin: 0;
+            font-size: 12px;
+            color: var(--text-secondary);
+        }
+        .metrics-teach {
+            display: grid;
+            grid-template-columns: minmax(0, 1.1fr) minmax(0, 0.9fr);
+            gap: 16px;
+            margin-bottom: 18px;
+        }
+        @media (max-width: 980px) {
+            .metrics-teach { grid-template-columns: 1fr; }
+        }
+        .metrics-calc-shell {
+            border: 1px solid var(--border-color);
+            border-radius: var(--radius-lg);
+            background: var(--surface);
+            padding: 16px;
+            margin-top: 8px;
+        }
+        .metrics-calc-grid {
+            display: grid;
+            grid-template-columns: minmax(0, 0.95fr) minmax(0, 1.05fr);
+            gap: 16px;
+            margin-top: 12px;
+        }
+        @media (max-width: 980px) {
+            .metrics-calc-grid { grid-template-columns: 1fr; }
+        }
+        .metrics-calc-shell .metrics-panel {
+            background: var(--input-bg);
+        }
         .embed-layout {
             display: grid;
             grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
@@ -5075,11 +5121,16 @@ ${(() => {
                     <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="15 18 9 12 15 6"></polyline></svg>
                     返回工具列表
                 </button>
-                <div class="metrics-layout">
+
+                <div class="metrics-section-head">
+                    <h2>教学区</h2>
+                    <p>先建立概念，再看例子。这里不负责填你的业务数据。</p>
+                </div>
+                <div class="metrics-teach">
                     <div class="metrics-stack">
                         <div class="metrics-panel">
-                            <h3>1. 先认清四格</h3>
-                            <p>所有分类指标，都先从混淆矩阵这四格开始。先有“实际”，再有“预测”。</p>
+                            <h3>先认清四格</h3>
+                            <p>所有分类指标，都先从混淆矩阵这四格开始。先有“实际”，再有“预测”。下方数字会跟随当前示例/输入变化，方便对照。</p>
                             <div class="metrics-matrix">
                                 <div></div>
                                 <div class="metrics-matrix-label">实际正例</div>
@@ -5094,8 +5145,8 @@ ${(() => {
                         </div>
 
                         <div class="metrics-panel">
-                            <h3>2. 用例子看懂</h3>
-                            <p>先点一个场景，看数字如何影响准确率、精准率、召回率。</p>
+                            <h3>用例子看懂</h3>
+                            <p>点场景会加载一组教学数据，并同步到下方计算区。</p>
                             <div class="metrics-pills">
                                 ${Object.values(metricsScenarios).map((item) => (
                                     '<button class="metrics-pill ' + (metricsState.scenario === item.id ? 'active' : '') + '" onclick="applyMetricsScenario(\'' + item.id + '\')">' + escapeHtml(item.title) + '</button>'
@@ -5104,10 +5155,56 @@ ${(() => {
                             <p style="margin-top:12px;">${escapeHtml(scenario.summary)}</p>
                             <p style="margin-top:8px;"><strong style="color:var(--text-primary);">点题：</strong>${escapeHtml(scenario.lesson)}</p>
                         </div>
+                    </div>
+
+                    <div class="metrics-stack">
+                        <div class="metrics-panel">
+                            <h3>三个主指标分别回答什么</h3>
+                            <ul class="metrics-list">
+                                <li><strong style="color:var(--text-primary);">Accuracy 准确率</strong>：我整体靠不靠谱？</li>
+                                <li><strong style="color:var(--text-primary);">Precision 精准率</strong>：我报出来的结果水分大不大？</li>
+                                <li><strong style="color:var(--text-primary);">Recall 召回率</strong>：我漏了多少该抓的？</li>
+                            </ul>
+                            <div style="margin-top:12px;">
+                                <p>Accuracy = (TP + TN) / (TP + TN + FP + FN)</p>
+                                <p>Precision = TP / (TP + FP)</p>
+                                <p>Recall = TP / (TP + FN)</p>
+                            </div>
+                        </div>
 
                         <div class="metrics-panel">
-                            <h3>3. 填你的数据</h3>
-                            <p>第一版先支持四格输入。改数字后会立即重算。</p>
+                            <h3>易混概念</h3>
+                            <div class="metrics-compare">
+                                <div class="metrics-compare-item">
+                                    <strong>Accuracy vs Precision</strong>
+                                    <span>准确率看“整体对不对”；精准率只看“你报出来的正例里有多少是真的”。中文都常被叫准确率，但不是一回事。</span>
+                                </div>
+                                <div class="metrics-compare-item">
+                                    <strong>Precision vs Recall</strong>
+                                    <span>精准率怕误报，召回率怕漏报。一个问“报得准不准”，一个问“抓得全不全”。</span>
+                                </div>
+                                <div class="metrics-compare-item">
+                                    <strong>FP vs FN</strong>
+                                    <span>FP 是误报：不该抓却抓了。FN 是漏报：该抓却没抓。哪个更贵，取决于业务。</span>
+                                </div>
+                                <div class="metrics-compare-item">
+                                    <strong>Accuracy 为什么会骗人</strong>
+                                    <span>正例很少时，模型即使几乎全预测成负例，准确率也可能很高，但召回率可以是 0。</span>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="metrics-calc-shell">
+                    <div class="metrics-section-head">
+                        <h2>计算区</h2>
+                        <p>这里才是填你自己的数据。改数字后立即重算，结果紧跟在右侧。</p>
+                    </div>
+                    <div class="metrics-calc-grid">
+                        <div class="metrics-panel">
+                            <h3>动手计算</h3>
+                            <p>填写 TP / FP / FN / TN。也可先点上方示例，再改成你的数。</p>
                             <div class="metrics-grid-inputs">
                                 <div class="metrics-input-card">
                                     <label>TP 真正例</label>
@@ -5133,31 +5230,7 @@ ${(() => {
                         </div>
 
                         <div class="metrics-panel">
-                            <h3>5. 易混概念</h3>
-                            <div class="metrics-compare">
-                                <div class="metrics-compare-item">
-                                    <strong>Accuracy vs Precision</strong>
-                                    <span>准确率看“整体对不对”；精准率只看“你报出来的正例里有多少是真的”。中文都常被叫准确率，但不是一回事。</span>
-                                </div>
-                                <div class="metrics-compare-item">
-                                    <strong>Precision vs Recall</strong>
-                                    <span>精准率怕误报，召回率怕漏报。一个问“报得准不准”，一个问“抓得全不全”。</span>
-                                </div>
-                                <div class="metrics-compare-item">
-                                    <strong>FP vs FN</strong>
-                                    <span>FP 是误报：不该抓却抓了。FN 是漏报：该抓却没抓。哪个更贵，取决于业务。</span>
-                                </div>
-                                <div class="metrics-compare-item">
-                                    <strong>Accuracy 为什么会骗人</strong>
-                                    <span>正例很少时，模型即使几乎全预测成负例，准确率也可能很高，但召回率可以是 0。</span>
-                                </div>
-                            </div>
-                        </div>
-                    </div>
-
-                    <div class="metrics-stack">
-                        <div class="metrics-panel">
-                            <h3>4. 结果与人话解释</h3>
+                            <h3>结果与人话解释</h3>
                             ${result.error ? ('<div class="embed-error">' + escapeHtml(result.error) + '</div>') : (
                                 '<div class="metrics-metric-grid">'
                                 + metricCard('准确率 Accuracy', result.metrics.accuracy, '全部判断里对了多少')
@@ -5166,26 +5239,12 @@ ${(() => {
                                 + metricCard('F1', result.metrics.f1, '精准率与召回率的调和平均')
                                 + '</div>'
                                 + '<div style="margin-top:14px;">'
-                                + '<p style="margin-bottom:6px;"><strong style="color:var(--text-primary);">公式</strong></p>'
-                                + '<p>Accuracy = (TP + TN) / (TP + TN + FP + FN)</p>'
-                                + '<p>Precision = TP / (TP + FP)</p>'
-                                + '<p>Recall = TP / (TP + FN)</p>'
-                                + '</div>'
-                                + '<div style="margin-top:14px;">'
                                 + '<p style="margin-bottom:6px;"><strong style="color:var(--text-primary);">人话报告</strong></p>'
                                 + '<ul class="metrics-list">'
                                 + story.map((line) => '<li>' + escapeHtml(line) + '</li>').join('')
                                 + '</ul>'
                                 + '</div>'
                             )}
-                        </div>
-                        <div class="metrics-panel">
-                            <h3>三个主指标分别回答什么</h3>
-                            <ul class="metrics-list">
-                                <li><strong style="color:var(--text-primary);">Accuracy</strong>：我整体靠不靠谱？</li>
-                                <li><strong style="color:var(--text-primary);">Precision</strong>：我报出来的结果水分大不大？</li>
-                                <li><strong style="color:var(--text-primary);">Recall</strong>：我漏了多少该抓的？</li>
-                            </ul>
                         </div>
                     </div>
                 </div>
