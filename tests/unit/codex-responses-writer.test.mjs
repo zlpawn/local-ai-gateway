@@ -129,6 +129,109 @@ test("writer unwraps custom tool input and does not finish an item twice", () =>
   assert.equal(itemDone[0][1].item.input, "click(10, 20)");
 });
 
+test("writer accepts custom tool input returned under a single alternate key", () => {
+  const events = [];
+  const writer = new ResponsesWriter({
+    model: "chat-model",
+    responseId: "resp_custom_alias",
+    emit: (event, data) => events.push([event, data]),
+  });
+
+  writer.finishFunction({
+    index: 0,
+    callId: "call_patch",
+    name: "apply_patch",
+    argumentsText: "{\"patch\":\"*** Begin Patch\\n*** End Patch\"}",
+    kind: "custom",
+  });
+  writer.completed({});
+
+  const itemDone = events.find(([event, data]) => (
+    event === "response.output_item.done" && data.item.type === "custom_tool_call"
+  ));
+  assert.equal(itemDone[1].item.input, "*** Begin Patch\n*** End Patch");
+});
+
+test("writer accepts nested single-key wrappers and preserves ambiguous objects", () => {
+  const events = [];
+  const writer = new ResponsesWriter({
+    model: "chat-model",
+    responseId: "resp_custom_nested",
+    emit: (event, data) => events.push([event, data]),
+  });
+
+  writer.finishFunction({
+    index: 0,
+    callId: "call_nested",
+    name: "apply_patch",
+    argumentsText: "{\"input\":{\"patch\":\"*** Begin Patch\\n*** End Patch\"}}",
+    kind: "custom",
+  });
+
+  writer.finishFunction({
+    index: 1,
+    callId: "call_ambiguous",
+    name: "apply_patch",
+    argumentsText: "{\"patch\":\"one\",\"path\":\"two\"}",
+    kind: "custom",
+  });
+
+  const toolItems = events
+    .filter(([event, data]) => (
+      event === "response.output_item.done" && data.item.type === "custom_tool_call"
+    ))
+    .map(([, data]) => data.item);
+  assert.equal(toolItems[0].input, "*** Begin Patch\n*** End Patch");
+  assert.equal(toolItems[1].input, "{\"patch\":\"one\",\"path\":\"two\"}");
+});
+
+test("writer preserves empty custom tool objects instead of failing the stream", () => {
+  const events = [];
+  const writer = new ResponsesWriter({
+    model: "chat-model",
+    responseId: "resp_custom_empty",
+    emit: (event, data) => events.push([event, data]),
+  });
+
+  writer.finishFunction({
+    index: 0,
+    callId: "call_empty",
+    name: "apply_patch",
+    argumentsText: "{}",
+    kind: "custom",
+  });
+  writer.completed({});
+
+  const toolItem = events.find(([event, data]) => (
+    event === "response.output_item.done" && data.item.type === "custom_tool_call"
+  ))[1].item;
+  assert.equal(toolItem.input, "{}");
+  assert.equal(events.at(-1)[0], "response.completed");
+});
+
+test("writer accepts already unwrapped custom tool input", () => {
+  const events = [];
+  const writer = new ResponsesWriter({
+    model: "chat-model",
+    responseId: "resp_custom_raw",
+    emit: (event, data) => events.push([event, data]),
+  });
+
+  writer.finishFunction({
+    index: 0,
+    callId: "call_patch",
+    name: "apply_patch",
+    argumentsText: "*** Begin Patch\n*** End Patch",
+    kind: "custom",
+  });
+  writer.completed({});
+
+  const itemDone = events.find(([event, data]) => (
+    event === "response.output_item.done" && data.item.type === "custom_tool_call"
+  ));
+  assert.equal(itemDone[1].item.input, "*** Begin Patch\n*** End Patch");
+});
+
 test("writer emits response.failed instead of response.completed after failure", () => {
   const events = [];
   const writer = new ResponsesWriter({

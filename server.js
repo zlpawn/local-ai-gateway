@@ -29,7 +29,10 @@ import {
 } from "./lib/codex/official-models.mjs";
 import { unifyCodexHistory } from "./lib/codex/history-unify.mjs";
 import { pipeResponsesSsePassthrough } from "./lib/codex/responses-passthrough.mjs";
-import { ResponsesWriter } from "./lib/codex/responses-writer.mjs";
+import {
+  normalizeCustomInput,
+  ResponsesWriter,
+} from "./lib/codex/responses-writer.mjs";
 import {
   ensureFreshToken as ensureAntigravityToken,
   loadCodeAssist as loadAntigravityProject,
@@ -4964,6 +4967,23 @@ function sanitizeAnthropicMessages(messages) {
     }
   }
 
+  for (const message of merged) {
+    if (message.role !== "assistant") continue;
+    const firstToolUse = message.content.findIndex((part) => part?.type === "tool_use");
+    if (firstToolUse < 0) continue;
+
+    const beforeToolUse = message.content.slice(0, firstToolUse);
+    const fromToolUse = message.content.slice(firstToolUse);
+    const trailingText = fromToolUse.filter((part) => part?.type === "text");
+    if (trailingText.length === 0) continue;
+
+    message.content = [
+      ...beforeToolUse,
+      ...trailingText,
+      ...fromToolUse.filter((part) => part?.type !== "text"),
+    ];
+  }
+
   while (merged.length > 0 && merged[merged.length - 1]?.role === "assistant") {
     merged.pop();
   }
@@ -6209,18 +6229,21 @@ async function streamAnthropicAsOpenAIResponse(
             index: payload.index ?? toolBlocks.size,
             callId: block.id || randomUUID(),
             name: block.name || "tool",
+            kind: toolKinds.get(block.name) || "function",
             argumentsText: block.input && Object.keys(block.input).length
               ? JSON.stringify(block.input)
               : "",
           };
           toolBlocks.set(tool.index, tool);
-          writer.functionArgumentsDelta({
-            index: tool.index,
-            callId: tool.callId,
-            name: tool.name,
-            delta: tool.argumentsText,
-            kind: toolKinds.get(tool.name) || "function",
-          });
+          if (tool.kind !== "custom") {
+            writer.functionArgumentsDelta({
+              index: tool.index,
+              callId: tool.callId,
+              name: tool.name,
+              delta: tool.argumentsText,
+              kind: tool.kind,
+            });
+          }
         }
         return;
       }
@@ -6233,13 +6256,15 @@ async function streamAnthropicAsOpenAIResponse(
           if (!tool) return;
           const delta = payload.delta.partial_json || "";
           tool.argumentsText += delta;
-          writer.functionArgumentsDelta({
-            index: tool.index,
-            callId: tool.callId,
-            name: tool.name,
-            delta,
-            kind: toolKinds.get(tool.name) || "function",
-          });
+          if (tool.kind !== "custom") {
+            writer.functionArgumentsDelta({
+              index: tool.index,
+              callId: tool.callId,
+              name: tool.name,
+              delta,
+              kind: tool.kind,
+            });
+          }
         }
         return;
       }
@@ -6247,12 +6272,32 @@ async function streamAnthropicAsOpenAIResponse(
       if (eventName === "content_block_stop") {
         const tool = toolBlocks.get(payload.index);
         if (tool) {
+          const argumentsText = tool.argumentsText || "{}";
+          if (tool.kind === "custom") {
+            const normalized = normalizeCustomInput(argumentsText);
+            if (normalized.fallback) {
+              logInfo("custom_tool_arguments_fallback", {
+                request_id: requestId,
+                model: requestedModel || "custom-model",
+                tool: tool.name,
+                arguments_length: argumentsText.length,
+                shape: normalized.shape,
+              });
+            }
+            writer.functionArgumentsDelta({
+              index: tool.index,
+              callId: tool.callId,
+              name: tool.name,
+              delta: normalized.input,
+              kind: tool.kind,
+            });
+          }
           writer.finishFunction({
             index: tool.index,
             callId: tool.callId,
             name: tool.name,
-            argumentsText: tool.argumentsText || "{}",
-            kind: toolKinds.get(tool.name) || "function",
+            argumentsText,
+            kind: tool.kind,
           });
         }
         return;
