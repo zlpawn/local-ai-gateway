@@ -22,11 +22,11 @@
   ],
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/zlpawn/local-ai-gateway.git"
+    "url": "git+https://github.com/zlpawn/shrimp.git"
   },
-  "homepage": "https://github.com/zlpawn/local-ai-gateway#readme",
+  "homepage": "https://github.com/zlpawn/shrimp#readme",
   "bugs": {
-    "url": "https://github.com/zlpawn/local-ai-gateway/issues"
+    "url": "https://github.com/zlpawn/shrimp/issues"
   },
   "keywords": [
     "ai",

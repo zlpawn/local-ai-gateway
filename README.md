@@ -31,7 +31,7 @@ shrimp cli-tool install -- npm i -g some-cli
 # PowerShell tip: quote dashed flags or use --command "..." so -y is not eaten by the shell
 `````
 
-Default output is JSON for agents. Use `--format pretty` for humans. GitHub repository rename remains a final cutover step after verification.
+Default output is JSON for agents. Use `--format pretty` for humans.
 
 Local lightweight routing gateway for AI clients and custom model providers.
 

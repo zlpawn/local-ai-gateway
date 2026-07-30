@@ -14,8 +14,9 @@ test("npm package metadata exposes only public release files", async () => {
   assert.equal(pkg.bin.shrimp, "bin/shrimp.js");
   assert.equal(pkg.bin["local-ai-gateway"], undefined);
   assert.equal(pkg.publishConfig.access, "public");
-  // GitHub repository rename is intentionally deferred.
-  assert.equal(pkg.repository.url, "git+https://github.com/zlpawn/local-ai-gateway.git");
+  assert.equal(pkg.repository.url, "git+https://github.com/zlpawn/shrimp.git");
+  assert.equal(pkg.homepage, "https://github.com/zlpawn/shrimp#readme");
+  assert.equal(pkg.bugs.url, "https://github.com/zlpawn/shrimp/issues");
   assert.ok(pkg.files.includes("gateway.config.example.json"));
   assert.ok(!pkg.files.includes("gateway.config.json"));
   assert.ok(!pkg.files.includes("models.json"));
