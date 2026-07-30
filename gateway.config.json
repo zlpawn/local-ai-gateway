@@ -108,7 +108,12 @@
             "claude-fable-5": "grok-4.5"
           },
           "is_default": true,
-          "id": "ep_b83be2be-8d46-4765-8484-4626a8c6fd5a"
+          "id": "ep_b83be2be-8d46-4765-8484-4626a8c6fd5a",
+          "model_capabilities": {
+            "grok-4.5": {
+              "context_window": 500000
+            }
+          }
         },
         {
           "name": "huoshan-codingplan",
@@ -307,6 +312,11 @@
             ],
             "reasoning": true,
             "tools": true
+          },
+          "model_capabilities": {
+            "grok-4.5": {
+              "context_window": 500000
+            }
           }
         },
         {
