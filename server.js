@@ -3524,6 +3524,23 @@ async function fetchConfiguredAnthropic(provider, body, clientReq) {
       let key = upstreamApiKey;
       let res = await doFetch(key);
 
+      if (!res.ok) {
+        logInfo("anthropic_upstream_error", {
+          status: res.status,
+          provider: provider.id,
+          url,
+          last_message_role: body.messages?.[body.messages.length - 1]?.role || null,
+          messages_count: body.messages?.length || 0,
+        });
+        if (res.status === 400) {
+          try {
+            const cloned = res.clone();
+            const errText = await cloned.text();
+            console.error("[BEDROCK_400_DEBUG] error:", errText, "body sent:", JSON.stringify(body));
+          } catch {}
+        }
+      }
+
       // Auth fallback: retry once with the configured key on 401/403.
       if (res.status === 401 || res.status === 403) {
         const fallbackKey = getConfiguredProviderApiKey(provider);
@@ -4915,15 +4932,48 @@ async function fetchLiveOfficialCodexModels() {
 }
 
 function sanitizeAnthropicMessages(messages) {
-  const result = Array.isArray(messages) ? [...messages] : [];
-  while (result.length > 0 && result[result.length - 1]?.role === "assistant") {
-    result.pop();
+  if (!Array.isArray(messages)) return [{ role: "user", content: [{ type: "text", text: " " }] }];
+
+  const merged = [];
+  for (const rawMsg of messages) {
+    if (!rawMsg || typeof rawMsg !== "object") continue;
+    const role = rawMsg.role === "assistant" ? "assistant" : "user";
+    let content = Array.isArray(rawMsg.content)
+      ? rawMsg.content.filter(Boolean)
+      : typeof rawMsg.content === "string"
+        ? [{ type: "text", text: rawMsg.content }]
+        : [];
+
+    content = content.map((part) => {
+      if (typeof part === "string") return { type: "text", text: part || " " };
+      if (part && typeof part === "object" && part.type === "text") {
+        return { ...part, text: part.text || " " };
+      }
+      return part;
+    }).filter(Boolean);
+
+    if (content.length === 0) {
+      content = [{ type: "text", text: " " }];
+    }
+
+    const previous = merged[merged.length - 1];
+    if (previous?.role === role) {
+      previous.content.push(...content);
+    } else {
+      merged.push({ role, content });
+    }
   }
-  const lastRole = result[result.length - 1]?.role;
-  if (!lastRole || lastRole === "system") {
-    result.push({ role: "user", content: [{ type: "text", text: "" }] });
+
+  while (merged.length > 0 && merged[merged.length - 1]?.role === "assistant") {
+    merged.pop();
   }
-  return result;
+
+  const lastRole = merged[merged.length - 1]?.role;
+  if (!lastRole || lastRole !== "user") {
+    merged.push({ role: "user", content: [{ type: "text", text: " " }] });
+  }
+
+  return merged;
 }
 
 function openAIChatToAnthropic(body, resolvedModel) {
