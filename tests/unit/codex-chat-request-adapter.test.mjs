@@ -287,3 +287,22 @@ test("request adapter strips trailing assistant text prefill messages to avoid 4
   assert.equal(messages[0].role, "user");
   assert.equal(messages[0].content, "Hello");
 });
+
+test("request adapter strips trailing assistant tool_calls messages when preceding user message exists", () => {
+  const result = responsesRequestToChat({
+    model: "claude-opus-5",
+    input: [
+      { role: "user", content: "Inspect this." },
+      {
+        type: "function_call",
+        call_id: "call_123",
+        name: "shell_command",
+        arguments: "{\"command\":\"ls\"}",
+      },
+    ],
+  }, "claude-opus-5");
+
+  const messages = result.body.messages;
+  assert.equal(messages.length, 1);
+  assert.equal(messages[0].role, "user");
+});
