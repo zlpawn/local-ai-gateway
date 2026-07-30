@@ -1901,6 +1901,183 @@
             margin-bottom: 16px;
         }
         .tools-detail-back:hover { color: var(--text-primary); }
+
+        .metrics-layout {
+            display: grid;
+            grid-template-columns: minmax(0, 1.1fr) minmax(0, 0.9fr);
+            gap: 20px;
+        }
+        @media (max-width: 980px) {
+            .metrics-layout { grid-template-columns: 1fr; }
+        }
+        .metrics-stack { display: flex; flex-direction: column; gap: 16px; }
+        .metrics-panel {
+            background: var(--surface);
+            border: 1px solid var(--border-color);
+            border-radius: var(--radius-lg);
+            padding: 16px;
+        }
+        .metrics-panel h3 {
+            margin: 0 0 10px;
+            font-size: 14px;
+            font-weight: 650;
+        }
+        .metrics-panel p {
+            margin: 0;
+            color: var(--text-secondary);
+            font-size: 13px;
+            line-height: 1.55;
+        }
+        .metrics-matrix {
+            display: grid;
+            grid-template-columns: 88px repeat(2, minmax(0, 1fr));
+            gap: 8px;
+            margin-top: 12px;
+        }
+        .metrics-matrix-label {
+            font-size: 12px;
+            color: var(--text-secondary);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            text-align: center;
+        }
+        .metrics-cell {
+            border: 1px solid var(--border-color);
+            border-radius: 8px;
+            padding: 12px;
+            background: var(--input-bg);
+            min-height: 88px;
+        }
+        .metrics-cell strong {
+            display: block;
+            font-size: 13px;
+            margin-bottom: 4px;
+        }
+        .metrics-cell span {
+            display: block;
+            font-size: 12px;
+            color: var(--text-secondary);
+            line-height: 1.45;
+        }
+        .metrics-cell .metrics-count {
+            margin-top: 8px;
+            font-size: 20px;
+            font-weight: 700;
+            color: var(--text-primary);
+        }
+        .metrics-cell.tp { border-color: rgba(34, 197, 94, 0.45); }
+        .metrics-cell.fp { border-color: rgba(249, 115, 22, 0.45); }
+        .metrics-cell.fn { border-color: rgba(239, 68, 68, 0.45); }
+        .metrics-cell.tn { border-color: rgba(59, 130, 246, 0.45); }
+        .metrics-pills {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 8px;
+            margin-top: 12px;
+        }
+        .metrics-pill {
+            border: 1px solid var(--border-color);
+            background: var(--input-bg);
+            color: var(--text-secondary);
+            border-radius: 999px;
+            padding: 6px 10px;
+            font-size: 12px;
+            cursor: pointer;
+        }
+        .metrics-pill.active {
+            color: var(--text-primary);
+            border-color: var(--accent, #2563eb);
+            background: rgba(37, 99, 235, 0.08);
+        }
+        .metrics-grid-inputs {
+            display: grid;
+            grid-template-columns: repeat(2, minmax(0, 1fr));
+            gap: 10px;
+            margin-top: 12px;
+        }
+        .metrics-input-card {
+            border: 1px solid var(--border-color);
+            border-radius: 8px;
+            padding: 10px;
+            background: var(--input-bg);
+        }
+        .metrics-input-card label {
+            display: block;
+            font-size: 12px;
+            color: var(--text-secondary);
+            margin-bottom: 6px;
+        }
+        .metrics-input-card input {
+            width: 100%;
+            border: 1px solid var(--border-color);
+            border-radius: 6px;
+            background: var(--surface);
+            color: var(--text-primary);
+            padding: 8px 10px;
+            font-size: 14px;
+        }
+        .metrics-metric-grid {
+            display: grid;
+            grid-template-columns: repeat(2, minmax(0, 1fr));
+            gap: 10px;
+        }
+        .metrics-metric-card {
+            border: 1px solid var(--border-color);
+            border-radius: 8px;
+            padding: 12px;
+            background: var(--input-bg);
+        }
+        .metrics-metric-card .label {
+            font-size: 12px;
+            color: var(--text-secondary);
+        }
+        .metrics-metric-card .value {
+            margin-top: 6px;
+            font-size: 22px;
+            font-weight: 700;
+        }
+        .metrics-metric-card .hint {
+            margin-top: 4px;
+            font-size: 12px;
+            color: var(--text-secondary);
+            line-height: 1.4;
+        }
+        .metrics-list {
+            margin: 10px 0 0;
+            padding-left: 18px;
+            color: var(--text-secondary);
+            font-size: 13px;
+            line-height: 1.55;
+        }
+        .metrics-list li { margin: 6px 0; }
+        .metrics-compare {
+            display: grid;
+            gap: 8px;
+            margin-top: 10px;
+        }
+        .metrics-compare-item {
+            border: 1px solid var(--border-color);
+            border-radius: 8px;
+            padding: 10px 12px;
+            background: var(--input-bg);
+        }
+        .metrics-compare-item strong {
+            display: block;
+            font-size: 13px;
+            margin-bottom: 4px;
+        }
+        .metrics-compare-item span {
+            font-size: 12px;
+            color: var(--text-secondary);
+            line-height: 1.45;
+        }
+        .metrics-actions {
+            display: flex;
+            gap: 8px;
+            flex-wrap: wrap;
+            margin-top: 12px;
+        }
         .embed-layout {
             display: grid;
             grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
@@ -2553,7 +2730,7 @@ experimental_bearer_token = "dummy"</pre>
                 <div class="section-header">
                     <div>
                         <h2>迷你工具 (Mini Tools)</h2>
-                        <p>实验性迷你工具集合,提供文本向量化等便捷能力。</p>
+                        <p>实验性迷你工具集合，提供文本向量化、分类评估教学等便捷能力。</p>
                     </div>
                 </div>
                 <div id="tools-cards" class="tools-cards"></div>
@@ -2678,7 +2855,37 @@ experimental_bearer_token = "dummy"</pre>
         // Craft-style navigation: null = card list, {client,index} = detail editor
         let selectedEndpoint = null;
         let activeClient = 'code';
-        let toolsView = 'cards'; // 'cards' | 'embedding'
+        let toolsView = 'cards'; // 'cards' | 'embedding' | 'classification-metrics'
+        const metricsState = {
+            scenario: 'spam',
+            tp: 40,
+            fp: 10,
+            fn: 20,
+            tn: 130,
+        };
+        const metricsScenarios = {
+            spam: {
+                id: 'spam',
+                title: '垃圾邮件拦截',
+                summary: '拦垃圾邮件时，误伤正常邮件和漏拦垃圾邮件都很常见。',
+                lesson: '精准率低=正常邮件被误伤；召回率低=垃圾邮件漏进来。',
+                counts: { tp: 40, fp: 10, fn: 20, tn: 130 },
+            },
+            disease: {
+                id: 'disease',
+                title: '疾病筛查',
+                summary: '筛查场景通常更害怕漏诊，所以会更关注召回率。',
+                lesson: '召回高但精准低，意味着少漏诊，但会有更多人被误报。',
+                counts: { tp: 18, fp: 30, fn: 2, tn: 150 },
+            },
+            imbalance: {
+                id: 'imbalance',
+                title: '类别不平衡陷阱',
+                summary: '正例很少时，全预测成负例也可能得到很高准确率。',
+                lesson: '准确率 99% 也可能完全没用，因为真实正例一个都没抓到。',
+                counts: { tp: 0, fp: 0, fn: 10, tn: 990 },
+            },
+        };
         const embedState = {
             client: 'codex',
             endpointId: '',
@@ -4720,12 +4927,20 @@ ${(() => {
                     <div class="tools-card-name">文本向量化</div>
                     <div class="tools-card-desc">选择已配置的向量模型,对文本生成向量或计算两段文本的余弦相似度。</div>
                 </div>
+                <div class="tools-card" onclick="openTool('classification-metrics')">
+                    <div class="tools-card-icon">
+                        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="7" height="7"></rect><rect x="14" y="3" width="7" height="7"></rect><rect x="14" y="14" width="7" height="7"></rect><rect x="3" y="14" width="7" height="7"></rect></svg>
+                    </div>
+                    <div class="tools-card-name">分类评估实验室</div>
+                    <div class="tools-card-desc">讲清 TP/FP/FN/TN，以及准确率、精准率、召回率，并用你的数据现场计算。</div>
+                </div>
             `;
         };
 
         window.openTool = function(toolId) {
             toolsView = toolId;
-            renderToolsDetail();
+            if (toolId === 'classification-metrics') renderClassificationMetricsDetail();
+            else renderToolsDetail();
         };
 
         window.backToToolsCards = function() {
@@ -4737,6 +4952,246 @@ ${(() => {
             renderToolsCards();
         };
 
+
+        function metricsToCount(value) {
+            const n = Number(value);
+            if (!Number.isFinite(n) || n < 0) return null;
+            return Math.floor(n);
+        }
+
+        function metricsRatio(numerator, denominator) {
+            if (denominator === 0) return { value: null, unavailable: true };
+            return { value: numerator / denominator, unavailable: false };
+        }
+
+        function computeMetricsFromState() {
+            const tp = metricsToCount(metricsState.tp);
+            const fp = metricsToCount(metricsState.fp);
+            const fn = metricsToCount(metricsState.fn);
+            const tn = metricsToCount(metricsState.tn);
+            if ([tp, fp, fn, tn].some((v) => v == null)) {
+                return { error: 'TP / FP / FN / TN 都必须是大于等于 0 的整数。' };
+            }
+            const total = tp + fp + fn + tn;
+            const actualPos = tp + fn;
+            const actualNeg = fp + tn;
+            const predictedPos = tp + fp;
+            const accuracy = metricsRatio(tp + tn, total);
+            const precision = metricsRatio(tp, predictedPos);
+            const recall = metricsRatio(tp, actualPos);
+            const f1 = (precision.value == null || recall.value == null)
+                ? { value: null, unavailable: true }
+                : metricsRatio(2 * precision.value * recall.value, precision.value + recall.value);
+            return {
+                counts: { tp, fp, fn, tn },
+                totals: {
+                    total,
+                    actualPos,
+                    actualNeg,
+                    predictedPos,
+                },
+                metrics: { accuracy, precision, recall, f1 },
+            };
+        }
+
+        function formatMetricPercent(metric) {
+            if (!metric || metric.value == null) return 'N/A';
+            return (metric.value * 100).toFixed(1) + '%';
+        }
+
+        function buildMetricsStory(result) {
+            if (result.error) return [result.error];
+            const { counts, totals, metrics } = result;
+            const lines = [];
+            lines.push('一共 ' + totals.total + ' 条样本：实际正例 ' + totals.actualPos + '，实际负例 ' + totals.actualNeg + '。');
+            lines.push('模型报出 ' + totals.predictedPos + ' 个正例：其中 TP ' + counts.tp + ' 个真对，FP ' + counts.fp + ' 个误报。');
+            lines.push('真实正例里抓回 ' + counts.tp + ' 个，漏掉 ' + counts.fn + ' 个（FN）。');
+            if (metrics.precision.value == null) lines.push('精准率无法计算：模型没有预测出任何正例。');
+            else lines.push('精准率 ' + formatMetricPercent(metrics.precision) + '：你报出来的正例里，大约 ' + formatMetricPercent(metrics.precision) + ' 是真的。');
+            if (metrics.recall.value == null) lines.push('召回率无法计算：数据里没有真实正例。');
+            else lines.push('召回率 ' + formatMetricPercent(metrics.recall) + '：真实正例里，大约 ' + formatMetricPercent(metrics.recall) + ' 被找回来了。');
+            if (metrics.accuracy.value != null) {
+                lines.push('准确率 ' + formatMetricPercent(metrics.accuracy) + '：所有判断里，对了 ' + formatMetricPercent(metrics.accuracy) + '。');
+            }
+            if (
+                totals.total > 0
+                && totals.actualPos > 0
+                && totals.actualPos / totals.total <= 0.1
+                && metrics.accuracy.value != null
+                && metrics.accuracy.value >= 0.9
+                && (metrics.recall.value == null || metrics.recall.value < 0.5)
+            ) {
+                lines.push('注意：正例很少时，准确率容易虚高。即使漏掉大量正例，准确率也可能看起来不错。');
+            } else if (metrics.precision.value != null && metrics.recall.value != null) {
+                if (metrics.precision.value - metrics.recall.value >= 0.15) {
+                    lines.push('当前更偏“报得准，但抓得不全”：误报少，漏报更多。');
+                } else if (metrics.recall.value - metrics.precision.value >= 0.15) {
+                    lines.push('当前更偏“抓得全，但水分更大”：漏报少，误报更多。');
+                } else {
+                    lines.push('当前精准率和召回率比较接近，没有明显偏向某一侧。');
+                }
+            }
+            return lines;
+        }
+
+        window.applyMetricsScenario = function(id) {
+            const scenario = metricsScenarios[id] || metricsScenarios.spam;
+            metricsState.scenario = scenario.id;
+            metricsState.tp = scenario.counts.tp;
+            metricsState.fp = scenario.counts.fp;
+            metricsState.fn = scenario.counts.fn;
+            metricsState.tn = scenario.counts.tn;
+            renderClassificationMetricsDetail();
+        };
+
+        window.onMetricsCountInput = function(field, value) {
+            metricsState[field] = value;
+            metricsState.scenario = 'custom';
+            renderClassificationMetricsDetail();
+        };
+
+        window.resetMetricsExample = function() {
+            applyMetricsScenario(metricsState.scenario === 'custom' ? 'spam' : metricsState.scenario);
+        };
+
+        window.renderClassificationMetricsDetail = function() {
+            const cards = document.getElementById('tools-cards');
+            const detail = document.getElementById('tools-detail');
+            if (!cards || !detail) return;
+            cards.style.display = 'none';
+            const result = computeMetricsFromState();
+            const story = buildMetricsStory(result);
+            const scenario = metricsScenarios[metricsState.scenario] || metricsScenarios.spam;
+            const metricCard = (label, metric, hint) => (
+                '<div class="metrics-metric-card">'
+                + '<div class="label">' + label + '</div>'
+                + '<div class="value">' + escapeHtml(formatMetricPercent(metric)) + '</div>'
+                + '<div class="hint">' + hint + '</div>'
+                + '</div>'
+            );
+            const countOrState = (key) => escapeHtml(String(result.counts ? result.counts[key] : metricsState[key]));
+            detail.innerHTML = `
+                <button class="tools-detail-back" onclick="backToToolsCards()">
+                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="15 18 9 12 15 6"></polyline></svg>
+                    返回工具列表
+                </button>
+                <div class="metrics-layout">
+                    <div class="metrics-stack">
+                        <div class="metrics-panel">
+                            <h3>1. 先认清四格</h3>
+                            <p>所有分类指标，都先从混淆矩阵这四格开始。先有“实际”，再有“预测”。</p>
+                            <div class="metrics-matrix">
+                                <div></div>
+                                <div class="metrics-matrix-label">实际正例</div>
+                                <div class="metrics-matrix-label">实际负例</div>
+                                <div class="metrics-matrix-label">预测正例</div>
+                                <div class="metrics-cell tp"><strong>TP 真正例</strong><span>预测是，实际也是</span><div class="metrics-count">${countOrState('tp')}</div></div>
+                                <div class="metrics-cell fp"><strong>FP 假正例</strong><span>预测是，实际不是（误报）</span><div class="metrics-count">${countOrState('fp')}</div></div>
+                                <div class="metrics-matrix-label">预测负例</div>
+                                <div class="metrics-cell fn"><strong>FN 假负例</strong><span>预测不是，实际是（漏报）</span><div class="metrics-count">${countOrState('fn')}</div></div>
+                                <div class="metrics-cell tn"><strong>TN 真负例</strong><span>预测不是，实际也不是</span><div class="metrics-count">${countOrState('tn')}</div></div>
+                            </div>
+                        </div>
+
+                        <div class="metrics-panel">
+                            <h3>2. 用例子看懂</h3>
+                            <p>先点一个场景，看数字如何影响准确率、精准率、召回率。</p>
+                            <div class="metrics-pills">
+                                ${Object.values(metricsScenarios).map((item) => (
+                                    '<button class="metrics-pill ' + (metricsState.scenario === item.id ? 'active' : '') + '" onclick="applyMetricsScenario(\'' + item.id + '\')">' + escapeHtml(item.title) + '</button>'
+                                )).join('')}
+                            </div>
+                            <p style="margin-top:12px;">${escapeHtml(scenario.summary)}</p>
+                            <p style="margin-top:8px;"><strong style="color:var(--text-primary);">点题：</strong>${escapeHtml(scenario.lesson)}</p>
+                        </div>
+
+                        <div class="metrics-panel">
+                            <h3>3. 填你的数据</h3>
+                            <p>第一版先支持四格输入。改数字后会立即重算。</p>
+                            <div class="metrics-grid-inputs">
+                                <div class="metrics-input-card">
+                                    <label>TP 真正例</label>
+                                    <input type="number" min="0" step="1" value="${escapeHtml(String(metricsState.tp))}" oninput="onMetricsCountInput('tp', this.value)" />
+                                </div>
+                                <div class="metrics-input-card">
+                                    <label>FP 假正例（误报）</label>
+                                    <input type="number" min="0" step="1" value="${escapeHtml(String(metricsState.fp))}" oninput="onMetricsCountInput('fp', this.value)" />
+                                </div>
+                                <div class="metrics-input-card">
+                                    <label>FN 假负例（漏报）</label>
+                                    <input type="number" min="0" step="1" value="${escapeHtml(String(metricsState.fn))}" oninput="onMetricsCountInput('fn', this.value)" />
+                                </div>
+                                <div class="metrics-input-card">
+                                    <label>TN 真负例</label>
+                                    <input type="number" min="0" step="1" value="${escapeHtml(String(metricsState.tn))}" oninput="onMetricsCountInput('tn', this.value)" />
+                                </div>
+                            </div>
+                            <div class="metrics-actions">
+                                <button class="btn" onclick="resetMetricsExample()">恢复当前示例</button>
+                                <button class="btn" onclick="applyMetricsScenario('imbalance')">加载不平衡陷阱</button>
+                            </div>
+                        </div>
+
+                        <div class="metrics-panel">
+                            <h3>5. 易混概念</h3>
+                            <div class="metrics-compare">
+                                <div class="metrics-compare-item">
+                                    <strong>Accuracy vs Precision</strong>
+                                    <span>准确率看“整体对不对”；精准率只看“你报出来的正例里有多少是真的”。中文都常被叫准确率，但不是一回事。</span>
+                                </div>
+                                <div class="metrics-compare-item">
+                                    <strong>Precision vs Recall</strong>
+                                    <span>精准率怕误报，召回率怕漏报。一个问“报得准不准”，一个问“抓得全不全”。</span>
+                                </div>
+                                <div class="metrics-compare-item">
+                                    <strong>FP vs FN</strong>
+                                    <span>FP 是误报：不该抓却抓了。FN 是漏报：该抓却没抓。哪个更贵，取决于业务。</span>
+                                </div>
+                                <div class="metrics-compare-item">
+                                    <strong>Accuracy 为什么会骗人</strong>
+                                    <span>正例很少时，模型即使几乎全预测成负例，准确率也可能很高，但召回率可以是 0。</span>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="metrics-stack">
+                        <div class="metrics-panel">
+                            <h3>4. 结果与人话解释</h3>
+                            ${result.error ? ('<div class="embed-error">' + escapeHtml(result.error) + '</div>') : (
+                                '<div class="metrics-metric-grid">'
+                                + metricCard('准确率 Accuracy', result.metrics.accuracy, '全部判断里对了多少')
+                                + metricCard('精准率 Precision', result.metrics.precision, '报出的正例里有多少真对')
+                                + metricCard('召回率 Recall', result.metrics.recall, '真实正例里抓回了多少')
+                                + metricCard('F1', result.metrics.f1, '精准率与召回率的调和平均')
+                                + '</div>'
+                                + '<div style="margin-top:14px;">'
+                                + '<p style="margin-bottom:6px;"><strong style="color:var(--text-primary);">公式</strong></p>'
+                                + '<p>Accuracy = (TP + TN) / (TP + TN + FP + FN)</p>'
+                                + '<p>Precision = TP / (TP + FP)</p>'
+                                + '<p>Recall = TP / (TP + FN)</p>'
+                                + '</div>'
+                                + '<div style="margin-top:14px;">'
+                                + '<p style="margin-bottom:6px;"><strong style="color:var(--text-primary);">人话报告</strong></p>'
+                                + '<ul class="metrics-list">'
+                                + story.map((line) => '<li>' + escapeHtml(line) + '</li>').join('')
+                                + '</ul>'
+                                + '</div>'
+                            )}
+                        </div>
+                        <div class="metrics-panel">
+                            <h3>三个主指标分别回答什么</h3>
+                            <ul class="metrics-list">
+                                <li><strong style="color:var(--text-primary);">Accuracy</strong>：我整体靠不靠谱？</li>
+                                <li><strong style="color:var(--text-primary);">Precision</strong>：我报出来的结果水分大不大？</li>
+                                <li><strong style="color:var(--text-primary);">Recall</strong>：我漏了多少该抓的？</li>
+                            </ul>
+                        </div>
+                    </div>
+                </div>
+            `;
+        };
+
         function getEmbeddingEndpoints(client) {
             const eps = (config.clients[client]?.endpoints || []).filter(
                 ep => ep.purpose === 'embedding' && ep.enabled !== false
@@ -4745,6 +5200,10 @@ ${(() => {
         }
 
         window.renderToolsDetail = function() {
+            if (toolsView === 'classification-metrics') {
+                renderClassificationMetricsDetail();
+                return;
+            }
             const cards = document.getElementById('tools-cards');
             const detail = document.getElementById('tools-detail');
             if (!cards || !detail) return;
