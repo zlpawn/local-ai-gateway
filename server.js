@@ -4914,6 +4914,17 @@ async function fetchLiveOfficialCodexModels() {
   }
 }
 
+function sanitizeAnthropicMessages(messages) {
+  const result = Array.isArray(messages) ? [...messages] : [];
+  while (result.length > 0 && result[result.length - 1]?.role === "assistant") {
+    result.pop();
+  }
+  if (result.length === 0) {
+    result.push({ role: "user", content: [{ type: "text", text: "" }] });
+  }
+  return result;
+}
+
 function openAIChatToAnthropic(body, resolvedModel) {
   const messages = [];
   const system = [];
@@ -4926,12 +4937,14 @@ function openAIChatToAnthropic(body, resolvedModel) {
     }
 
     const converted = openAIMessageToAnthropic(message);
-    if (converted) messages.push(converted);
+    if (converted) appendAnthropicMessage(messages, converted);
   }
+
+  const sanitizedMessages = sanitizeAnthropicMessages(messages);
 
   const upstreamBody = {
     model: resolvedModel,
-    messages,
+    messages: sanitizedMessages,
     max_tokens: body.max_completion_tokens || body.max_tokens || 4096,
     stream: Boolean(body.stream),
   };
@@ -4983,9 +4996,11 @@ function openAIResponsesToAnthropic(body, resolvedModel) {
     );
   }
 
+  const sanitizedMessages = sanitizeAnthropicMessages(messages);
+
   const upstreamBody = {
     model: resolvedModel,
-    messages,
+    messages: sanitizedMessages,
     max_tokens: body.max_output_tokens || body.max_tokens || 4096,
     stream: Boolean(body.stream),
   };
@@ -5141,6 +5156,10 @@ function anthropicMessagesToOpenAIChat(body, resolvedModel) {
     const converted = anthropicMessageToOpenAIChatMessage(message);
     if (Array.isArray(converted)) messages.push(...converted);
     else if (converted) messages.push(converted);
+  }
+
+  while (messages.length > 0 && messages[messages.length - 1]?.role === "assistant") {
+    messages.pop();
   }
 
   const upstreamBody = {

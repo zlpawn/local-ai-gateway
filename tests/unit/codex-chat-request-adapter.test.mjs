@@ -272,3 +272,18 @@ test("request adapter converts summary-type compaction item", () => {
   assert.equal(messages[0].role, "system");
   assert.ok(messages[0].content.includes("database migrations"));
 });
+
+test("request adapter strips trailing assistant text prefill messages to avoid 400 errors", () => {
+  const result = responsesRequestToChat({
+    model: "claude-opus-5",
+    input: [
+      { role: "user", content: "Hello" },
+      { role: "assistant", content: "I am ready to help" },
+    ],
+  }, "claude-opus-5");
+
+  const messages = result.body.messages;
+  assert.equal(messages.length, 1);
+  assert.equal(messages[0].role, "user");
+  assert.equal(messages[0].content, "Hello");
+});
