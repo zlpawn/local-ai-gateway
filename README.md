@@ -3,6 +3,14 @@
 
 ## Shrimp agent CLI
 
+### Command style
+
+- Readable verbs: `shrimp endpoint list`, `shrimp client copy`
+- Short aliases: `shrimp ep ls`, `shrimp c copy`, `shrimp st`, `shrimp key set`
+- Agent default JSON; humans can use `--format pretty`
+- Cross-platform: same commands on macOS and Windows
+- Install tip: `shrimp skill install -- <command...>` (quote dashed flags in PowerShell)
+
 The agent-native CLI entry is `shrimp` (package `@wuhezhizhong/shrimp`).
 
 ```bash
@@ -514,6 +522,7 @@ Invoke-RestMethod `
   -ContentType "application/json" `
   -Body $body
 ```
+
 
 
 

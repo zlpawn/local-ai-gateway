@@ -76,6 +76,15 @@
 - schema/help
 
 
+
+### Command UX principles
+
+- Prefer readable multi-word commands (`endpoint list`) with short aliases (`ep ls`)
+- Keep one cross-platform command surface for macOS and Windows
+- Global flags work before/after command tokens
+- Default JSON for agents; pretty grouped help for humans
+- Avoid shell-specific syntax in docs/examples; call out PowerShell quoting where needed
+
 ### Install UX (skill / cli-tool)
 
 - Default: **noninteractive** shell capture for agents (`stdin` ignored, JSON result + `output_tail`)
@@ -1016,6 +1025,7 @@ Recommended execution after review approval:
 2. **Inline Execution** — same session using executing-plans
 
 Do not start implementation until external design/plan review feedback is incorporated if required.
+
 
 
 
