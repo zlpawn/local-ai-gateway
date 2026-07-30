@@ -1,4 +1,4 @@
-﻿# Local AI Gateway
+# Shrimp
 
 
 ## Shrimp agent CLI
@@ -332,16 +332,16 @@ After installing the package globally, the same cross-platform control is
 available without npm:
 
 ```bash
-npm install -g @wuhezhizhong/local-ai-gateway
-local-ai-gateway start
-local-ai-gateway status
-local-ai-gateway stop
-local-ai-gateway restart
-local-ai-gateway logs
+npm install -g @wuhezhizhong/shrimp
+shrimp start
+shrimp status
+shrimp stop
+shrimp restart
+shrimp logs
 ```
 
 The first command creates user-owned configuration under
-`~/.local-ai-gateway/`. Existing `.env` and `gateway.config.json` files are
+`~/.shrimp/`. Existing `.env` and `gateway.config.json` files are
 never overwritten.
 
 ## Claude Desktop/Gateway Config

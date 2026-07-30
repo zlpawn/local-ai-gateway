@@ -165,12 +165,12 @@ test('interactiveSetup - interactive mode choice', async () => {
   }
 });
 
-test('HubStore - default hub path is under ~/.local-ai-gateway/hub', () => {
+test('HubStore - default hub path is under ~/.shrimp/hub', () => {
   const prev = process.env.LOCAL_AI_GATEWAY_HUB_DIR;
   delete process.env.LOCAL_AI_GATEWAY_HUB_DIR;
   try {
     const store = new HubStore();
-    const expected = path.join(os.homedir(), '.local-ai-gateway', 'hub');
+    const expected = path.join(os.homedir(), '.shrimp', 'hub');
     assert.equal(store.baseDir, expected);
     assert.equal(store.sessionsDir, path.join(expected, 'sessions'));
     assert.equal(store.pointerFile, path.join(expected, 'CURRENT_ACTIVE.json'));

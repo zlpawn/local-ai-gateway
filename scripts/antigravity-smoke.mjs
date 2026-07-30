@@ -2,7 +2,7 @@
 // Antigravity v1internal LIVE smoke test (gRPC).
 //
 // Hits the REAL Google v1internal PredictionService via gRPC.
-// Requires a logged-in token: run `node bin/cli.js antigravity login` first.
+// Requires a logged-in token: run `node bin/shrimp.js upstream google-oauth login` first.
 // This is NOT part of the unit test suite (no mocks) - run it manually.
 //
 // Usage:
@@ -30,11 +30,11 @@ async function main() {
   const creds = getClientCredentials();
   const token = getStoredToken();
   if (!token.refresh_token) {
-    console.error("[smoke] No token. Run first: node bin/cli.js antigravity login");
+    console.error("[smoke] No token. Run first: node bin/shrimp.js upstream google-oauth login");
     process.exit(1);
   }
   if (!token.account_id) {
-    console.error("[smoke] Token has no account_id. Re-run: node bin/cli.js antigravity login");
+    console.error("[smoke] Token has no account_id. Re-run: node bin/shrimp.js upstream google-oauth login");
     process.exit(1);
   }
 

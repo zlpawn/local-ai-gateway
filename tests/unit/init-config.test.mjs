@@ -109,11 +109,11 @@ test("environment loading fills missing values without overriding the caller", a
 
 test("relative user configuration paths resolve under the user data directory", () => {
   assert.equal(
-    resolveUserPath("D:\\Users\\person\\.local-ai-gateway", "gateway.config.json"),
-    path.resolve("D:\\Users\\person\\.local-ai-gateway", "gateway.config.json"),
+    resolveUserPath("D:\\Users\\person\\.shrimp", "gateway.config.json"),
+    path.resolve("D:\\Users\\person\\.shrimp", "gateway.config.json"),
   );
   assert.equal(
-    resolveUserPath("D:\\Users\\person\\.local-ai-gateway", "E:\\shared\\gateway.json"),
+    resolveUserPath("D:\\Users\\person\\.shrimp", "E:\\shared\\gateway.json"),
     path.resolve("E:\\shared\\gateway.json"),
   );
 });

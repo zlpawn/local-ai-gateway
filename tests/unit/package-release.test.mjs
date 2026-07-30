@@ -10,8 +10,11 @@ test("npm package metadata exposes only public release files", async () => {
   const pkg = JSON.parse(await readFile(path.join(projectRoot, "package.json"), "utf8"));
 
   assert.equal(pkg.main, undefined);
-  assert.equal(pkg.bin["local-ai-gateway"], "bin/cli.js");
+  assert.equal(pkg.name, "@wuhezhizhong/shrimp");
+  assert.equal(pkg.bin.shrimp, "bin/shrimp.js");
+  assert.equal(pkg.bin["local-ai-gateway"], undefined);
   assert.equal(pkg.publishConfig.access, "public");
+  // GitHub repository rename is intentionally deferred.
   assert.equal(pkg.repository.url, "git+https://github.com/zlpawn/local-ai-gateway.git");
   assert.ok(pkg.files.includes("gateway.config.example.json"));
   assert.ok(!pkg.files.includes("gateway.config.json"));
@@ -21,7 +24,7 @@ test("npm package metadata exposes only public release files", async () => {
 test("public package attribution does not expose a local user alias", async () => {
   const license = await readFile(path.join(projectRoot, "LICENSE"), "utf8");
   assert.doesNotMatch(license, /\bxtea\b/i);
-  assert.match(license, /Local AI Gateway contributors/);
+  assert.match(license, /Shrimp contributors/);
 });
 
 

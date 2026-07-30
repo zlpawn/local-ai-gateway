@@ -30,7 +30,7 @@ const customModels = builtCatalog.models.filter(
 );
 const catalog = {
   generated_at: new Date().toISOString(),
-  source: "local-ai-gateway",
+  source: "shrimp",
   models: builtCatalog.models,
 };
 
@@ -109,7 +109,7 @@ function verifyWithCodex(catalogPath, customModels) {
     "-c",
     "model_provider=\"custom\"",
     "-c",
-    "model_providers.custom.name=\"Local AI Gateway\"",
+    "model_providers.custom.name=\"Shrimp\"",
     "-c",
     "model_providers.custom.base_url=\"http://127.0.0.1:8787/codex/v1\"",
     "-c",
@@ -151,7 +151,7 @@ function printCodexConfigSnippet(catalogPath, config) {
   console.log(`openai_base_url = "http://${host}:${port}/codex/v1"`);
   console.log("");
   console.log("[model_providers.custom]");
-  console.log('name = "Local AI Gateway"');
+  console.log('name = "Shrimp"');
   console.log(`base_url = "http://${host}:${port}/codex/v1"`);
   console.log('wire_api = "responses"');
   console.log("requires_openai_auth = true");

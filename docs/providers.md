@@ -1,6 +1,6 @@
 # Provider Recipes
 
-Local AI Gateway routes by model id. Each model points to a provider, and each
+Shrimp routes by model id. Each model points to a provider, and each
 provider declares the upstream API shape it supports.
 The `base_url` value is used exactly as written; the gateway does not append
 protocol paths such as `/messages`, `/chat/completions`, or `/responses`.

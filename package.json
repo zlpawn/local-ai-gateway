@@ -7,8 +7,7 @@
   "author": "Shrimp contributors",
   "type": "module",
   "bin": {
-    "shrimp": "bin/shrimp.js",
-    "local-ai-gateway": "bin/cli.js"
+    "shrimp": "bin/shrimp.js"
   },
   "files": [
     "bin",
@@ -45,7 +44,7 @@
   "scripts": {
     "init": "node scripts/init-config.mjs",
     "start": "node server.js",
-    "check": "node --check server.js && node --check scripts/gateway.mjs && node --check scripts/init-config.mjs && node --check bin/cli.js",
+    "check": "node --check server.js && node --check scripts/gateway.mjs && node --check scripts/init-config.mjs && node --check bin/shrimp.js",
     "doctor": "node scripts/doctor.mjs",
     "validate:config": "node scripts/validate-config.mjs",
     "codex:catalog": "node scripts/codex-catalog.mjs",
@@ -56,8 +55,8 @@
     "test:adapters": "node --test tests/integration/basic-routes.test.mjs tests/integration/protocol-adapters.test.mjs",
     "test:cli": "node --test tests/unit/gateway-service.test.mjs tests/unit/init-config.test.mjs tests/unit/package-release.test.mjs tests/unit/config-panel.test.mjs tests/unit/session-sync.test.mjs tests/integration/gateway-cli.integration.test.mjs && node --test tests/unit/clis/shrimp/*.test.mjs tests/integration/shrimp-cli.integration.test.mjs",
     "test:sync": "node --test tests/unit/session-sync.test.mjs",
-    "sync:status": "node bin/cli.js sync status",
-    "sync:install-skill": "node bin/cli.js sync install-skill",
+    "sync:status": "node bin/shrimp.js sync status",
+    "sync:install-skill": "node bin/shrimp.js sync install-skill",
     "test:codex:unit": "node --test tests/unit/gateway-config-store.test.mjs tests/unit/vision-fallback.test.mjs tests/unit/claude-code-settings.test.mjs tests/unit/codex-model-catalog.test.mjs tests/unit/codex-chat-request-adapter.test.mjs tests/unit/codex-responses-writer.test.mjs tests/unit/codex-chat-response-adapter.test.mjs tests/unit/codex-responses-passthrough.test.mjs tests/unit/codex-official-models.test.mjs tests/unit/codex-hosted-tools-inject.test.mjs tests/unit/web-search.test.mjs",
     "test:codex:catalog-write": "node --test tests/integration/codex-catalog-write.test.mjs",
     "test:codex:integration": "node --test tests/integration/codex-gateway.test.mjs",
