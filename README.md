@@ -16,6 +16,11 @@ shrimp start
 # interactive install (local PTY, same idea as web panel terminal)
 shrimp skill install --interactive --command "npx -y skills add owner/repo --skill foo"
 shrimp cli-tool install --interactive --command "npm i -g some-cli"
+
+# --command can be omitted; trailing args are the install command
+shrimp skill install -- npx -y skills add owner/repo --skill foo
+shrimp cli-tool install -- npm i -g some-cli
+# PowerShell tip: quote dashed flags or use --command "..." so -y is not eaten by the shell
 `````
 
 Default output is JSON for agents. Use `--format pretty` for humans. GitHub repository rename remains a final cutover step after verification.
@@ -509,5 +514,6 @@ Invoke-RestMethod `
   -ContentType "application/json" `
   -Body $body
 ```
+
 
 

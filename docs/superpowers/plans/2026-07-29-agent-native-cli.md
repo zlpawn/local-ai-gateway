@@ -94,7 +94,11 @@ shrimp cli-tool install --command "npm i -g some-cli"
 # human interactive prompts (npx questions, confirmations)
 shrimp skill install --interactive --command "npx -y skills add owner/repo --skill foo"
 shrimp cli-tool install --interactive --command "npm i -g some-cli"
-```
+
+# --command optional
+shrimp skill install -- npx -y skills add owner/repo --skill foo
+shrimp cli-tool install -- npm i -g some-cli
+`````
 ### Identity landed in code
 
 - package name: `@wuhezhizhong/shrimp`
@@ -1012,5 +1016,6 @@ Recommended execution after review approval:
 2. **Inline Execution** — same session using executing-plans
 
 Do not start implementation until external design/plan review feedback is incorporated if required.
+
 
 
