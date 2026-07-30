@@ -50,7 +50,7 @@
 | 8 Doctor JSON | done | structured recommendations |
 | 9 Client apply / slots / codex helpers | done | apply/slots/snippet/catalog/history commands |
 | 10 Session sync full settings | done | enable/disable/set/status/install-skill |
-| 11 Skills + local CLI tools | done | skill.* and cli-tool.* commands |
+| 11 Skills + local CLI tools | done | skill.* and cli-tool.* commands; noninteractive default + `--interactive` local PTY |
 | 12 Mini tools + upstream auth | done | tool.embedding* + upstream google-oauth |
 | 13 E2E agent bootstrap test | done | `tests/integration/shrimp-cli.integration.test.mjs` |
 | 14 Docs/panel/copy UI polish | done | generic copy selectors in config panel; package identity updated |
@@ -75,6 +75,26 @@
 - upstream: list / google-oauth login|status
 - schema/help
 
+
+### Install UX (skill / cli-tool)
+
+- Default: **noninteractive** shell capture for agents (`stdin` ignored, JSON result + `output_tail`)
+- Human parity with web panel: add `--interactive` to attach a local `node-pty` session to the current TTY
+- Same install history records as panel (`InstallHistory` / `CliInstallHistory`)
+- On success, CLI tries to infer newly appeared skill/cli names when `--name` omitted
+- Does **not** require gateway WebSocket; local runner is preferred for CLI use
+
+Examples:
+
+```bash
+# agent-friendly
+shrimp skill install --command "npx -y skills add owner/repo --skill foo"
+shrimp cli-tool install --command "npm i -g some-cli"
+
+# human interactive prompts (npx questions, confirmations)
+shrimp skill install --interactive --command "npx -y skills add owner/repo --skill foo"
+shrimp cli-tool install --interactive --command "npm i -g some-cli"
+```
 ### Identity landed in code
 
 - package name: `@wuhezhizhong/shrimp`
@@ -992,4 +1012,5 @@ Recommended execution after review approval:
 2. **Inline Execution** — same session using executing-plans
 
 Do not start implementation until external design/plan review feedback is incorporated if required.
+
 
