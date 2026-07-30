@@ -4919,7 +4919,8 @@ function sanitizeAnthropicMessages(messages) {
   while (result.length > 0 && result[result.length - 1]?.role === "assistant") {
     result.pop();
   }
-  if (result.length === 0) {
+  const lastRole = result[result.length - 1]?.role;
+  if (!lastRole || lastRole === "system") {
     result.push({ role: "user", content: [{ type: "text", text: "" }] });
   }
   return result;
@@ -5162,9 +5163,14 @@ function anthropicMessagesToOpenAIChat(body, resolvedModel) {
     messages.pop();
   }
 
+  const lastRole = messages[messages.length - 1]?.role;
+  if (!lastRole || lastRole === "system") {
+    messages.push({ role: "user", content: "" });
+  }
+
   const upstreamBody = {
     model: resolvedModel,
-    messages: messages.length ? messages : [{ role: "user", content: "" }],
+    messages,
     stream: Boolean(body.stream),
   };
 
