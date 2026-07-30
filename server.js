@@ -1,4 +1,4 @@
-﻿import http from "node:http";
+import http from "node:http";
 import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
@@ -872,10 +872,15 @@ async function route(req, res) {
       const payload = JSON.parse(await readText(req) || "{}");
       const from = String(payload.from || "codex").trim();
       const to = String(payload.to || "deeptutor").trim();
+      const mode = String(payload.mode || "replace").trim();
       if (!from || !to) { sendJson(res, 400, { error: "from and to are required" }); return; }
       if (from === to) { sendJson(res, 400, { error: "from and to must differ" }); return; }
       if (!GATEWAY_CONFIG.clients?.[from]) {
         sendJson(res, 400, { error: "client '" + from + "' not found" });
+        return;
+      }
+      if (!["replace", "merge", "fill-empty"].includes(mode)) {
+        sendJson(res, 400, { error: "mode must be replace|merge|fill-empty" });
         return;
       }
       const result = copyClientEndpoints({
@@ -883,7 +888,9 @@ async function route(req, res) {
         secrets: structuredClone(GATEWAY_SECRETS),
         from,
         to,
+        mode,
       });
+      fs.writeFileSync(GATEWAY_SECRETS_FILE, JSON.stringify(result.secrets || { api_keys: {} }, null, 2) + "\n", { mode: 0o600 });
       const saved = saveGatewayState({
         configPath: GATEWAY_CONFIG_FILE,
         secretsPath: GATEWAY_SECRETS_FILE,
@@ -891,10 +898,10 @@ async function route(req, res) {
         officialCodexIds: OFFICIAL_CODEX_MODEL_IDS,
       });
       GATEWAY_CONFIG = saved.config;
-      GATEWAY_SECRETS = saved.secrets;
+      GATEWAY_SECRETS = result.secrets || saved.secrets;
       reloadGatewayConfig({ reloadFiles: false });
       logInfo("gateway_config_client_copied", { from, to, copied: result.copied });
-      sendJson(res, 200, { success: true, from, to, copied: result.copied });
+      sendJson(res, 200, { success: true, from, to, mode, copied: result.copied, skipped: result.skipped || 0 });
     } catch (error) {
       if (error instanceof GatewayConfigError) {
         sendJson(res, 400, {

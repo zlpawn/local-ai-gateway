@@ -2342,9 +2342,29 @@ experimental_bearer_token = "dummy"</pre>
                         <p>为 DeepTutor 客户端提供 OpenAI 兼容的下游代理支持。默认从 Codex 复制节点与密钥。</p>
                     </div>
                     <div class="section-header-actions">
-                        <button class="btn" id="deeptutor-copy-btn" onclick="copyClientFromCodex()" title="把 Codex 的全部节点（含密钥）以新 ID 复制到 DeepTutor，覆盖现有 DeepTutor 节点">
-                            从 Codex 复制节点
-                        </button>
+                        <div style="display:flex; gap:8px; align-items:center; flex-wrap:wrap;">
+                            <select id="copy-from-client" title="源 client" style="padding:6px 8px;">
+                                <option value="codex" selected>codex</option>
+                                <option value="code">code</option>
+                                <option value="desktop">desktop</option>
+                                <option value="deeptutor">deeptutor</option>
+                            </select>
+                            <span style="color:var(--text-secondary); font-size:12px;">→</span>
+                            <select id="copy-to-client" title="目标 client" style="padding:6px 8px;">
+                                <option value="deeptutor" selected>deeptutor</option>
+                                <option value="code">code</option>
+                                <option value="desktop">desktop</option>
+                                <option value="codex">codex</option>
+                            </select>
+                            <select id="copy-mode" title="复制模式" style="padding:6px 8px;">
+                                <option value="replace" selected>replace</option>
+                                <option value="merge">merge</option>
+                                <option value="fill-empty">fill-empty</option>
+                            </select>
+                            <button class="btn" id="deeptutor-copy-btn" onclick="copyClientEndpointsGeneric()" title="把源 client 的节点（含密钥）复制到目标 client">
+                                复制节点
+                            </button>
+                        </div>
                         <div class="add-node-dropdown" id="add-node-dropdown-deeptutor">
                             <button type="button" class="btn add-node-trigger" aria-expanded="false" aria-haspopup="menu" onclick="toggleAddNodeMenu('deeptutor', event)">
                                 <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="12" y1="5" x2="12" y2="19"></line><line x1="5" y1="12" x2="19" y2="12"></line></svg>
@@ -2364,7 +2384,7 @@ experimental_bearer_token = "dummy"</pre>
 大语言模型 base_url：http://<span class="cfg-host">127.0.0.1</span>:<span class="cfg-port">8787</span>/deeptutor/
 向量模型 base_url：http://<span class="cfg-host">127.0.0.1</span>:<span class="cfg-port">8787</span>/deeptutor/emb/embeddings</pre>
                     </div>
-                    <p style="font-size: 12px; margin-top: 8px; margin-bottom: 0; color: var(--text-secondary);">首次进入时若 DeepTutor 为空，网关会自动从 Codex 复制节点与密钥。也可点右上角「从 Codex 复制节点」重新覆盖。</p>
+                    <p style="font-size: 12px; margin-top: 8px; margin-bottom: 0; color: var(--text-secondary);">首次进入时若 DeepTutor 为空，网关会自动从 Codex 复制节点与密钥。也可点右上角通用复制控件，从任意 client 复制节点（默认 codex → deeptutor）。</p>
                 </div>
 
                 <div class="endpoints-grid" id="deeptutor-endpoints"></div>
@@ -2828,10 +2848,33 @@ experimental_bearer_token = "dummy"</pre>
         }
 
         // ===== DeepTutor: copy nodes (incl. secrets) from Codex =====
-        window.copyClientFromCodex = async function() {
+                window.copyClientFromCodex = async function() {
+            // backward-compatible alias
+            const fromEl = document.getElementById('copy-from-client');
+            const toEl = document.getElementById('copy-to-client');
+            const modeEl = document.getElementById('copy-mode');
+            if (fromEl) fromEl.value = 'codex';
+            if (toEl) toEl.value = 'deeptutor';
+            if (modeEl) modeEl.value = 'replace';
+            return copyClientEndpointsGeneric();
+        };
+
+        window.copyClientEndpointsGeneric = async function() {
+            const from = document.getElementById('copy-from-client')?.value || 'codex';
+            const to = document.getElementById('copy-to-client')?.value || 'deeptutor';
+            const mode = document.getElementById('copy-mode')?.value || 'replace';
+            if (from === to) {
+                showToast('源与目标 client 不能相同', 'danger');
+                return;
+            }
+            const modeText = mode === 'replace'
+                ? '<strong>覆盖目标现有节点</strong>'
+                : mode === 'merge'
+                    ? '追加到目标现有节点'
+                    : '仅当目标为空时复制';
             const ok = await showSkillConfirmModal(
-                '从 Codex 复制节点',
-                '把 Codex 的全部节点（含密钥）以新 ID 复制到 DeepTutor，<strong>覆盖现有 DeepTutor 节点</strong>。确认继续？'
+                '复制客户端节点',
+                `把 <code>${from}</code> 的节点（含密钥）复制到 <code>${to}</code>。<br/>模式：${mode}（${modeText}）。确认继续？`
             );
             if (!ok) return;
             const btn = document.getElementById('deeptutor-copy-btn');
@@ -2839,19 +2882,20 @@ experimental_bearer_token = "dummy"</pre>
                 if (btn) { btn.disabled = true; btn.textContent = '复制中...'; }
                 const res = await fetch('/v1/config/copy-client', {
                     method: 'POST',
-                    headers: { 'Content-Type': 'application/json', 'X-Gateway-Config-Client': 'deeptutor' },
-                    body: JSON.stringify({ from: 'codex', to: 'deeptutor' })
+                    headers: { 'Content-Type': 'application/json', 'X-Gateway-Config-Client': to },
+                    body: JSON.stringify({ from, to, mode })
                 });
                 const data = await res.json();
                 if (!data.success) throw new Error(data.error?.message || data.error || '失败');
                 await loadConfig();
-                showToast('已从 Codex 复制 ' + (data.copied ?? 0) + ' 个节点到 DeepTutor', 'success');
+                showToast(`已从 ${from} 复制 ${data.copied ?? 0} 个节点到 ${to}（${mode}）`, 'success');
             } catch (err) {
                 showToast('复制失败: ' + err.message, 'danger');
             } finally {
-                if (btn) { btn.disabled = false; btn.textContent = '从 Codex 复制节点'; }
+                if (btn) { btn.disabled = false; btn.textContent = '复制节点'; }
             }
         };
+
 
         async function init() {
             try {

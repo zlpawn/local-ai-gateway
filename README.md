@@ -1,4 +1,20 @@
-# Local AI Gateway
+﻿# Local AI Gateway
+
+
+## Shrimp agent CLI
+
+The agent-native CLI entry is `shrimp` (package `@wuhezhizhong/shrimp`).
+
+```bash
+npm install -g .   # from source checkout
+shrimp schema
+shrimp doctor
+shrimp endpoint add --client code --name demo --type openai-chat --base-url https://example.com/v1/chat/completions --api-key sk-demo
+shrimp client apply --client code
+shrimp start
+```
+
+Default output is JSON for agents. Use `--format pretty` for humans. GitHub repository rename remains a final cutover step after verification.
 
 Local lightweight routing gateway for AI clients and custom model providers.
 
@@ -489,3 +505,4 @@ Invoke-RestMethod `
   -ContentType "application/json" `
   -Body $body
 ```
+

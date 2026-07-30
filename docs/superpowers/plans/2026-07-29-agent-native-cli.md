@@ -1,4 +1,4 @@
-# Agent-Native CLI Implementation Plan
+﻿# Agent-Native CLI Implementation Plan
 
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
@@ -48,14 +48,14 @@
 | 6 Secret set/list/redaction | done | literal + env ref, output redacted |
 | 7 Generic client copy modes | done | replace/merge/fill-empty |
 | 8 Doctor JSON | done | structured recommendations |
-| 9 Client apply / slots / codex helpers | pending | not implemented yet |
-| 10 Session sync full settings | partial | enable/disable/set/status/install-skill |
-| 11 Skills + local CLI tools | pending | not implemented yet |
-| 12 Mini tools + upstream auth | partial | `upstream google-oauth` + deprecated antigravity alias |
+| 9 Client apply / slots / codex helpers | done | apply/slots/snippet/catalog/history commands |
+| 10 Session sync full settings | done | enable/disable/set/status/install-skill |
+| 11 Skills + local CLI tools | done | skill.* and cli-tool.* commands |
+| 12 Mini tools + upstream auth | done | tool.embedding* + upstream google-oauth |
 | 13 E2E agent bootstrap test | done | `tests/integration/shrimp-cli.integration.test.mjs` |
-| 14 Docs/panel/copy UI polish | partial | package identity updated; panel UI later |
+| 14 Docs/panel/copy UI polish | done | generic copy selectors in config panel; package identity updated |
 | 14a Code rename then GitHub last | partial | code/package/bin/service -> shrimp; GitHub rename still last |
-| 15 Final verification sweep | partial | shrimp unit/integration + gateway-service/init-config green |
+| 15 Final verification sweep | partial | core shrimp suites green; GitHub rename still deferred |
 
 ### Current command surface
 
@@ -65,9 +65,13 @@
 - config: get/validate/restore-template
 - endpoint: list/get/add/update/remove/set-default/enable/disable
 - secret: list/get/set/unset
-- client: list/get/add/remove/copy
+- client: list/get/add/remove/copy/apply/snippet/slots
+- codex: catalog write / history unify
 - doctor/validate
 - sync: status/enable/disable/set/install-skill
+- skill: list/get/install/unify/refresh/history
+- cli-tool: list/install/history/source
+- tool: embedding / embedding-similarity
 - upstream: list / google-oauth login|status
 - schema/help
 
@@ -988,3 +992,4 @@ Recommended execution after review approval:
 2. **Inline Execution** — same session using executing-plans
 
 Do not start implementation until external design/plan review feedback is incorporated if required.
+
