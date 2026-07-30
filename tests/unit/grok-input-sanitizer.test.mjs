@@ -52,17 +52,19 @@ test("sanitizeGrokResponsesInput maps assistant content parts to output_text and
     input: [
       { type: "message", role: "user", content: [{ type: "input_text", text: "hello" }] },
       { type: "message", role: "assistant", content: [{ type: "input_text", text: "hi there" }] },
+      { type: "message", role: "user", content: [{ type: "input_text", text: "continue" }] },
     ],
   };
 
   const clean = sanitizeGrokResponsesInput(raw);
 
-  assert.equal(clean.input.length, 2);
+  assert.equal(clean.input.length, 3);
   assert.equal(clean.input[0].role, "user");
   assert.equal(clean.input[0].content[0].type, "input_text");
   assert.equal(clean.input[1].role, "assistant");
   assert.equal(clean.input[1].content[0].type, "output_text");
   assert.equal(clean.input[1].content[0].text, "hi there");
+  assert.equal(clean.input[2].role, "user");
 });
 
 test("sanitizeGrokResponsesInput maps image content parts to input_image with string url", () => {
@@ -121,4 +123,46 @@ test("sanitizeResponsesInput skips compaction with empty text", () => {
   const clean = sanitizeResponsesInput(raw);
   assert.equal(clean.input.length, 1);
   assert.equal(clean.input[0].role, "user");
+});
+
+test("sanitizeResponsesInput strips trailing assistant prefill messages", () => {
+  const raw = {
+    model: "glm-5.2",
+    input: [
+      { role: "user", content: "Continue the task." },
+      { role: "assistant", content: "I will continue." },
+      { role: "assistant", content: [{ type: "output_text", text: "Starting now." }] },
+    ],
+  };
+
+  const clean = sanitizeResponsesInput(raw);
+
+  assert.equal(clean.input.length, 1);
+  assert.equal(clean.input[0].role, "user");
+  assert.equal(clean.input[0].content, "Continue the task.");
+});
+
+test("sanitizeResponsesInput preserves assistant history before a user tool result", () => {
+  const raw = {
+    model: "glm-5.2",
+    input: [
+      { role: "user", content: "Run the check." },
+      {
+        type: "function_call",
+        call_id: "call_1",
+        name: "exec_command",
+        arguments: "{\"cmd\":\"npm test\"}",
+      },
+      {
+        type: "function_call_output",
+        call_id: "call_1",
+        output: "ok",
+      },
+    ],
+  };
+
+  const clean = sanitizeResponsesInput(raw);
+
+  assert.equal(clean.input.length, 3);
+  assert.equal(clean.input.at(-1).type, "function_call_output");
 });
