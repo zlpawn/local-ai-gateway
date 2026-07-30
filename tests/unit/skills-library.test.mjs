@@ -167,6 +167,9 @@ description: Auto-export Netscape cookies from Chrome for yt-dlp via CDP.
 
 test("Skill library scans antigravity-only and claude roots with dedup", () => {
   const tmpHome = fs.mkdtempSync(path.join(os.tmpdir(), "skill-multiscan-"));
+  const catalogFile = SkillInstaller.MANAGED_CATALOG_FILE;
+  const hadCatalog = fs.existsSync(catalogFile);
+  const previousCatalog = hadCatalog ? fs.readFileSync(catalogFile, "utf-8") : null;
   try {
     // central: only grok-imagine ensured (managed). Put a local skill in antigravity dir only.
     const agRoot = SkillInstaller.getAntigravitySkillsRoot(tmpHome);
@@ -228,13 +231,81 @@ description: A skill only present under ~/.claude/skills.
     // clean promoted artifact so we don't leak into the real project tree
     const promotedDir = path.join(SkillInstaller.MANAGED_SKILLS_ROOT, "multiscan-ag-only-skill");
     if (fs.existsSync(promotedDir)) fs.rmSync(promotedDir, { recursive: true, force: true });
-    const cat = SkillInstaller.MANAGED_CATALOG_FILE;
-    if (fs.existsSync(cat)) {
-      const data = JSON.parse(fs.readFileSync(cat, "utf-8"));
-      const filtered = (data.skills || []).filter((s) => s.name !== "multiscan-ag-only-skill");
-      if (filtered.length === 0) fs.rmSync(cat, { force: true });
-      else fs.writeFileSync(cat, JSON.stringify({ ...data, skills: filtered }, null, 2));
+    if (hadCatalog) fs.writeFileSync(catalogFile, previousCatalog, "utf-8");
+    else if (fs.existsSync(catalogFile)) fs.rmSync(catalogFile, { force: true });
+    fs.rmSync(tmpHome, { recursive: true, force: true });
+  }
+});
+
+test("Leo coding standards is a searchable managed development skill", () => {
+  const tmpHome = fs.mkdtempSync(path.join(os.tmpdir(), "leo-coding-library-"));
+  try {
+    SkillInstaller.ensureManagedSkills(tmpHome);
+
+    const snapshot = SkillInstaller.buildLibrarySnapshot({ homeDir: tmpHome });
+    const skill = snapshot.allSkills.find((item) => item.name === "leo-coding-standards");
+    assert.ok(skill);
+    assert.equal(skill.managed, true);
+    assert.equal(skill.installed, true);
+    assert.equal(skill.category, "development");
+    assert.equal(skill.categoryLabel, "开发工程");
+    assert.equal(skill.title, "Leo Java 编码规范");
+
+    const development = snapshot.categories.find((item) => item.id === "development");
+    assert.ok(development);
+    assert.equal(development.label, "开发工程");
+    assert.equal(development.count >= 1, true);
+
+    for (const query of ["java", "coding standards", "代码规范"]) {
+      const result = SkillInstaller.buildLibrarySnapshot({
+        homeDir: tmpHome,
+        query,
+      });
+      assert.equal(
+        result.skills.some((item) => item.name === "leo-coding-standards"),
+        true,
+        `query should find leo-coding-standards: ${query}`,
+      );
     }
+
+    const installedDir = path.join(tmpHome, ".agents", "skills", "leo-coding-standards");
+    for (const relativePath of [
+      "agents/openai.yaml",
+      "references/java-api-rules.md",
+      "references/engineering-principles.md",
+      "references/review-checklist.md",
+    ]) {
+      assert.equal(fs.existsSync(path.join(installedDir, relativePath)), true, relativePath);
+    }
+  } finally {
+    fs.rmSync(tmpHome, { recursive: true, force: true });
+  }
+});
+
+test("Skill library infers uncataloged Java review skills as development", () => {
+  const tmpHome = fs.mkdtempSync(path.join(os.tmpdir(), "java-review-category-"));
+  try {
+    const skillDir = path.join(tmpHome, ".agents", "skills", "java-review-local");
+    fs.mkdirSync(skillDir, { recursive: true });
+    fs.writeFileSync(
+      path.join(skillDir, "SKILL.md"),
+      `---
+name: java-review-local
+description: Use when reviewing Java code for coding standards and maintainability.
+---
+
+# Java Review Local
+`,
+      "utf-8",
+    );
+
+    const snapshot = SkillInstaller.buildLibrarySnapshot({ homeDir: tmpHome });
+    const skill = snapshot.allSkills.find((item) => item.name === "java-review-local");
+    assert.ok(skill);
+    assert.equal(skill.managed, false);
+    assert.equal(skill.category, "development");
+    assert.equal(skill.categoryLabel, "开发工程");
+  } finally {
     fs.rmSync(tmpHome, { recursive: true, force: true });
   }
 });

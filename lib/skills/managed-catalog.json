@@ -1,6 +1,6 @@
 {
   "version": 1,
-  "updatedAt": "2026-07-28T06:52:31.100Z",
+  "updatedAt": "2026-07-30T02:33:17.329Z",
   "skills": [
     {
       "id": "video-to-karpathy-wiki",
@@ -40,6 +40,27 @@
       "icon": "🧩",
       "featured": false,
       "tags": [],
+      "requiresDaemon": false,
+      "promoted": true,
+      "managed": true
+    },
+    {
+      "id": "leo-coding-standards",
+      "name": "leo-coding-standards",
+      "title": "Leo Java 编码规范",
+      "summary": "在 Java 编写、修改、重构、测试和代码审查中应用 Leo 的 API 偏好、工程原则与设计边界。",
+      "category": "development",
+      "categoryLabel": "开发工程",
+      "icon": "🛠️",
+      "featured": false,
+      "tags": [
+        "java",
+        "coding-standards",
+        "coding standards",
+        "code-review",
+        "design-principles",
+        "代码规范"
+      ],
       "requiresDaemon": false,
       "promoted": true,
       "managed": true

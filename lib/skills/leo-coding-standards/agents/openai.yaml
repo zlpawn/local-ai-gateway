@@ -1,0 +1,7 @@
+interface:
+  display_name: "Leo Java 编码规范"
+  short_description: "统一 Java 编写、修改、重构、测试与代码审查的工程规范"
+  default_prompt: "Use $leo-coding-standards to write or review this Java code according to Leo coding standards."
+
+policy:
+  allow_implicit_invocation: true

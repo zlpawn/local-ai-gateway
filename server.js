@@ -29,7 +29,11 @@ import {
 } from "./lib/codex/official-models.mjs";
 import { unifyCodexHistory } from "./lib/codex/history-unify.mjs";
 import { pipeResponsesSsePassthrough } from "./lib/codex/responses-passthrough.mjs";
-import { ResponsesWriter } from "./lib/codex/responses-writer.mjs";
+import { applyAnthropicConstraints } from "./lib/codex/anthropic-constraints.mjs";
+import {
+  normalizeCustomInput,
+  ResponsesWriter,
+} from "./lib/codex/responses-writer.mjs";
 import {
   ensureFreshToken as ensureAntigravityToken,
   loadCodeAssist as loadAntigravityProject,
@@ -1331,8 +1335,11 @@ function collectGroupedModelsFromConfig(config) {
     try {
       const query = String(url.searchParams.get("q") || "").trim();
       const probe = url.searchParams.get("probe") === "1" || url.searchParams.get("probe") === "true";
+      const viewRaw = String(url.searchParams.get("view") || "recommended").toLowerCase();
+      const view = viewRaw === "all" ? "all" : "recommended";
       const ignored = CliSourceConfig.listIgnored();
-      const result = await discoverInstalledClis({ query, probe, ignored });
+      const favorites = CliSourceConfig.listFavorites();
+      const result = await discoverInstalledClis({ query, probe, ignored, favorites, view });
       sendJson(res, 200, { success: true, ...result });
     } catch (err) {
       sendJson(res, 500, { error: err.message || String(err) });
@@ -1460,6 +1467,45 @@ function collectGroupedModelsFromConfig(config) {
     return;
   }
   // --- xterm static assets (served locally, no CDN) ---
+
+  // --- CLI favorites: user pins uncommon CLIs into recommended ---
+  if (reqPath === "/v1/cli/favorite" && req.method === "GET") {
+    if (!checkLocalAuth(req, res)) return;
+    try {
+      sendJson(res, 200, { success: true, favorites: CliSourceConfig.listFavorites() });
+    } catch (err) {
+      sendJson(res, 500, { error: err.message || String(err) });
+    }
+    return;
+  }
+
+  if (reqPath === "/v1/cli/favorite" && req.method === "POST") {
+    if (!checkLocalAuth(req, res)) return;
+    try {
+      const payload = JSON.parse(await readText(req) || "{}");
+      const name = String(payload.name || "").trim();
+      if (!name) { sendJson(res, 400, { error: "name is required" }); return; }
+      const favorites = CliSourceConfig.addFavorite(name);
+      sendJson(res, 200, { success: true, favorites });
+    } catch (err) {
+      sendJson(res, 400, { error: err.message || String(err) });
+    }
+    return;
+  }
+
+  if (reqPath === "/v1/cli/favorite" && req.method === "DELETE") {
+    if (!checkLocalAuth(req, res)) return;
+    try {
+      const name = String(url.searchParams.get("name") || "").trim();
+      if (!name) { sendJson(res, 400, { error: "name is required" }); return; }
+      const favorites = CliSourceConfig.removeFavorite(name);
+      sendJson(res, 200, { success: true, favorites });
+    } catch (err) {
+      sendJson(res, 500, { error: err.message || String(err) });
+    }
+    return;
+  }
+
   if (reqPath.startsWith("/xterm/") && req.method === "GET") {
     const seg = reqPath.slice("/xterm/".length);
     const candidates = {
@@ -2033,7 +2079,7 @@ async function forwardOpenAIChatCompletionsResolved(body, clientReq, clientRes, 
 
   const upstreamBody =
     route?.provider?.type === "anthropic"
-      ? openAIChatToAnthropic(body, resolvedModel)
+      ? openAIChatToAnthropic(body, resolvedModel, route)
       : route?.provider?.type === "openai-responses"
         ? openAIChatCompletionsToResponses(body, resolvedModel)
         : {
@@ -2123,7 +2169,7 @@ async function forwardOpenAIChatCompletionsResolved(body, clientReq, clientRes, 
 
     if (route.provider.type === "anthropic") {
       const loop = await runGatewayWebSearchAnthropicLoop({
-        body: withoutStreamFlag(openAIChatToAnthropic(body, resolvedModel)),
+        body: withoutStreamFlag(openAIChatToAnthropic(body, resolvedModel, route)),
         selected: injectedSearch.selected,
         maxLoops: gatewayWebSearchMaxLoops(),
         signal,
@@ -2149,7 +2195,7 @@ async function forwardOpenAIChatCompletionsResolved(body, clientReq, clientRes, 
             context,
             fetchAgain: (retryBody) => fetchConfiguredAnthropic(
               route.provider,
-              withoutStreamFlag(openAIChatToAnthropic(retryBody, resolvedModel)),
+              withoutStreamFlag(openAIChatToAnthropic(retryBody, resolvedModel, route)),
               clientReq,
               signal,
             ),
@@ -2353,7 +2399,7 @@ async function forwardOpenAIChatCompletionsResolved(body, clientReq, clientRes, 
       context,
       fetchAgain: async (retryBody) => {
         const converted = route.provider.type === "anthropic"
-          ? openAIChatToAnthropic(retryBody, resolvedModel)
+          ? openAIChatToAnthropic(retryBody, resolvedModel, route)
           : route.provider.type === "openai-responses"
             ? openAIChatCompletionsToResponses(retryBody, resolvedModel)
             : { ...retryBody, model: resolvedModel };
@@ -2697,7 +2743,7 @@ async function forwardResolvedCodexResponse({
 
   const responseToolKinds = collectResponseToolKinds(body.tools);
   const upstreamBody = route?.provider?.type === "anthropic"
-    ? openAIResponsesToAnthropic(body, resolvedModel)
+    ? openAIResponsesToAnthropic(body, resolvedModel, route)
     : route?.provider?.type === "openai-responses" || !route?.provider
       ? sanitizeResponsesInput({ ...body, model: resolvedModel })
       : {
@@ -2932,7 +2978,7 @@ async function forwardResolvedCodexResponse({
   if (route?.provider?.type === "anthropic") {
     if (injectedSearch.selected) {
       const loop = await runGatewayWebSearchAnthropicLoop({
-        body: withoutStreamFlag(openAIResponsesToAnthropic(body, resolvedModel)),
+        body: withoutStreamFlag(openAIResponsesToAnthropic(body, resolvedModel, route)),
         selected: injectedSearch.selected,
         maxLoops: gatewayWebSearchMaxLoops(),
         signal,
@@ -2957,7 +3003,7 @@ async function forwardResolvedCodexResponse({
             context,
             fetchAgain: (retryBody) => fetchConfiguredAnthropic(
               route.provider,
-              withoutStreamFlag(openAIResponsesToAnthropic(retryBody, resolvedModel)),
+              withoutStreamFlag(openAIResponsesToAnthropic(retryBody, resolvedModel, route)),
               clientReq,
               signal,
             ),
@@ -3010,7 +3056,7 @@ async function forwardResolvedCodexResponse({
       context,
       fetchAgain: (retryBody) => fetchConfiguredAnthropic(
         route.provider,
-        openAIResponsesToAnthropic(retryBody, resolvedModel),
+        openAIResponsesToAnthropic(retryBody, resolvedModel, route),
         clientReq,
       ),
     });
@@ -3488,6 +3534,23 @@ async function fetchConfiguredAnthropic(provider, body, clientReq) {
 
       let key = upstreamApiKey;
       let res = await doFetch(key);
+
+      if (!res.ok) {
+        logInfo("anthropic_upstream_error", {
+          status: res.status,
+          provider: provider.id,
+          url,
+          last_message_role: body.messages?.[body.messages.length - 1]?.role || null,
+          messages_count: body.messages?.length || 0,
+        });
+        if (res.status === 400) {
+          try {
+            const cloned = res.clone();
+            const errText = await cloned.text();
+            console.error("[BEDROCK_400_DEBUG] error:", errText, "body sent:", JSON.stringify(body));
+          } catch {}
+        }
+      }
 
       // Auth fallback: retry once with the configured key on 401/403.
       if (res.status === 401 || res.status === 403) {
@@ -4879,7 +4942,43 @@ async function fetchLiveOfficialCodexModels() {
   }
 }
 
-function openAIChatToAnthropic(body, resolvedModel) {
+function sanitizeAnthropicMessages(messages) {
+  if (!Array.isArray(messages)) return [{ role: "user", content: [{ type: "text", text: " " }] }];
+
+  const merged = [];
+  for (const rawMsg of messages) {
+    if (!rawMsg || typeof rawMsg !== "object") continue;
+    const role = rawMsg.role === "assistant" ? "assistant" : "user";
+    let content = Array.isArray(rawMsg.content)
+      ? rawMsg.content.filter(Boolean)
+      : typeof rawMsg.content === "string"
+        ? [{ type: "text", text: rawMsg.content }]
+        : [];
+
+    content = content.map((part) => {
+      if (typeof part === "string") return { type: "text", text: part || " " };
+      if (part && typeof part === "object" && part.type === "text") {
+        return { ...part, text: part.text || " " };
+      }
+      return part;
+    }).filter(Boolean);
+
+    if (content.length === 0) {
+      content = [{ type: "text", text: " " }];
+    }
+
+    const previous = merged[merged.length - 1];
+    if (previous?.role === role) {
+      previous.content.push(...content);
+    } else {
+      merged.push({ role, content });
+    }
+  }
+
+  return merged;
+}
+
+function openAIChatToAnthropic(body, resolvedModel, route) {
   const messages = [];
   const system = [];
 
@@ -4891,12 +4990,17 @@ function openAIChatToAnthropic(body, resolvedModel) {
     }
 
     const converted = openAIMessageToAnthropic(message);
-    if (converted) messages.push(converted);
+    if (converted) appendAnthropicMessage(messages, converted);
   }
+
+  const sanitizedMessages = applyAnthropicConstraints(
+    sanitizeAnthropicMessages(messages),
+    route,
+  );
 
   const upstreamBody = {
     model: resolvedModel,
-    messages,
+    messages: sanitizedMessages,
     max_tokens: body.max_completion_tokens || body.max_tokens || 4096,
     stream: Boolean(body.stream),
   };
@@ -4920,7 +5024,7 @@ function openAIChatToAnthropic(body, resolvedModel) {
   return upstreamBody;
 }
 
-function openAIResponsesToAnthropic(body, resolvedModel) {
+function openAIResponsesToAnthropic(body, resolvedModel, route) {
   const messages = [];
   const system = [];
 
@@ -4945,12 +5049,18 @@ function openAIResponsesToAnthropic(body, resolvedModel) {
         max_tokens: body.max_output_tokens || body.max_tokens,
       },
       resolvedModel,
+      route,
     );
   }
 
+  const sanitizedMessages = applyAnthropicConstraints(
+    sanitizeAnthropicMessages(messages),
+    route,
+  );
+
   const upstreamBody = {
     model: resolvedModel,
-    messages,
+    messages: sanitizedMessages,
     max_tokens: body.max_output_tokens || body.max_tokens || 4096,
     stream: Boolean(body.stream),
   };
@@ -5108,9 +5218,18 @@ function anthropicMessagesToOpenAIChat(body, resolvedModel) {
     else if (converted) messages.push(converted);
   }
 
+  while (messages.length > 0 && messages[messages.length - 1]?.role === "assistant") {
+    messages.pop();
+  }
+
+  const lastRole = messages[messages.length - 1]?.role;
+  if (!lastRole || lastRole === "system") {
+    messages.push({ role: "user", content: "" });
+  }
+
   const upstreamBody = {
     model: resolvedModel,
-    messages: messages.length ? messages : [{ role: "user", content: "" }],
+    messages,
     stream: Boolean(body.stream),
   };
 
@@ -6099,18 +6218,21 @@ async function streamAnthropicAsOpenAIResponse(
             index: payload.index ?? toolBlocks.size,
             callId: block.id || randomUUID(),
             name: block.name || "tool",
+            kind: toolKinds.get(block.name) || "function",
             argumentsText: block.input && Object.keys(block.input).length
               ? JSON.stringify(block.input)
               : "",
           };
           toolBlocks.set(tool.index, tool);
-          writer.functionArgumentsDelta({
-            index: tool.index,
-            callId: tool.callId,
-            name: tool.name,
-            delta: tool.argumentsText,
-            kind: toolKinds.get(tool.name) || "function",
-          });
+          if (tool.kind !== "custom") {
+            writer.functionArgumentsDelta({
+              index: tool.index,
+              callId: tool.callId,
+              name: tool.name,
+              delta: tool.argumentsText,
+              kind: tool.kind,
+            });
+          }
         }
         return;
       }
@@ -6123,13 +6245,15 @@ async function streamAnthropicAsOpenAIResponse(
           if (!tool) return;
           const delta = payload.delta.partial_json || "";
           tool.argumentsText += delta;
-          writer.functionArgumentsDelta({
-            index: tool.index,
-            callId: tool.callId,
-            name: tool.name,
-            delta,
-            kind: toolKinds.get(tool.name) || "function",
-          });
+          if (tool.kind !== "custom") {
+            writer.functionArgumentsDelta({
+              index: tool.index,
+              callId: tool.callId,
+              name: tool.name,
+              delta,
+              kind: tool.kind,
+            });
+          }
         }
         return;
       }
@@ -6137,12 +6261,32 @@ async function streamAnthropicAsOpenAIResponse(
       if (eventName === "content_block_stop") {
         const tool = toolBlocks.get(payload.index);
         if (tool) {
+          const argumentsText = tool.argumentsText || "{}";
+          if (tool.kind === "custom") {
+            const normalized = normalizeCustomInput(argumentsText);
+            if (normalized.fallback) {
+              logInfo("custom_tool_arguments_fallback", {
+                request_id: requestId,
+                model: requestedModel || "custom-model",
+                tool: tool.name,
+                arguments_length: argumentsText.length,
+                shape: normalized.shape,
+              });
+            }
+            writer.functionArgumentsDelta({
+              index: tool.index,
+              callId: tool.callId,
+              name: tool.name,
+              delta: normalized.input,
+              kind: tool.kind,
+            });
+          }
           writer.finishFunction({
             index: tool.index,
             callId: tool.callId,
             name: tool.name,
-            argumentsText: tool.argumentsText || "{}",
-            kind: toolKinds.get(tool.name) || "function",
+            argumentsText,
+            kind: tool.kind,
           });
         }
         return;

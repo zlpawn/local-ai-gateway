@@ -2104,7 +2104,18 @@
         }
 
 
-    </style>
+            .cli-view-toggle {
+            display: inline-flex;
+            gap: 6px;
+            align-items: center;
+            flex-wrap: wrap;
+        }
+        .cli-view-btn.is-active {
+            border-color: var(--accent, #2563eb);
+            color: var(--accent, #2563eb);
+            background: rgba(37, 99, 235, 0.08);
+        }
+</style>
     <script>
         // Prevent FOUC by setting theme early
         (function() {
@@ -2586,12 +2597,16 @@ experimental_bearer_token = "dummy"</pre>
 
                 <div class="usage-guide">
                     <h3>💡 使用说明</h3>
-                    <p>网关扫描 PATH（及 Windows 常见安装目录）中的可执行文件，列出本机已安装的 CLI 及其版本与路径。</p>
+                    <p>网关扫描 PATH（及 Windows 常见安装目录）中的可执行文件。默认只显示「推荐」CLI（系统规则自动挑出的常用工具）。Git/MinGW 等工具链内部二进制会被硬过滤。若某个工具不在推荐里，请切到「全部」点「设为常用」固定进来；推荐列表里只对你手动固定的项显示「取消常用」。</p>
                 </div>
 
                 <div class="skills-toolbar">
                     <input id="cli-search-input" class="skills-search" type="search" placeholder="搜索 CLI 名称..." oninput="onCliSearchInput(this.value)" />
-                    <span class="skills-filter-chip" id="cli-stats-chip">已安装 0 个</span>
+                    <div class="cli-view-toggle" id="cli-view-toggle" role="group" aria-label="CLI 视图切换">
+                        <button type="button" class="btn cli-view-btn is-active" data-view="recommended" onclick="setCliView('recommended')">推荐</button>
+                        <button type="button" class="btn cli-view-btn" data-view="all" onclick="setCliView('all')">全部</button>
+                    </div>
+                    <span class="skills-filter-chip" id="cli-stats-chip">推荐 0 / 全部 0</span>
                 </div>
 
                 <div id="cli-list" class="skills-list"></div>
@@ -3179,15 +3194,24 @@ experimental_bearer_token = "dummy"</pre>
             } catch (err) { showToast('删除失败: ' + err.message, 'danger'); }
         };
         // ===== Preset CLI: discovery + install history (mirrors skills) =====
-        let cliLibraryState = { loaded: false, loading: false, query: "", items: [], stats: { total: 0, installed: 0, shown: 0 } };
+        let cliLibraryState = { loaded: false, loading: false, query: "", view: "recommended", items: [], stats: { total: 0, installed: 0, recommended: 0, other: 0, shown: 0, view: "recommended" } };
         let cliSearchTimer = null;
         let cliIgnoredState = [];
+        let cliFavoriteState = [];
 
         async function loadCliIgnored() {
             try {
                 const res = await fetch('/v1/cli/ignore');
                 const data = await res.json();
                 if (data.success) cliIgnoredState = data.ignored || [];
+            } catch {}
+        }
+
+        async function loadCliFavorites() {
+            try {
+                const res = await fetch('/v1/cli/favorite');
+                const data = await res.json();
+                if (data.success) cliFavoriteState = data.favorites || [];
             } catch {}
         }
 
@@ -3209,18 +3233,40 @@ experimental_bearer_token = "dummy"</pre>
             }
         }
 
+        async function toggleCliFavorite(name) {
+            const isFavorite = cliFavoriteState.includes(name);
+            try {
+                const method = isFavorite ? 'DELETE' : 'POST';
+                const url = isFavorite ? '/v1/cli/favorite?name=' + encodeURIComponent(name) : '/v1/cli/favorite';
+                const body = isFavorite ? null : JSON.stringify({ name: name });
+                const res = await fetch(url, { method: method, headers: isFavorite ? {} : { 'Content-Type': 'application/json' }, body: body });
+                const data = await res.json();
+                if (!data.success) throw new Error(data.error || '失败');
+                cliFavoriteState = data.favorites || [];
+                cliLibraryState.loaded = false;
+                refreshCliLibrary(false);
+                showToast(isFavorite ? '已取消常用 ' + name : '已将 ' + name + ' 设为常用', 'success');
+            } catch (err) {
+                showToast('操作失败: ' + err.message, 'danger');
+            }
+        }
+
         async function refreshCliLibrary(force) {
             if (cliLibraryState.loading) return;
             if (cliLibraryState.loaded && !force) { renderCliLibrary(); return; }
             cliLibraryState.loading = true;
             try {
                 if (force) await loadCliIgnored();
+                // Favorites affect recommended view; keep them fresh on every reload.
+                await loadCliFavorites();
                 const probeParam = force ? '&probe=1' : '';
-                const res = await fetch('/v1/cli/discover?q=' + encodeURIComponent(cliLibraryState.query || '') + probeParam);
+                const viewParam = '&view=' + encodeURIComponent(cliLibraryState.view || 'recommended');
+                const res = await fetch('/v1/cli/discover?q=' + encodeURIComponent(cliLibraryState.query || '') + probeParam + viewParam);
                 const data = await res.json();
                 if (!data.success) throw new Error(data.error || '失败');
                 cliLibraryState.items = data.items || [];
-                cliLibraryState.stats = data.stats || { total: 0, installed: 0, shown: cliLibraryState.items.length };
+                cliLibraryState.stats = data.stats || { total: 0, installed: 0, recommended: 0, other: 0, shown: cliLibraryState.items.length, view: cliLibraryState.view };
+                if (cliLibraryState.stats.view) cliLibraryState.view = cliLibraryState.stats.view;
                 cliLibraryState.loaded = true;
                 renderCliLibrary();
             } catch (err) {
@@ -3228,6 +3274,17 @@ experimental_bearer_token = "dummy"</pre>
             } finally {
                 cliLibraryState.loading = false;
             }
+        }
+
+        function setCliView(view) {
+            const next = view === 'all' ? 'all' : 'recommended';
+            if (cliLibraryState.view === next && cliLibraryState.loaded) {
+                renderCliLibrary();
+                return;
+            }
+            cliLibraryState.view = next;
+            cliLibraryState.loaded = false;
+            refreshCliLibrary(false);
         }
 
         function onCliSearchInput(value) {
@@ -3240,26 +3297,63 @@ experimental_bearer_token = "dummy"</pre>
             const host = document.getElementById('cli-list');
             if (!host) return;
             const chip = document.getElementById('cli-stats-chip');
-            if (chip) chip.textContent = '已安装 ' + (cliLibraryState.stats.total || 0) + ' 个';
+            const stats = cliLibraryState.stats || {};
+            const recommended = stats.recommended != null ? stats.recommended : 0;
+            const total = stats.total != null ? stats.total : 0;
+            const shown = stats.shown != null ? stats.shown : (cliLibraryState.items || []).length;
+            if (chip) {
+                if ((cliLibraryState.view || 'recommended') === 'all') {
+                    chip.textContent = '显示 ' + shown + ' / 全部 ' + total + '（推荐 ' + recommended + '）';
+                } else {
+                    chip.textContent = '推荐 ' + recommended + ' / 全部 ' + total;
+                }
+            }
+            document.querySelectorAll('#cli-view-toggle .cli-view-btn').forEach(function(btn) {
+                const active = btn.getAttribute('data-view') === (cliLibraryState.view || 'recommended');
+                btn.classList.toggle('is-active', active);
+            });
             const items = cliLibraryState.items || [];
             if (!items.length) {
-                host.innerHTML = '<div class="skill-detail-empty">没有匹配的 CLI。</div>';
+                const emptyHint = (cliLibraryState.view || 'recommended') === 'recommended'
+                    ? '当前没有匹配的推荐 CLI。可切换到「全部」查看扫描结果，或调整搜索词。'
+                    : '没有匹配的 CLI。';
+                host.innerHTML = '<div class="skill-detail-empty">' + emptyHint + '</div>';
                 return;
             }
             host.innerHTML = items.map(function(item) {
                 const version = item.version ? escapeHtml(item.version) : '<span style=\"color:var(--text-secondary);\">-</span>';
                 const pathLine = item.path ? escapeHtml(item.path) : '<span style=\"color:var(--text-secondary);\">未在 PATH 中找到</span>';
                 const ignored = cliIgnoredState.indexOf(item.name) >= 0;
+                const favorite = item.favorite || cliFavoriteState.indexOf(item.name) >= 0;
+                const tier = item.tier === 'recommended' ? '推荐' : '其他';
+                const tierStyle = item.tier === 'recommended'
+                    ? 'background:rgba(16,185,129,0.12);color:#059669;'
+                    : 'background:var(--input-bg);color:var(--text-secondary);';
+                const favoritePill = favorite
+                    ? ' <span class=\"skill-pill\" style=\"background:rgba(245,158,11,0.14);color:#d97706;\">常用</span>'
+                    : '';
+                // Pin button:
+                // - recommended view: only show for already-pinned items ("取消常用")
+                // - all view: show "设为常用" / "取消常用"
+                // Auto-recommended items already in 推荐 do not need a redundant pin action.
+                const showFavoriteBtn = favorite || (cliLibraryState.view || 'recommended') === 'all';
+                const favoriteBtn = !showFavoriteBtn ? '' : (
+                    '<button class=\"btn\" style=\"padding:4px 10px;font-size:12px;' + (favorite ? 'color:#d97706;' : '') + '" title="' + (favorite ? '取消常用，恢复自动推荐规则' : '设为常用，固定进入推荐列表') + '" onclick="toggleCliFavorite(' + String.fromCharCode(39) + escapeHtml(item.name) + String.fromCharCode(39) + ')">' + (favorite ? '取消常用' : '设为常用') + '</button>'
+                );
                 return '<div class=\"install-record\">' +
                     '<div class=\"install-record-head\">' +
                     '<div style=\"min-width:0;flex:1;\">' +
-                    '<div class=\"install-record-skill\">' + escapeHtml(item.name) + (item.source ? ' <span class=\"skill-pill\" style=\"background:var(--input-bg);color:var(--text-secondary);\">' + escapeHtml(item.source) + '</span>' : '') + '</div>' +
+                    '<div class=\"install-record-skill\">' + escapeHtml(item.name) +
+                    ' <span class=\"skill-pill\" style=\"' + tierStyle + '\">' + tier + '</span>' +
+                    favoritePill +
+                    (item.source ? ' <span class=\"skill-pill\" style=\"background:var(--input-bg);color:var(--text-secondary);\">' + escapeHtml(item.source) + '</span>' : '') + '</div>' +
                     '<div class=\"install-record-cmd\">$ ' + escapeHtml(item.command) + ' --version</div>' +
                     '<div class=\"install-record-meta\">版本: ' + version + '</div>' +
                     '<div class=\"install-record-meta\">' + pathLine + '</div>' +
                     '</div>' +
                     '<div class=\"install-record-actions\">' +
-                    '<button class=\"btn\" style=\"padding:4px 10px;font-size:12px;' + (ignored ? 'color:var(--text-secondary);' : '') + '\" title=\"' + (ignored ? '取消忽略，恢复扫描' : '忽略此 CLI，以后不再扫描') + '\" onclick=\"toggleCliIgnore(' + String.fromCharCode(39) + escapeHtml(item.name) + String.fromCharCode(39) + ')\">' + (ignored ? '已忽略' : '忽略') + '</button>' +
+                    favoriteBtn +
+                    '<button class=\"btn\" style=\"padding:4px 10px;font-size:12px;' + (ignored ? 'color:var(--text-secondary);' : '') + '" title="' + (ignored ? '取消忽略，恢复扫描' : '忽略此 CLI，以后不再扫描') + '" onclick="toggleCliIgnore(' + String.fromCharCode(39) + escapeHtml(item.name) + String.fromCharCode(39) + ')">' + (ignored ? '已忽略' : '忽略') + '</button>' +
                     '</div>' +
                     '</div></div>';
             }).join('');

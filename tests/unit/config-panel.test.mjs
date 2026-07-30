@@ -302,6 +302,15 @@ test("Preset CLI module has a nav group, a discovery section, and an install-his
   assert.match(html, /id="section-cli"/);
   assert.match(html, /id="section-cli-install-history"/);
   assert.match(html, /refreshCliLibrary/);
+  assert.match(html, /setCliView/);
+  assert.match(html, /toggleCliFavorite/);
+  assert.match(html, /\/v1\/cli\/favorite/);
+  assert.match(html, /设为常用/);
+  assert.match(html, /showFavoriteBtn/);
+  assert.match(html, /取消常用/);
+  assert.match(html, /cli-view-toggle/);
+  assert.match(html, /viewParam/);
+  assert.match(html, /推荐/);
   assert.match(html, /\/v1\/cli\/discover/);
   assert.match(html, /\/v1\/cli\/install-history/);
   assert.match(html, /\/v1\/cli\/install/);

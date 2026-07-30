@@ -621,6 +621,130 @@ test("Codex Anthropic preserves custom tools and drops hosted tools", async (t) 
   assert.match(text, /event: response\.completed/);
 });
 
+test("Codex Anthropic accepts a custom tool string returned under an alternate key", async (t) => {
+  const scenario = {
+    anthropicEvents: [
+      ["message_start", {
+        type: "message_start",
+        message: {
+          id: "msg_custom_alias",
+          model: "anthropic-upstream",
+          usage: { input_tokens: 3, output_tokens: 0 },
+        },
+      }],
+      ["content_block_start", {
+        type: "content_block_start",
+        index: 0,
+        content_block: {
+          type: "tool_use",
+          id: "call_patch",
+          name: "apply_patch",
+          input: {},
+        },
+      }],
+      ["content_block_delta", {
+        type: "content_block_delta",
+        index: 0,
+        delta: {
+          type: "input_json_delta",
+          partial_json: "{\"patch\":\"*** Begin Patch\\n*** End Patch\"}",
+        },
+      }],
+      ["content_block_stop", { type: "content_block_stop", index: 0 }],
+      ["message_delta", {
+        type: "message_delta",
+        delta: { stop_reason: "tool_use" },
+        usage: { output_tokens: 2 },
+      }],
+      ["message_stop", { type: "message_stop" }],
+    ],
+  };
+  const { upstreamPort } = await startMatrixUpstream(t, scenario);
+  const { gatewayPort } = await startMatrixGateway(t, {
+    providerType: "anthropic",
+    upstreamPort,
+    publicModel: "anthropic-public",
+    upstreamModel: "anthropic-upstream",
+  });
+
+  const response = await codexRequest(gatewayPort, {
+    model: "anthropic-public",
+    stream: true,
+    input: "Patch the file.",
+    tools: [
+      {
+        type: "custom",
+        name: "apply_patch",
+        description: "Apply a patch",
+      },
+    ],
+  });
+  const text = await response.text();
+
+  assert.equal(response.status, 200, text);
+  assert.doesNotMatch(text, /event: response\.failed/);
+  assert.match(text, /"type":"custom_tool_call"/);
+  assert.match(text, /"input":"\*\*\* Begin Patch\\n\*\*\* End Patch"/);
+  assert.match(text, /event: response\.completed/);
+});
+
+test("Codex Anthropic preserves malformed custom arguments without disconnecting", async (t) => {
+  const scenario = {
+    anthropicEvents: [
+      ["message_start", {
+        type: "message_start",
+        message: {
+          id: "msg_custom_malformed",
+          model: "anthropic-upstream",
+          usage: { input_tokens: 3, output_tokens: 0 },
+        },
+      }],
+      ["content_block_start", {
+        type: "content_block_start",
+        index: 0,
+        content_block: {
+          type: "tool_use",
+          id: "call_patch",
+          name: "apply_patch",
+          input: {},
+        },
+      }],
+      ["content_block_stop", { type: "content_block_stop", index: 0 }],
+      ["message_delta", {
+        type: "message_delta",
+        delta: { stop_reason: "tool_use" },
+        usage: { output_tokens: 2 },
+      }],
+      ["message_stop", { type: "message_stop" }],
+    ],
+  };
+  const { upstreamPort } = await startMatrixUpstream(t, scenario);
+  const { gatewayPort } = await startMatrixGateway(t, {
+    providerType: "anthropic",
+    upstreamPort,
+    publicModel: "anthropic-public",
+    upstreamModel: "anthropic-upstream",
+  });
+
+  const response = await codexRequest(gatewayPort, {
+    model: "anthropic-public",
+    stream: true,
+    input: "Patch the file.",
+    tools: [{
+      type: "custom",
+      name: "apply_patch",
+      description: "Apply a patch",
+    }],
+  });
+  const text = await response.text();
+
+  assert.equal(response.status, 200, text);
+  assert.doesNotMatch(text, /event: response\.failed/);
+  assert.match(text, /"type":"custom_tool_call"/);
+  assert.match(text, /"input":"\{\}"/);
+  assert.match(text, /event: response\.completed/);
+});
+
 test("Codex Anthropic coalesces parallel tool history into alternating messages", async (t) => {
   const scenario = {
     anthropicEvents: [
@@ -692,6 +816,82 @@ test("Codex Anthropic coalesces parallel tool history into alternating messages"
   assert.equal(messages[1].content.filter((block) => block.type === "tool_use").length, 2);
   assert.equal(messages[2].content.filter((block) => block.type === "tool_result").length, 2);
   assert.match(text, /event: response\.completed/);
+});
+
+test("Codex Anthropic moves assistant text before tool_use for Bedrock history", async (t) => {
+  const scenario = {
+    anthropicEvents: [
+      ["message_start", {
+        type: "message_start",
+        message: {
+          id: "msg_done",
+          model: "anthropic-upstream",
+          usage: { input_tokens: 4, output_tokens: 0 },
+        },
+      }],
+      ["content_block_start", {
+        type: "content_block_start",
+        index: 0,
+        content_block: { type: "text", text: "" },
+      }],
+      ["content_block_delta", {
+        type: "content_block_delta",
+        index: 0,
+        delta: { type: "text_delta", text: "done" },
+      }],
+      ["content_block_stop", { type: "content_block_stop", index: 0 }],
+      ["message_delta", {
+        type: "message_delta",
+        delta: { stop_reason: "end_turn" },
+        usage: { output_tokens: 1 },
+      }],
+      ["message_stop", { type: "message_stop" }],
+    ],
+  };
+  const { upstreamPort, getCapturedRequest } = await startMatrixUpstream(t, scenario);
+  const { gatewayPort } = await startMatrixGateway(t, {
+    providerType: "anthropic",
+    upstreamPort,
+    publicModel: "anthropic-public",
+    upstreamModel: "anthropic-upstream",
+  });
+
+  const response = await codexRequest(gatewayPort, {
+    model: "anthropic-public",
+    stream: true,
+    input: [
+      { role: "user", content: [{ type: "input_text", text: "Inspect the repo." }] },
+      {
+        type: "function_call",
+        call_id: "call_1",
+        name: "exec_command",
+        arguments: "{\"cmd\":\"rg TODO\"}",
+      },
+      {
+        role: "assistant",
+        content: [{ type: "output_text", text: "I found the relevant area." }],
+      },
+      {
+        type: "function_call_output",
+        call_id: "call_1",
+        output: "server.js:1:TODO",
+      },
+    ],
+  });
+  const responseText = await response.text();
+  const messages = getCapturedRequest().body.messages;
+
+  assert.equal(response.status, 200, responseText);
+  assert.deepEqual(messages.map((message) => message.role), [
+    "user",
+    "assistant",
+    "user",
+  ]);
+  assert.deepEqual(messages[1].content.map((block) => block.type), [
+    "text",
+    "tool_use",
+  ]);
+  assert.equal(messages.at(-1).content[0].type, "tool_result");
 });
 
 const providerMatrixScenarios = [
