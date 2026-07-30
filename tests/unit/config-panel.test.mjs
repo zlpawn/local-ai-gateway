@@ -361,6 +361,11 @@ test("tools cards list renders classification metrics lab card", async () => {
   assert.match(html, /系统已翻译成专家口径/);
   assert.match(html, /一共有多少样本/);
   assert.match(html, /其中有多少被判成目标/);
+  assert.match(html, /updateMetricsLiveView/);
+  assert.match(html, /metrics-input-body/);
+  assert.match(html, /metrics-result-body/);
+  assert.match(html, /metrics-count-tp/);
+  assert.ok(html.includes(`metrics-metric-card' + toneClass + '">`));
 });
 
 test("text embedding tool detail renders form, mode switch, and similarity formula", async () => {
