@@ -2078,6 +2078,78 @@
             flex-wrap: wrap;
             margin-top: 12px;
         }
+        .metrics-mode-switch {
+            display: inline-flex;
+            gap: 6px;
+            flex-wrap: wrap;
+            margin-top: 4px;
+            margin-bottom: 10px;
+            padding: 4px;
+            border: 1px solid var(--border-color);
+            border-radius: 999px;
+            background: var(--input-bg);
+        }
+        .metrics-mode-btn {
+            border: 0;
+            background: transparent;
+            color: var(--text-secondary);
+            border-radius: 999px;
+            padding: 7px 12px;
+            font-size: 12px;
+            cursor: pointer;
+        }
+        .metrics-mode-btn.active {
+            background: var(--surface);
+            color: var(--text-primary);
+            box-shadow: 0 1px 2px rgba(15, 23, 42, 0.08);
+        }
+        .metrics-bridge {
+            margin-top: 14px;
+            border: 1px dashed var(--border-color);
+            border-radius: 10px;
+            padding: 12px;
+            background: var(--surface);
+        }
+        .metrics-bridge h4 {
+            margin: 0 0 8px;
+            font-size: 13px;
+            color: var(--text-primary);
+        }
+        .metrics-bridge-grid {
+            display: grid;
+            grid-template-columns: repeat(2, minmax(0, 1fr));
+            gap: 8px;
+        }
+        .metrics-bridge-item {
+            border: 1px solid var(--border-color);
+            border-radius: 8px;
+            padding: 8px 10px;
+            background: var(--input-bg);
+        }
+        .metrics-bridge-item strong {
+            display: block;
+            font-size: 12px;
+            color: var(--text-primary);
+            margin-bottom: 2px;
+        }
+        .metrics-bridge-item span {
+            display: block;
+            font-size: 12px;
+            color: var(--text-secondary);
+            line-height: 1.4;
+        }
+        .metrics-bridge-note {
+            margin: 8px 0 0;
+            font-size: 12px;
+            color: var(--text-secondary);
+            line-height: 1.45;
+        }
+        .metrics-hint-error {
+            margin-top: 10px;
+            color: #b91c1c;
+            font-size: 12px;
+            line-height: 1.45;
+        }
 
         .metrics-section-head {
             display: flex;
@@ -2904,10 +2976,17 @@ experimental_bearer_token = "dummy"</pre>
         let toolsView = 'cards'; // 'cards' | 'embedding' | 'classification-metrics'
         const metricsState = {
             scenario: 'spam',
+            inputMode: 'guided',
             tp: 40,
             fp: 10,
             fn: 20,
             tn: 130,
+            guided: {
+                total: 200,
+                selected: 50,
+                selectedWrong: 10,
+                missedActual: 20,
+            },
         };
         const metricsScenarios = {
             spam: {
@@ -5010,7 +5089,76 @@ ${(() => {
             return { value: numerator / denominator, unavailable: false };
         }
 
+        function guidedFromCounts(counts) {
+            const tp = metricsToCount(counts.tp) ?? 0;
+            const fp = metricsToCount(counts.fp) ?? 0;
+            const fn = metricsToCount(counts.fn) ?? 0;
+            const tn = metricsToCount(counts.tn) ?? 0;
+            const selected = tp + fp;
+            const total = tp + fp + fn + tn;
+            return {
+                total,
+                selected,
+                selectedWrong: fp,
+                missedActual: fn,
+            };
+        }
+
+        function syncGuidedFromCounts() {
+            metricsState.guided = guidedFromCounts({
+                tp: metricsState.tp,
+                fp: metricsState.fp,
+                fn: metricsState.fn,
+                tn: metricsState.tn,
+            });
+        }
+
+        function applyGuidedToCounts() {
+            const total = metricsToCount(metricsState.guided.total);
+            const selected = metricsToCount(metricsState.guided.selected);
+            const selectedWrong = metricsToCount(metricsState.guided.selectedWrong);
+            const missedActual = metricsToCount(metricsState.guided.missedActual);
+            if ([total, selected, selectedWrong, missedActual].some((v) => v == null)) {
+                return { error: '业务填写项都必须是大于等于 0 的整数。' };
+            }
+            if (selected > total) {
+                return { error: '“判成目标”的数量不能超过总样本数。' };
+            }
+            if (selectedWrong > selected) {
+                return { error: '“判成目标里的错误数”不能超过“判成目标”的数量。' };
+            }
+            const notSelected = total - selected;
+            if (missedActual > notSelected) {
+                return { error: '“漏掉的真实目标”不能超过“没判成目标”的数量。' };
+            }
+            const tp = selected - selectedWrong;
+            const fp = selectedWrong;
+            const fn = missedActual;
+            const tn = notSelected - missedActual;
+            metricsState.tp = tp;
+            metricsState.fp = fp;
+            metricsState.fn = fn;
+            metricsState.tn = tn;
+            return {
+                guided: {
+                    total,
+                    selected,
+                    notSelected,
+                    selectedCorrect: tp,
+                    selectedWrong,
+                    missedActual,
+                },
+                counts: { tp, fp, fn, tn },
+            };
+        }
+
         function computeMetricsFromState() {
+            let guidedMeta = null;
+            if (metricsState.inputMode === 'guided') {
+                const guidedResult = applyGuidedToCounts();
+                if (guidedResult.error) return guidedResult;
+                guidedMeta = guidedResult.guided;
+            }
             const tp = metricsToCount(metricsState.tp);
             const fp = metricsToCount(metricsState.fp);
             const fn = metricsToCount(metricsState.fn);
@@ -5028,8 +5176,19 @@ ${(() => {
             const f1 = (precision.value == null || recall.value == null)
                 ? { value: null, unavailable: true }
                 : metricsRatio(2 * precision.value * recall.value, precision.value + recall.value);
+            if (!guidedMeta) {
+                guidedMeta = {
+                    total,
+                    selected: predictedPos,
+                    notSelected: total - predictedPos,
+                    selectedCorrect: tp,
+                    selectedWrong: fp,
+                    missedActual: fn,
+                };
+            }
             return {
                 counts: { tp, fp, fn, tn },
+                guided: guidedMeta,
                 totals: {
                     total,
                     actualPos,
@@ -5087,11 +5246,31 @@ ${(() => {
             metricsState.fp = scenario.counts.fp;
             metricsState.fn = scenario.counts.fn;
             metricsState.tn = scenario.counts.tn;
+            syncGuidedFromCounts();
+            renderClassificationMetricsDetail();
+        };
+
+        window.setMetricsInputMode = function(mode) {
+            metricsState.inputMode = mode === 'expert' ? 'expert' : 'guided';
+            if (metricsState.inputMode === 'guided') {
+                syncGuidedFromCounts();
+            } else {
+                applyGuidedToCounts();
+            }
             renderClassificationMetricsDetail();
         };
 
         window.onMetricsCountInput = function(field, value) {
             metricsState[field] = value;
+            metricsState.scenario = 'custom';
+            if (metricsState.inputMode === 'expert') {
+                syncGuidedFromCounts();
+            }
+            renderClassificationMetricsDetail();
+        };
+
+        window.onMetricsGuidedInput = function(field, value) {
+            metricsState.guided[field] = value;
             metricsState.scenario = 'custom';
             renderClassificationMetricsDetail();
         };
@@ -5124,7 +5303,7 @@ ${(() => {
 
                 <div class="metrics-section-head">
                     <h2>教学区</h2>
-                    <p>先建立概念，再看例子。这里不负责填你的业务数据。</p>
+                    <p>先建立概念，再看例子。</p>
                 </div>
                 <div class="metrics-teach">
                     <div class="metrics-stack">
@@ -5199,30 +5378,46 @@ ${(() => {
                 <div class="metrics-calc-shell">
                     <div class="metrics-section-head">
                         <h2>计算区</h2>
-                        <p>这里才是填你自己的数据。改数字后立即重算，结果紧跟在右侧。</p>
+                        <p>改数字后立即重算，结果紧跟在右侧。</p>
                     </div>
                     <div class="metrics-calc-grid">
                         <div class="metrics-panel">
                             <h3>动手计算</h3>
-                            <p>填写 TP / FP / FN / TN。也可先点上方示例，再改成你的数。</p>
-                            <div class="metrics-grid-inputs">
-                                <div class="metrics-input-card">
-                                    <label>TP 真正例</label>
-                                    <input type="number" min="0" step="1" value="${escapeHtml(String(metricsState.tp))}" oninput="onMetricsCountInput('tp', this.value)" />
-                                </div>
-                                <div class="metrics-input-card">
-                                    <label>FP 假正例（误报）</label>
-                                    <input type="number" min="0" step="1" value="${escapeHtml(String(metricsState.fp))}" oninput="onMetricsCountInput('fp', this.value)" />
-                                </div>
-                                <div class="metrics-input-card">
-                                    <label>FN 假负例（漏报）</label>
-                                    <input type="number" min="0" step="1" value="${escapeHtml(String(metricsState.fn))}" oninput="onMetricsCountInput('fn', this.value)" />
-                                </div>
-                                <div class="metrics-input-card">
-                                    <label>TN 真负例</label>
-                                    <input type="number" min="0" step="1" value="${escapeHtml(String(metricsState.tn))}" oninput="onMetricsCountInput('tn', this.value)" />
-                                </div>
+                            <div class="metrics-mode-switch">
+                                <button class="metrics-mode-btn ${metricsState.inputMode === 'guided' ? 'active' : ''}" onclick="setMetricsInputMode('guided')">业务引导填写</button>
+                                <button class="metrics-mode-btn ${metricsState.inputMode === 'expert' ? 'active' : ''}" onclick="setMetricsInputMode('expert')">直接填 TP/FP/FN/TN</button>
                             </div>
+                            ${metricsState.inputMode === 'guided' ? (
+                                '<p>先按业务场景填写，系统会自动翻译成 TP / FP / FN / TN，帮你慢慢对齐专家口径。</p>'
+                                + '<div class="metrics-grid-inputs">'
+                                + '<div class="metrics-input-card"><label>一共有多少样本</label><input type="number" min="0" step="1" value="' + escapeHtml(String(metricsState.guided.total)) + '" oninput="onMetricsGuidedInput(\'total\', this.value)" /></div>'
+                                + '<div class="metrics-input-card"><label>其中有多少被判成目标</label><input type="number" min="0" step="1" value="' + escapeHtml(String(metricsState.guided.selected)) + '" oninput="onMetricsGuidedInput(\'selected\', this.value)" /></div>'
+                                + '<div class="metrics-input-card"><label>判成目标里，有多少其实是错的</label><input type="number" min="0" step="1" value="' + escapeHtml(String(metricsState.guided.selectedWrong)) + '" oninput="onMetricsGuidedInput(\'selectedWrong\', this.value)" /></div>'
+                                + '<div class="metrics-input-card"><label>没判成目标里，有多少其实本该是目标</label><input type="number" min="0" step="1" value="' + escapeHtml(String(metricsState.guided.missedActual)) + '" oninput="onMetricsGuidedInput(\'missedActual\', this.value)" /></div>'
+                                + '</div>'
+                                + (result.error
+                                    ? ('<div class="metrics-hint-error">' + escapeHtml(result.error) + '</div>')
+                                    : (
+                                        '<div class="metrics-bridge">'
+                                        + '<h4>系统已翻译成专家口径</h4>'
+                                        + '<div class="metrics-bridge-grid">'
+                                        + '<div class="metrics-bridge-item"><strong>TP 真正例 = ' + escapeHtml(String(result.counts?.tp ?? 0)) + '</strong><span>判成目标，而且判对了</span></div>'
+                                        + '<div class="metrics-bridge-item"><strong>FP 假正例 = ' + escapeHtml(String(result.counts?.fp ?? 0)) + '</strong><span>判成目标，但其实错了（误报）</span></div>'
+                                        + '<div class="metrics-bridge-item"><strong>FN 假负例 = ' + escapeHtml(String(result.counts?.fn ?? 0)) + '</strong><span>没判成目标，但其实是目标（漏报）</span></div>'
+                                        + '<div class="metrics-bridge-item"><strong>TN 真负例 = ' + escapeHtml(String(result.counts?.tn ?? 0)) + '</strong><span>没判成目标，而且本来也不是</span></div>'
+                                        + '</div>'
+                                        + '<p class="metrics-bridge-note">没判成目标 = ' + escapeHtml(String(result.guided?.notSelected ?? 0)) + '；判对的目标 = ' + escapeHtml(String(result.guided?.selectedCorrect ?? 0)) + '。切换到“直接填 TP/FP/FN/TN”时会沿用这组数。</p>'
+                                        + '</div>'
+                                    ))
+                            ) : (
+                                '<p>直接填写 TP / FP / FN / TN。也可先点上方示例，再改成你的数。</p>'
+                                + '<div class="metrics-grid-inputs">'
+                                + '<div class="metrics-input-card"><label>TP 真正例</label><input type="number" min="0" step="1" value="' + escapeHtml(String(metricsState.tp)) + '" oninput="onMetricsCountInput(\'tp\', this.value)" /></div>'
+                                + '<div class="metrics-input-card"><label>FP 假正例（误报）</label><input type="number" min="0" step="1" value="' + escapeHtml(String(metricsState.fp)) + '" oninput="onMetricsCountInput(\'fp\', this.value)" /></div>'
+                                + '<div class="metrics-input-card"><label>FN 假负例（漏报）</label><input type="number" min="0" step="1" value="' + escapeHtml(String(metricsState.fn)) + '" oninput="onMetricsCountInput(\'fn\', this.value)" /></div>'
+                                + '<div class="metrics-input-card"><label>TN 真负例</label><input type="number" min="0" step="1" value="' + escapeHtml(String(metricsState.tn)) + '" oninput="onMetricsCountInput(\'tn\', this.value)" /></div>'
+                                + '</div>'
+                            )}
                             <div class="metrics-actions">
                                 <button class="btn" onclick="resetMetricsExample()">恢复当前示例</button>
                                 <button class="btn" onclick="applyMetricsScenario('imbalance')">加载不平衡陷阱</button>

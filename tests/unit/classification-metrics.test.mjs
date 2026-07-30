@@ -5,6 +5,8 @@ import {
   buildMetricsNarrative,
   formatPercent,
   getScenario,
+  confusionFromGuidedInput,
+  guidedFromConfusion,
 } from "../../lib/tools/classification-metrics.mjs";
 
 test("computeConfusionMetrics calculates core binary metrics", () => {
@@ -35,5 +37,34 @@ test("invalid counts are rejected", () => {
   assert.throws(
     () => computeConfusionMetrics({ tp: -1, fp: 0, fn: 0, tn: 1 }),
     /TP must be a non-negative integer/,
+  );
+});
+
+test("confusionFromGuidedInput maps business questions to TP/FP/FN/TN", () => {
+  const result = confusionFromGuidedInput({
+    total: 200,
+    selected: 50,
+    selectedWrong: 10,
+    missedActual: 20,
+  });
+  assert.deepEqual(result.counts, { tp: 40, fp: 10, fn: 20, tn: 130 });
+  assert.equal(result.guided.notSelected, 150);
+  assert.equal(result.guided.selectedCorrect, 40);
+});
+
+test("guidedFromConfusion and confusionFromGuidedInput stay reversible", () => {
+  const guided = guidedFromConfusion({ tp: 18, fp: 30, fn: 2, tn: 150 });
+  const back = confusionFromGuidedInput(guided);
+  assert.deepEqual(back.counts, { tp: 18, fp: 30, fn: 2, tn: 150 });
+});
+
+test("confusionFromGuidedInput rejects impossible business counts", () => {
+  assert.throws(
+    () => confusionFromGuidedInput({ total: 10, selected: 12, selectedWrong: 0, missedActual: 0 }),
+    /selected cannot exceed total/,
+  );
+  assert.throws(
+    () => confusionFromGuidedInput({ total: 10, selected: 4, selectedWrong: 5, missedActual: 0 }),
+    /selectedWrong cannot exceed selected/,
   );
 });

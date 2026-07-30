@@ -355,6 +355,12 @@ test("tools cards list renders classification metrics lab card", async () => {
   assert.match(html, /召回率 Recall/);
   assert.match(html, /Accuracy vs Precision/);
   assert.match(html, /类别不平衡陷阱/);
+  assert.match(html, /业务引导填写/);
+  assert.match(html, /setMetricsInputMode\('guided'\)/);
+  assert.match(html, /onMetricsGuidedInput/);
+  assert.match(html, /系统已翻译成专家口径/);
+  assert.match(html, /一共有多少样本/);
+  assert.match(html, /其中有多少被判成目标/);
 });
 
 test("text embedding tool detail renders form, mode switch, and similarity formula", async () => {
