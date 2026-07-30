@@ -221,7 +221,7 @@
         {
           "id": "ep_3a82b850-9c20-4484-a206-0bfb79c5e9c3",
           "name": "ait",
-          "type": "openai-chat",
+          "type": "anthropic",
           "base_url": "https://openapi-ait.ke.com",
           "auth": "bearer",
           "models": [
@@ -391,7 +391,7 @@
         {
           "id": "ep_83eb6724-bd3a-4a8c-805e-ffb507dc2f21",
           "name": "ait",
-          "type": "openai-chat",
+          "type": "anthropic",
           "base_url": "https://openapi-ait.ke.com",
           "auth": "bearer",
           "models": [
