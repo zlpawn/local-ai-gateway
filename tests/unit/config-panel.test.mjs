@@ -345,6 +345,24 @@ test("tools cards list renders text embedding card", async () => {
   assert.match(html, /tools-card/);
 });
 
+test("tools cards list renders classification metrics lab card", async () => {
+  const html = await readFile(path.join(ROOT, "desktop", "config-panel.html"), "utf8");
+  assert.match(html, /分类评估实验室/);
+  assert.match(html, /openTool\('classification-metrics'\)/);
+  assert.match(html, /window\.renderClassificationMetricsDetail\s*=\s*function/);
+  assert.match(html, /TP 真正例/);
+  assert.match(html, /精准率 Precision/);
+  assert.match(html, /召回率 Recall/);
+  assert.match(html, /Accuracy vs Precision/);
+  assert.match(html, /类别不平衡陷阱/);
+  assert.match(html, /业务引导填写/);
+  assert.match(html, /setMetricsInputMode\('guided'\)/);
+  assert.match(html, /onMetricsGuidedInput/);
+  assert.match(html, /系统已翻译成专家口径/);
+  assert.match(html, /一共有多少样本/);
+  assert.match(html, /其中有多少被判成目标/);
+});
+
 test("text embedding tool detail renders form, mode switch, and similarity formula", async () => {
   const html = await readFile(path.join(ROOT, "desktop", "config-panel.html"), "utf8");
   assert.match(html, /window\.renderToolsDetail\s*=\s*function/);
