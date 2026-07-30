@@ -273,20 +273,15 @@ test("DeepTutor client has a nav tab and a node section mirroring Codex", async 
   assert.match(html, /toggleAddNodeMenu\('deeptutor'/);
 });
 
-test("Global sidebar exposes client copy controls and DeepTutor keeps a connection guide", async () => {
+test("DeepTutor section keeps a connection guide without generic client copy controls", async () => {
   const html = await readHtml();
-  assert.match(html, /id="global-copy-panel"/);
-  assert.match(html, /id="global-copy-btn"/);
-  assert.match(html, /id="copy-from-client"/);
-  assert.match(html, /id="copy-to-client"/);
-  assert.match(html, /id="copy-mode"/);
-  assert.match(html, /copyClientEndpointsGeneric/);
-  assert.match(html, /copyClientFromCodex/);
-  assert.match(html, /\/v1\/config\/copy-client/);
-  assert.match(html, /全局操作/);
   assert.match(html, /大语言模型 base_url：[\s\S]*?\/deeptutor\//);
   assert.match(html, /向量模型 base_url：[\s\S]*?\/deeptutor\/emb\/embeddings/);
-  assert.doesNotMatch(html, /id="deeptutor-copy-btn"/);
+  assert.doesNotMatch(html, /id="global-copy-panel"/);
+  assert.doesNotMatch(html, /id="global-copy-btn"/);
+  assert.doesNotMatch(html, /copyClientEndpointsGeneric/);
+  assert.doesNotMatch(html, /copyClientFromCodex/);
+  assert.doesNotMatch(html, /全局操作/);
 });
 
 test("DeepTutor is included in the render loop and default config", async () => {

@@ -2138,34 +2138,9 @@
         <aside class="sidebar">
             <div class="sidebar-header">
                 <div class="status-dot"></div>
-                Shrimp 配置
+                Shrimp
             </div>
             <nav class="sidebar-nav">
-                <div class="nav-group-title">全局操作</div>
-                <div class="global-copy-panel" id="global-copy-panel" style="padding: 0 14px 12px; display:flex; flex-direction:column; gap:8px;">
-                    <div style="font-size:12px; color:var(--text-secondary); line-height:1.4;">在任意客户端之间复制节点与密钥</div>
-                    <select id="copy-from-client" title="源 client" style="padding:6px 8px; width:100%;">
-                        <option value="codex" selected>codex</option>
-                        <option value="code">code</option>
-                        <option value="desktop">desktop</option>
-                        <option value="deeptutor">deeptutor</option>
-                    </select>
-                    <div style="text-align:center; color:var(--text-secondary); font-size:12px;">→</div>
-                    <select id="copy-to-client" title="目标 client" style="padding:6px 8px; width:100%;">
-                        <option value="deeptutor" selected>deeptutor</option>
-                        <option value="code">code</option>
-                        <option value="desktop">desktop</option>
-                        <option value="codex">codex</option>
-                    </select>
-                    <select id="copy-mode" title="复制模式" style="padding:6px 8px; width:100%;">
-                        <option value="replace" selected>replace 覆盖</option>
-                        <option value="merge">merge 追加</option>
-                        <option value="fill-empty">fill-empty 仅空目标</option>
-                    </select>
-                    <button class="btn" id="global-copy-btn" onclick="copyClientEndpointsGeneric()" title="把源 client 的节点（含密钥）复制到目标 client" style="width:100%;">
-                        复制节点
-                    </button>
-                </div>
                 <div class="nav-group-title">代理节点</div>
                 <a href="#code" class="nav-item active" onclick="switchTab('code')">
                     <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="margin-right: 8px;"><polyline points="16 18 22 12 16 6"></polyline><polyline points="8 6 2 12 8 18"></polyline></svg>
@@ -2375,7 +2350,7 @@ experimental_bearer_token = "dummy"</pre>
                 <div class="section-header">
                     <div>
                         <h2>DeepTutor 代理</h2>
-                        <p>为 DeepTutor 客户端提供 OpenAI 兼容的下游代理支持。可在左侧全局操作区复制任意客户端节点。</p>
+                        <p>为 DeepTutor 客户端提供 OpenAI 兼容的下游代理支持。默认从 Codex 复制节点与密钥。</p>
                     </div>
                     <div class="section-header-actions">
                         <div class="add-node-dropdown" id="add-node-dropdown-deeptutor">
@@ -2397,7 +2372,7 @@ experimental_bearer_token = "dummy"</pre>
 大语言模型 base_url：http://<span class="cfg-host">127.0.0.1</span>:<span class="cfg-port">8787</span>/deeptutor/
 向量模型 base_url：http://<span class="cfg-host">127.0.0.1</span>:<span class="cfg-port">8787</span>/deeptutor/emb/embeddings</pre>
                     </div>
-                    <p style="font-size: 12px; margin-top: 8px; margin-bottom: 0; color: var(--text-secondary);">首次进入时若 DeepTutor 为空，网关会自动从 Codex 复制节点与密钥。也可使用左侧「全局操作」复制任意 client 节点（默认 codex → deeptutor）。</p>
+                    <p style="font-size: 12px; margin-top: 8px; margin-bottom: 0; color: var(--text-secondary);">首次进入时若 DeepTutor 为空，网关会自动从 Codex 复制节点与密钥。</p>
                 </div>
 
                 <div class="endpoints-grid" id="deeptutor-endpoints"></div>
@@ -2863,56 +2838,6 @@ experimental_bearer_token = "dummy"</pre>
             }
             render();
         }
-
-        // ===== Global: copy nodes (incl. secrets) between any clients =====
-        window.copyClientFromCodex = async function() {
-            // backward-compatible alias for old callers / tests
-            const fromEl = document.getElementById('copy-from-client');
-            const toEl = document.getElementById('copy-to-client');
-            const modeEl = document.getElementById('copy-mode');
-            if (fromEl) fromEl.value = 'codex';
-            if (toEl) toEl.value = 'deeptutor';
-            if (modeEl) modeEl.value = 'replace';
-            return copyClientEndpointsGeneric();
-        };
-
-        window.copyClientEndpointsGeneric = async function() {
-            const from = document.getElementById('copy-from-client')?.value || 'codex';
-            const to = document.getElementById('copy-to-client')?.value || 'deeptutor';
-            const mode = document.getElementById('copy-mode')?.value || 'replace';
-            if (from === to) {
-                showToast('源与目标 client 不能相同', 'danger');
-                return;
-            }
-            const modeText = mode === 'replace'
-                ? '<strong>覆盖目标现有节点</strong>'
-                : mode === 'merge'
-                    ? '追加到目标现有节点'
-                    : '仅当目标为空时复制';
-            const ok = await showSkillConfirmModal(
-                '复制客户端节点',
-                `把 <code>${from}</code> 的节点（含密钥）复制到 <code>${to}</code>。<br/>模式：${mode}（${modeText}）。确认继续？`
-            );
-            if (!ok) return;
-            const btn = document.getElementById('global-copy-btn');
-            try {
-                if (btn) { btn.disabled = true; btn.textContent = '复制中...'; }
-                const res = await fetch('/v1/config/copy-client', {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json', 'X-Gateway-Config-Client': to },
-                    body: JSON.stringify({ from, to, mode })
-                });
-                const data = await res.json();
-                if (!data.success) throw new Error(data.error?.message || data.error || '失败');
-                await loadConfig();
-                showToast(`已从 ${from} 复制 ${data.copied ?? 0} 个节点到 ${to}（${mode}）`, 'success');
-            } catch (err) {
-                showToast('复制失败: ' + err.message, 'danger');
-            } finally {
-                if (btn) { btn.disabled = false; btn.textContent = '复制节点'; }
-            }
-        };
-
 
         async function init() {
             try {
