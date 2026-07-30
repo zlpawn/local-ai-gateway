@@ -29,6 +29,7 @@ import {
 } from "./lib/codex/official-models.mjs";
 import { unifyCodexHistory } from "./lib/codex/history-unify.mjs";
 import { pipeResponsesSsePassthrough } from "./lib/codex/responses-passthrough.mjs";
+import { applyAnthropicConstraints } from "./lib/codex/anthropic-constraints.mjs";
 import {
   normalizeCustomInput,
   ResponsesWriter,
@@ -2071,7 +2072,7 @@ async function forwardOpenAIChatCompletionsResolved(body, clientReq, clientRes, 
 
   const upstreamBody =
     route?.provider?.type === "anthropic"
-      ? openAIChatToAnthropic(body, resolvedModel)
+      ? openAIChatToAnthropic(body, resolvedModel, route)
       : route?.provider?.type === "openai-responses"
         ? openAIChatCompletionsToResponses(body, resolvedModel)
         : {
@@ -2161,7 +2162,7 @@ async function forwardOpenAIChatCompletionsResolved(body, clientReq, clientRes, 
 
     if (route.provider.type === "anthropic") {
       const loop = await runGatewayWebSearchAnthropicLoop({
-        body: withoutStreamFlag(openAIChatToAnthropic(body, resolvedModel)),
+        body: withoutStreamFlag(openAIChatToAnthropic(body, resolvedModel, route)),
         selected: injectedSearch.selected,
         maxLoops: gatewayWebSearchMaxLoops(),
         signal,
@@ -2187,7 +2188,7 @@ async function forwardOpenAIChatCompletionsResolved(body, clientReq, clientRes, 
             context,
             fetchAgain: (retryBody) => fetchConfiguredAnthropic(
               route.provider,
-              withoutStreamFlag(openAIChatToAnthropic(retryBody, resolvedModel)),
+              withoutStreamFlag(openAIChatToAnthropic(retryBody, resolvedModel, route)),
               clientReq,
               signal,
             ),
@@ -2391,7 +2392,7 @@ async function forwardOpenAIChatCompletionsResolved(body, clientReq, clientRes, 
       context,
       fetchAgain: async (retryBody) => {
         const converted = route.provider.type === "anthropic"
-          ? openAIChatToAnthropic(retryBody, resolvedModel)
+          ? openAIChatToAnthropic(retryBody, resolvedModel, route)
           : route.provider.type === "openai-responses"
             ? openAIChatCompletionsToResponses(retryBody, resolvedModel)
             : { ...retryBody, model: resolvedModel };
@@ -2735,7 +2736,7 @@ async function forwardResolvedCodexResponse({
 
   const responseToolKinds = collectResponseToolKinds(body.tools);
   const upstreamBody = route?.provider?.type === "anthropic"
-    ? openAIResponsesToAnthropic(body, resolvedModel)
+    ? openAIResponsesToAnthropic(body, resolvedModel, route)
     : route?.provider?.type === "openai-responses" || !route?.provider
       ? sanitizeResponsesInput({ ...body, model: resolvedModel })
       : {
@@ -2970,7 +2971,7 @@ async function forwardResolvedCodexResponse({
   if (route?.provider?.type === "anthropic") {
     if (injectedSearch.selected) {
       const loop = await runGatewayWebSearchAnthropicLoop({
-        body: withoutStreamFlag(openAIResponsesToAnthropic(body, resolvedModel)),
+        body: withoutStreamFlag(openAIResponsesToAnthropic(body, resolvedModel, route)),
         selected: injectedSearch.selected,
         maxLoops: gatewayWebSearchMaxLoops(),
         signal,
@@ -2995,7 +2996,7 @@ async function forwardResolvedCodexResponse({
             context,
             fetchAgain: (retryBody) => fetchConfiguredAnthropic(
               route.provider,
-              withoutStreamFlag(openAIResponsesToAnthropic(retryBody, resolvedModel)),
+              withoutStreamFlag(openAIResponsesToAnthropic(retryBody, resolvedModel, route)),
               clientReq,
               signal,
             ),
@@ -3048,7 +3049,7 @@ async function forwardResolvedCodexResponse({
       context,
       fetchAgain: (retryBody) => fetchConfiguredAnthropic(
         route.provider,
-        openAIResponsesToAnthropic(retryBody, resolvedModel),
+        openAIResponsesToAnthropic(retryBody, resolvedModel, route),
         clientReq,
       ),
     });
@@ -4967,36 +4968,10 @@ function sanitizeAnthropicMessages(messages) {
     }
   }
 
-  for (const message of merged) {
-    if (message.role !== "assistant") continue;
-    const firstToolUse = message.content.findIndex((part) => part?.type === "tool_use");
-    if (firstToolUse < 0) continue;
-
-    const beforeToolUse = message.content.slice(0, firstToolUse);
-    const fromToolUse = message.content.slice(firstToolUse);
-    const trailingText = fromToolUse.filter((part) => part?.type === "text");
-    if (trailingText.length === 0) continue;
-
-    message.content = [
-      ...beforeToolUse,
-      ...trailingText,
-      ...fromToolUse.filter((part) => part?.type !== "text"),
-    ];
-  }
-
-  while (merged.length > 0 && merged[merged.length - 1]?.role === "assistant") {
-    merged.pop();
-  }
-
-  const lastRole = merged[merged.length - 1]?.role;
-  if (!lastRole || lastRole !== "user") {
-    merged.push({ role: "user", content: [{ type: "text", text: " " }] });
-  }
-
   return merged;
 }
 
-function openAIChatToAnthropic(body, resolvedModel) {
+function openAIChatToAnthropic(body, resolvedModel, route) {
   const messages = [];
   const system = [];
 
@@ -5011,7 +4986,10 @@ function openAIChatToAnthropic(body, resolvedModel) {
     if (converted) appendAnthropicMessage(messages, converted);
   }
 
-  const sanitizedMessages = sanitizeAnthropicMessages(messages);
+  const sanitizedMessages = applyAnthropicConstraints(
+    sanitizeAnthropicMessages(messages),
+    route,
+  );
 
   const upstreamBody = {
     model: resolvedModel,
@@ -5039,7 +5017,7 @@ function openAIChatToAnthropic(body, resolvedModel) {
   return upstreamBody;
 }
 
-function openAIResponsesToAnthropic(body, resolvedModel) {
+function openAIResponsesToAnthropic(body, resolvedModel, route) {
   const messages = [];
   const system = [];
 
@@ -5064,10 +5042,14 @@ function openAIResponsesToAnthropic(body, resolvedModel) {
         max_tokens: body.max_output_tokens || body.max_tokens,
       },
       resolvedModel,
+      route,
     );
   }
 
-  const sanitizedMessages = sanitizeAnthropicMessages(messages);
+  const sanitizedMessages = applyAnthropicConstraints(
+    sanitizeAnthropicMessages(messages),
+    route,
+  );
 
   const upstreamBody = {
     model: resolvedModel,
