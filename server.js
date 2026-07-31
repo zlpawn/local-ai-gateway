@@ -1103,12 +1103,12 @@ function collectGroupedModelsFromConfig(config) {
     const skillMounts = {
       ...(GATEWAY_CONFIG.sessionSync?.skillMounts || {}),
       "session-sync": sessionTargets,
-      "grok-imagine": grokImagineTargets,
+      "leo-grok-imagine": grokImagineTargets,
     };
     const symlinkStatus = SkillInstaller.getSymlinkStatus(os.homedir(), "session-sync");
-    const grokImagineSymlinkStatus = SkillInstaller.getSymlinkStatus(os.homedir(), "grok-imagine");
+    const grokImagineSymlinkStatus = SkillInstaller.getSymlinkStatus(os.homedir(), "leo-grok-imagine");
     const isCentralInstalled = SkillInstaller.isInstalled("session-sync");
-    const isGrokImagineInstalled = SkillInstaller.isInstalled("grok-imagine");
+    const isGrokImagineInstalled = SkillInstaller.isInstalled("leo-grok-imagine");
     const groupedModels = collectGroupedModelsFromConfig(GATEWAY_CONFIG);
     const skillLibrary = SkillInstaller.buildLibrarySnapshot({
       mounts: skillMounts,
@@ -1120,7 +1120,7 @@ function collectGroupedModelsFromConfig(config) {
       isCentralInstalled,
       isGrokImagineInstalled,
       centralSkillFile: SkillInstaller.getCentralSkillFile("session-sync"),
-      grokImagineSkillFile: SkillInstaller.getCentralSkillFile("grok-imagine"),
+      grokImagineSkillFile: SkillInstaller.getCentralSkillFile("leo-grok-imagine"),
       dateRange: GATEWAY_CONFIG.sessionSync?.dateRange || null,
       summaryMode: GATEWAY_CONFIG.sessionSync?.summaryMode || "rule",
       summaryModel: GATEWAY_CONFIG.sessionSync?.summaryModel || "",
@@ -1152,7 +1152,7 @@ function collectGroupedModelsFromConfig(config) {
           Object.entries(incomingSkillMounts).map(([name, value]) => [name, SkillInstaller.normalizeToolMap(value)]),
         ),
         "session-sync": targets,
-        "grok-imagine": grokImagineTargets,
+        "leo-grok-imagine": grokImagineTargets,
       };
       const dateRange = payload.dateRange || null;
       const summaryMode = payload.summaryMode || "rule";
@@ -1216,7 +1216,7 @@ function collectGroupedModelsFromConfig(config) {
         grokImagineTargets,
         skillMounts,
         symlinks: SkillInstaller.getSymlinkStatus(os.homedir(), "session-sync"),
-        grokImagineSymlinks: SkillInstaller.getSymlinkStatus(os.homedir(), "grok-imagine"),
+        grokImagineSymlinks: SkillInstaller.getSymlinkStatus(os.homedir(), "leo-grok-imagine"),
         skillLibrary: SkillInstaller.buildLibrarySnapshot({ mounts: skillMounts }),
       });
     } catch (err) {
@@ -1243,7 +1243,7 @@ function collectGroupedModelsFromConfig(config) {
     const skillMounts = {
       ...(GATEWAY_CONFIG.sessionSync?.skillMounts || {}),
       "session-sync": sessionTargets,
-      "grok-imagine": grokImagineTargets,
+      "leo-grok-imagine": grokImagineTargets,
     };
     const library = SkillInstaller.buildLibrarySnapshot({
       query,
@@ -1344,7 +1344,7 @@ function collectGroupedModelsFromConfig(config) {
       if (skillName === "session-sync") {
         current.targets = targets;
       }
-      if (skillName === "grok-imagine") {
+      if (skillName === "leo-grok-imagine") {
         current.grokImagineTargets = targets;
       }
 

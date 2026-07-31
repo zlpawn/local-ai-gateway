@@ -215,7 +215,7 @@ Expected: all focused tests PASS.
 Run:
 
 ```bash
-node --test tests/unit/session-sync.test.mjs tests/unit/grok-imagine-skill.test.mjs tests/unit/skills-library.test.mjs tests/unit/leo-coding-standards-skill.test.mjs
+node --test tests/unit/session-sync.test.mjs tests/unit/leo-grok-imagine-skill.test.mjs tests/unit/skills-library.test.mjs tests/unit/leo-coding-standards-skill.test.mjs
 ```
 
 Expected: all tests PASS.
