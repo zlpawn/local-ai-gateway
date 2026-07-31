@@ -206,6 +206,14 @@
           ],
           "model_mapping": {
             "glm-5.2-ag": "glm-5.2"
+          },
+          "capabilities": {
+            "input_modalities": [
+              "text",
+              "image"
+            ],
+            "reasoning": true,
+            "tools": true
           }
         },
         {
