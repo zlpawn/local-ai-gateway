@@ -45,7 +45,7 @@ description: Auto-export Netscape cookies from Chrome for yt-dlp via CDP.
     const all = SkillInstaller.buildLibrarySnapshot({
       homeDir: tmpHome,
     });
-    const grok = all.allSkills.find((s) => s.name === "grok-imagine");
+    const grok = all.allSkills.find((s) => s.name === "leo-grok-imagine");
     assert.ok(grok);
     assert.equal(grok.installed, true);
     assert.equal(grok.mounted, true); // compatibility alias
@@ -58,7 +58,7 @@ description: Auto-export Netscape cookies from Chrome for yt-dlp via CDP.
 test("Skill library scope filters installed, managed, and missing skills", () => {
   const tmpHome = fs.mkdtempSync(path.join(os.tmpdir(), "skill-scope-"));
   try {
-    // Do not ensure managed skills so session-sync / grok-imagine stay missing.
+    // Do not ensure managed skills so session-sync / leo-grok-imagine stay missing.
     const root = path.join(tmpHome, ".agents", "skills");
     fs.mkdirSync(root, { recursive: true });
     const localDir = path.join(root, "browser-cookies-local");
@@ -104,7 +104,7 @@ description: local cookie skill
   }
 });
 
-test("Promote local skill writes project managed source like grok-imagine", () => {
+test("Promote local skill writes project managed source like leo-grok-imagine", () => {
   const tmpHome = fs.mkdtempSync(path.join(os.tmpdir(), "skill-promote-"));
   const projectSkillRoot = SkillInstaller.MANAGED_SKILLS_ROOT;
   const promotedDir = path.join(projectSkillRoot, "browser-cookies-local");
@@ -171,7 +171,7 @@ test("Skill library scans antigravity-only and claude roots with dedup", () => {
   const hadCatalog = fs.existsSync(catalogFile);
   const previousCatalog = hadCatalog ? fs.readFileSync(catalogFile, "utf-8") : null;
   try {
-    // central: only grok-imagine ensured (managed). Put a local skill in antigravity dir only.
+    // central: only leo-grok-imagine ensured (managed). Put a local skill in antigravity dir only.
     const agRoot = SkillInstaller.getAntigravitySkillsRoot(tmpHome);
     const agDir = path.join(agRoot, "multiscan-ag-only-skill");
     fs.mkdirSync(agDir, { recursive: true });

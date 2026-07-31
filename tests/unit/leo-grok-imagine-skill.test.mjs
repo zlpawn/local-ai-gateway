@@ -10,7 +10,7 @@ import {
   slugifyPrompt,
   formatDateYYYYMMDDHHmmss,
   parseCliArgs,
-} from "../../lib/skills/grok-imagine/scripts/grok_imagine.mjs";
+} from "../../lib/skills/leo-grok-imagine/scripts/grok_imagine.mjs";
 import { SkillInstaller } from "../../lib/session-sync/skill-installer.mjs";
 
 test("Grok Imagine Skill - parseCliArgs parser test", () => {
@@ -71,7 +71,7 @@ test("Grok Imagine Skill - token reader helper", () => {
 
 test("Grok Imagine Skill - SkillInstaller installation & symlink status", () => {
   const tmpHome = fs.mkdtempSync(path.join(os.tmpdir(), "grok-skill-test-"));
-  const skillName = "grok-imagine";
+  const skillName = "leo-grok-imagine";
 
   const initialStatus = SkillInstaller.getSymlinkStatus(tmpHome, skillName);
   assert.equal(initialStatus.antigravity, false);

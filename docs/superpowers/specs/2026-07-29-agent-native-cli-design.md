@@ -207,7 +207,7 @@ Mirror the skills pattern:
 ```text
 lib/skills/
   session-sync/
-  grok-imagine/
+  leo-grok-imagine/
   ...
 
 lib/clis/

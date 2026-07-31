@@ -3982,7 +3982,7 @@ experimental_bearer_token = "dummy"</pre>
             query: "",
             category: "all",
             scope: "all",
-            selectedSkill: "grok-imagine",
+            selectedSkill: "leo-grok-imagine",
             stats: { total: 0, installed: 0, managed: 0, local: 0, missing: 0, filtered: 0 },
             categories: [],
             skills: [],
@@ -4259,7 +4259,7 @@ experimental_bearer_token = "dummy"</pre>
             if (!name) return false;
             const ok = await showSkillConfirmModal(
                 '转为网关托管',
-                `确认把本地 skill「${name}」转成网关托管？\n\n会写入项目托管源目录 <code>lib/skills/${escapeHtml(name)}/</code>，并加入 <code>managed-catalog.json</code>，后续可像 grok-imagine / session-sync 一样由网关安装分发。`
+                `确认把本地 skill「${name}」转成网关托管？\n\n会写入项目托管源目录 <code>lib/skills/${escapeHtml(name)}/</code>，并加入 <code>managed-catalog.json</code>，后续可像 leo-grok-imagine / session-sync 一样由网关安装分发。`
             );
             if (!ok) return false;
             try {
