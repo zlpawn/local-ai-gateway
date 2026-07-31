@@ -111,12 +111,33 @@ test("Huoshan Imagine Skill - resolveApiKey precedence", () => {
   }
 });
 
-test("Huoshan Imagine Skill - buildTtsBody validates text", () => {
+test("Huoshan Imagine Skill - buildTtsBody validates text and shape", () => {
   assert.throws(() => buildTtsBody({}), /缺少待合成文本/);
   const body = buildTtsBody({ text: "你好", voice: "zh_male_xxx", encoding: "wav" });
-  assert.equal(body.text, "你好");
-  assert.equal(body.voice, "zh_male_xxx");
-  assert.equal(body.encoding, "wav");
+  assert.equal(body.user.uid, "0");
+  assert.equal(body.req_params.text, "你好");
+  assert.equal(body.req_params.voice_type, "zh_male_xxx");
+  assert.equal(body.req_params.encoding, "wav");
+  assert.equal(body.req_params.model, "doubao-seed-tts-2.0");
+  assert.equal(body.req_params.speed_ratio, 1.0);
+});
+
+test("Huoshan Imagine Skill - buildTtsBody optional fields", () => {
+  const body = buildTtsBody({
+    text: "测试",
+    rate: 5,
+    pitch: -2,
+    volume: 80,
+    speedRatio: 1.5,
+    sampleRate: 24000,
+    audioFormat: "raw",
+  });
+  assert.equal(body.req_params.rate, 5);
+  assert.equal(body.req_params.pitch, -2);
+  assert.equal(body.req_params.volume, 80);
+  assert.equal(body.req_params.speed_ratio, 1.5);
+  assert.equal(body.req_params.sample_rate, 24000);
+  assert.equal(body.req_params.audio_format, "raw");
 });
 
 test("Huoshan Imagine Skill - SkillInstaller recognizes the managed skill", () => {
