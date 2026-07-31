@@ -10,6 +10,7 @@ import {
   generateSemanticFilename,
   formatDateYYYYMMDDHHmmss,
   buildVideoContent,
+  buildImageBody,
   resolveApiKey,
   buildTtsBody,
 } from "../../lib/skills/leo-huoshan-imagine/scripts/leo_huoshan_imagine.mjs";
@@ -138,6 +139,52 @@ test("Huoshan Imagine Skill - buildTtsBody optional fields", () => {
   assert.equal(body.req_params.speed_ratio, 1.5);
   assert.equal(body.req_params.sample_rate, 24000);
   assert.equal(body.req_params.audio_format, "raw");
+});
+
+test("Huoshan Imagine Skill - buildImageBody defaults", () => {
+  const body = buildImageBody({ prompt: "一只猫" });
+  assert.equal(body.model, "doubao-seedream-5-0-lite-260128");
+  assert.equal(body.prompt, "一只猫");
+  assert.equal(body.size, "2K");
+  assert.equal(body.output_format, "png");
+  assert.equal(body.response_format, "url");
+  assert.equal(body.watermark, false);
+  assert.equal(body.image, undefined);
+});
+
+test("Huoshan Imagine Skill - buildImageBody with reference images", () => {
+  const body = buildImageBody({
+    prompt: "融合风格",
+    imageUrls: ["https://a.com/1.png", "https://a.com/2.png"],
+    size: "4K",
+    outputFormat: "jpeg",
+    responseFormat: "b64_json",
+    watermark: true,
+    sequentialImageGeneration: "auto",
+  });
+  assert.deepEqual(body.image, ["https://a.com/1.png", "https://a.com/2.png"]);
+  assert.equal(body.size, "4K");
+  assert.equal(body.output_format, "jpeg");
+  assert.equal(body.response_format, "b64_json");
+  assert.equal(body.watermark, true);
+  assert.equal(body.sequential_image_generation, "auto");
+});
+
+test("Huoshan Imagine Skill - parseCliArgs image command", () => {
+  const parsed = parseCliArgs([
+    "image",
+    "--prompt", "风景",
+    "--image-urls", "https://a.com/1.png,https://a.com/2.png",
+    "--size", "4K",
+    "--output-format", "jpeg",
+    "--watermark",
+  ]);
+  assert.equal(parsed.command, "image");
+  assert.equal(parsed.prompt, "风景");
+  assert.deepEqual(parsed.imageUrls, ["https://a.com/1.png", "https://a.com/2.png"]);
+  assert.equal(parsed.size, "4K");
+  assert.equal(parsed.outputFormat, "jpeg");
+  assert.equal(parsed.watermark, true);
 });
 
 test("Huoshan Imagine Skill - SkillInstaller recognizes the managed skill", () => {
