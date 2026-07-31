@@ -147,3 +147,38 @@ test("removeClient refuses to run without explicit confirmation", async (t) => {
   // Still present after a refused removal.
   assert.ok(getClient({ ...ctx, client: "temp" }));
 });
+
+test("addClient stamps the protocol onto the new group", async (t) => {
+  const ctx = await tempState();
+  t.after(() => rm(ctx.dir, { recursive: true, force: true }));
+  const result = addClient({ ...ctx, client: "p-openai", protocol: "openai" });
+  assert.equal(result.protocol, "openai");
+  const target = getClient({ ...ctx, client: "p-openai" });
+  assert.equal(target.endpoint_count, 0);
+});
+
+test("addClient inherits openai protocol when copying from codex", async (t) => {
+  const ctx = await tempState();
+  t.after(() => rm(ctx.dir, { recursive: true, force: true }));
+  addEndpoint({
+    ...ctx,
+    client: "codex",
+    name: "ark",
+    type: "openai-chat",
+    base_url: "https://example.com/v1/chat/completions",
+    api_key: "sk-codex",
+  });
+  const result = addClient({ ...ctx, client: "p-copy", copyFrom: "codex", mode: "replace" });
+  assert.equal(result.protocol, "openai");
+  // The protocol must be persisted on the group, not just returned.
+  const { readFileSync } = await import("node:fs");
+  const saved = JSON.parse(readFileSync(ctx.configPath, "utf8"));
+  assert.equal(saved.clients["p-copy"].protocol, "openai");
+});
+
+test("addClient defaults to anthropic protocol for empty creates", async (t) => {
+  const ctx = await tempState();
+  t.after(() => rm(ctx.dir, { recursive: true, force: true }));
+  const result = addClient({ ...ctx, client: "p-default" });
+  assert.equal(result.protocol, "anthropic");
+});
