@@ -3396,7 +3396,7 @@ experimental_bearer_token = "dummy"</pre>
         }
 
         function isCustomClient(name) {
-            return Boolean(name) && !BUILTIN_CLIENTS.includes(name);
+            return Boolean(name) && !BUILTIN_CLIENTS.includes(name) && Boolean(config.clients?.[name]);
         }
 
         function protocolLabel(protocol) {
