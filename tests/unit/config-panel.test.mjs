@@ -288,7 +288,8 @@ test("DeepTutor is included in the render loop and default config", async () => 
   const html = await readHtml();
   assert.match(html, /\['code', 'desktop', 'codex', 'deeptutor'\]\.forEach/);
   assert.match(html, /deeptutor: \{ endpoints: \[\] \}/);
-  assert.match(html, /deeptutor: data\.clients\.deeptutor/);
+  // Deeptutor is preserved when merging fetched clients (now via mergeFetchedClients).
+  assert.match(html, /deeptutor: fetched\.deeptutor \|\| \{ endpoints: \[\] \}/);
 });
 
 test("DeepTutor endpoints show the capability editor like Codex", async () => {
@@ -388,4 +389,57 @@ test("cosine similarity and embedding request helpers exist", async () => {
   assert.match(html, /window\.runEmbedding\s*=\s*async function/);
   assert.match(html, /params\.set\('endpoint_id'/);
   assert.match(html, /X-Gateway-Client/);
+});
+
+test("agent-node create/remove UI is present and wired", async () => {
+  const html = await readHtml();
+  // Sidebar trigger + custom nav container.
+  assert.match(html, /class="nav-create-client"/);
+  assert.match(html, /id="nav-custom-clients"/);
+  assert.match(html, /openClientCreateModal/);
+  // Create modal with both modes.
+  assert.match(html, /id="client-create-modal"/);
+  assert.match(html, /id="client-create-name"/);
+  assert.match(html, /client-create-mode-empty/);
+  assert.match(html, /client-create-mode-copy/);
+  assert.match(html, /client-create-copy-config/);
+  assert.match(html, /submitCreateClient/);
+  // Custom agent-node section + per-block rendering.
+  assert.match(html, /id="section-custom-clients"/);
+  assert.match(html, /id="custom-clients-container"/);
+  assert.match(html, /renderCustomClientNav/);
+  assert.match(html, /renderCustomClientSections/);
+  assert.match(html, /removeCustomClient/);
+  // Built-in clients are protected from removal.
+  assert.match(html, /const BUILTIN_CLIENTS = \['code', 'desktop', 'codex', 'deeptutor'\]/);
+  assert.match(html, /slugifyClientName/);
+  assert.match(html, /\/v1\/config\/add-client/);
+  assert.match(html, /\/v1\/config\/remove-client/);
+});
+
+test("create modal copy-mode toggles the source picker visibility", async () => {
+  const html = await readHtml();
+  assert.match(html, /setClientCreateMode\('empty'\)/);
+  assert.match(html, /onClientCreateModeChange/);
+  assert.match(html, /copyConfig\.classList\.toggle\('is-visible', mode === 'copy'\)/);
+});
+
+test("create modal exposes a protocol picker synced to the copy source", async () => {
+  const html = await readHtml();
+  assert.match(html, /id="client-create-protocol"/);
+  assert.match(html, /syncClientCreateProtocol/);
+  assert.match(html, /clientProtocolFor/);
+  // Both protocols are selectable (match without the trailing closing tag to
+  // avoid regex-delimiter issues).
+  assert.match(html, /<option value="anthropic">Anthropic Messages 协议/);
+  assert.match(html, /<option value="openai">OpenAI 兼容协议/);
+  // submitCreateClient forwards the chosen protocol.
+  assert.match(html, /protocol = document\.getElementById\('client-create-protocol'\)\?\.value/);
+});
+
+test("custom agent-node blocks show the protocol and allow changing it inline", async () => {
+  const html = await readHtml();
+  assert.match(html, /protocolLabel/);
+  assert.match(html, /setCustomClientProtocol/);
+  assert.match(html, /custom-client-protocol-select/);
 });

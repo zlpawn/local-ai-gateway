@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>AI 本地网关配置</title>
+    <title>Shrimp</title>
     <style>
         :root[data-theme="dark"] {
             /* Pure Dark Theme (No Purple Glow) */
@@ -1190,14 +1190,39 @@
             margin: 0;
         }
         .code-snippet {
+            position: relative;
             background: var(--bg-color);
             border-radius: 4px;
-            padding: 10px 12px;
+            padding: 10px 36px 10px 12px;
             font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
             font-size: 13px;
             color: var(--text-primary);
             border: 1px solid var(--border-color);
             user-select: all;
+        }
+        .code-snippet-copy {
+            position: absolute;
+            top: 6px;
+            right: 6px;
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            width: 24px;
+            height: 24px;
+            padding: 0;
+            border: none;
+            border-radius: var(--radius-sm);
+            background: transparent;
+            color: var(--text-secondary);
+            cursor: pointer;
+            transition: background var(--transition-fast), color var(--transition-fast);
+        }
+        .code-snippet-copy:hover {
+            background: var(--surface-hover);
+            color: var(--text-primary);
+        }
+        .code-snippet-copy.copied {
+            color: var(--success);
         }
 
         .model-slots-panel {
@@ -1846,6 +1871,198 @@
             text-align: center;
             color: var(--text-secondary);
             font-size: 13px;
+        }
+
+        /* Create agent-node modal */
+        .client-create-field {
+            margin-top: 14px;
+        }
+        .client-create-field > label {
+            display: block;
+            font-size: 12px;
+            font-weight: 600;
+            color: var(--text-secondary);
+            margin-bottom: 6px;
+        }
+        .client-create-field input[type="text"],
+        .client-create-field select {
+            width: 100%;
+            background: var(--input-bg);
+            border: 1px solid var(--border-color);
+            border-radius: var(--radius-md);
+            color: var(--text-primary);
+            font-size: 13px;
+            font-family: var(--font-sans);
+            padding: 9px 11px;
+            outline: none;
+            transition: border-color var(--transition-fast);
+        }
+        .client-create-field input[type="text"]:focus,
+        .client-create-field select:focus {
+            border-color: var(--text-secondary);
+        }
+        .client-create-hint {
+            font-size: 12px;
+            color: var(--text-secondary);
+            margin-top: 6px;
+            line-height: 1.5;
+        }
+        .client-create-mode {
+            display: flex;
+            gap: 8px;
+            margin-top: 8px;
+        }
+        .client-create-mode-option {
+            flex: 1;
+            display: flex;
+            flex-direction: column;
+            gap: 4px;
+            padding: 12px;
+            background: var(--input-bg);
+            border: 1px solid var(--border-color);
+            border-radius: var(--radius-md);
+            cursor: pointer;
+            transition: border-color var(--transition-fast), background var(--transition-fast);
+        }
+        .client-create-mode-option:hover {
+            border-color: var(--text-secondary);
+        }
+        .client-create-mode-option.is-selected {
+            border-color: var(--text-primary);
+            background: var(--surface-hover);
+        }
+        .client-create-mode-option input {
+            position: absolute;
+            opacity: 0;
+            pointer-events: none;
+        }
+        .client-create-mode-title {
+            font-size: 13px;
+            font-weight: 600;
+            color: var(--text-primary);
+        }
+        .client-create-mode-desc {
+            font-size: 12px;
+            color: var(--text-secondary);
+            line-height: 1.45;
+        }
+        .client-create-copy-config {
+            display: none;
+        }
+        .client-create-copy-config.is-visible {
+            display: block;
+        }
+
+        /* Custom agent-node nav items + create trigger */
+        .nav-create-client {
+            display: flex;
+            align-items: center;
+            gap: 6px;
+            min-height: 40px;
+            padding: 0 12px;
+            margin-top: 2px;
+            border: 1px dashed var(--border-color);
+            border-radius: var(--radius-md);
+            background: transparent;
+            color: var(--text-secondary);
+            font-size: 13px;
+            font-weight: 500;
+            cursor: pointer;
+            transition: border-color var(--transition-fast), color var(--transition-fast), background var(--transition-fast);
+            text-decoration: none;
+        }
+        .nav-create-client:hover {
+            border-color: var(--text-secondary);
+            color: var(--text-primary);
+            background: var(--surface-hover);
+        }
+        .nav-item-custom .nav-item-name {
+            overflow: hidden;
+            text-overflow: ellipsis;
+            white-space: nowrap;
+        }
+        .nav-item-custom .nav-item-badge {
+            font-size: 10px;
+            font-weight: 600;
+            text-transform: uppercase;
+            letter-spacing: 0.04em;
+            color: var(--text-secondary);
+            opacity: 0.7;
+            margin-left: auto;
+            padding-left: 6px;
+            flex-shrink: 0;
+        }
+
+        /* Custom agent-node section blocks */
+        .custom-client-block {
+            border: 1px solid var(--border-color);
+            border-radius: var(--radius-lg);
+            padding: 20px;
+            margin-bottom: 20px;
+            background: var(--surface);
+        }
+        .custom-client-block-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            gap: 12px;
+            margin-bottom: 16px;
+            padding-bottom: 12px;
+            border-bottom: 1px solid var(--border-color);
+            flex-wrap: wrap;
+        }
+        .custom-client-block-title {
+            font-size: 16px;
+            font-weight: 700;
+            color: var(--text-primary);
+            min-width: 0;
+            overflow: hidden;
+            text-overflow: ellipsis;
+            white-space: nowrap;
+        }
+        .custom-client-block-meta {
+            font-size: 12px;
+            color: var(--text-secondary);
+            margin-top: 2px;
+        }
+        .custom-client-empty {
+            text-align: center;
+            padding: 28px;
+            background: var(--input-bg);
+            border: 1px dashed var(--border-color);
+            border-radius: var(--radius-md);
+            color: var(--text-secondary);
+            font-size: 13px;
+        }
+
+        .custom-client-actions {
+            display: flex;
+            gap: 8px;
+            flex-shrink: 0;
+            align-items: center;
+            flex-wrap: wrap;
+            justify-content: flex-end;
+        }
+        .custom-client-section-header {
+            margin-top: 40px;
+        }
+        .custom-client-section-header:first-child {
+            margin-top: 0;
+        }
+        .custom-client-actions .btn {
+            white-space: nowrap;
+        }
+        .custom-client-actions .custom-client-delete {
+            padding: 6px 8px;
+        }
+        .custom-client-protocol-select {
+            font-size: 12px;
+            padding: 5px 8px;
+            background: var(--input-bg);
+            border: 1px solid var(--border-color);
+            border-radius: var(--radius-md);
+            color: var(--text-primary);
+            cursor: pointer;
         }
 
         .tools-cards {
@@ -2524,6 +2741,11 @@
                     <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="margin-right: 8px;"><path d="M22 10v6M2 10l10-5 10 5-10 5z"></path><path d="M6 12v5c3 3 9 3 12 0v-5"></path></svg>
                     DeepTutor 代理
                 </a>
+                <div id="nav-custom-clients"></div>
+                <a href="#custom-clients" class="nav-create-client" onclick="openClientCreateModal(event)">
+                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="12" y1="5" x2="12" y2="19"></line><line x1="5" y1="12" x2="19" y2="12"></line></svg>
+                    新建代理节点
+                </a>
 
                 <div class="nav-group-title">系统扩展</div>
                 <a href="#sync" class="nav-item" onclick="switchTab('sync')">
@@ -2692,6 +2914,7 @@
                     <h3>🚀 如何连接此网关？</h3>
                     <p>对于独立的 Codex 桌面端或命令行：保存本页配置后，网关会自动生成模型目录文件 <code class="cfg-catalog-path">~/.codex/gateway-model-catalog.json</code>（官方模型 + 下方 Codex 节点里的第三方模型）。把下面片段贴到 <code>~/.codex/config.toml</code>，并确保放在第一个 <code>[section]</code> 之前：</p>
                     <div class="code-snippet" style="margin-top: 10px;">
+                        <button type="button" class="code-snippet-copy" title="复制" onclick="copyCodeSnippet(this)" aria-label="复制"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="9" width="13" height="13" rx="2" ry="2"></rect><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"></path></svg></button>
                         <pre style="margin: 0; color: inherit; font-family: inherit; font-size: inherit; background: transparent; padding: 0; overflow-x: auto;">
 model_provider = "custom"
 model_catalog_json = "<span class="cfg-catalog-path">~/.codex/gateway-model-catalog.json</span>"
@@ -2733,15 +2956,27 @@ experimental_bearer_token = "dummy"</pre>
                 <div class="usage-guide">
                     <h3>🚀 如何连接此网关？</h3>
                     <p>DeepTutor 走 OpenAI 兼容协议。大语言模型 base_url 填 API 根路径；向量模型 base_url 填完整 embeddings 端点（DeepTutor 会直接 POST 到该地址）：</p>
-                    <div class="code-snippet" style="margin-top: 10px;">
-                        <pre style="margin: 0; color: inherit; font-family: inherit; font-size: inherit; background: transparent; padding: 0; overflow-x: auto;">
-大语言模型 base_url：http://<span class="cfg-host">127.0.0.1</span>:<span class="cfg-port">8787</span>/deeptutor/
-向量模型 base_url：http://<span class="cfg-host">127.0.0.1</span>:<span class="cfg-port">8787</span>/deeptutor/emb/embeddings</pre>
+                    <div style="display:flex; flex-direction:column; gap:8px; margin-top: 10px;">
+                        <div class="code-snippet">
+                            <button type="button" class="code-snippet-copy" title="复制" onclick="copyCodeSnippet(this)" aria-label="复制"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="9" width="13" height="13" rx="2" ry="2"></rect><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"></path></svg></button>
+                            <pre style="margin: 0; color: inherit; font-family: inherit; font-size: inherit; background: transparent; padding: 0; overflow-x: auto;">大语言模型 base_url：http://<span class="cfg-host">127.0.0.1</span>:<span class="cfg-port">8787</span>/deeptutor/</pre>
+                        </div>
+                        <div class="code-snippet">
+                            <button type="button" class="code-snippet-copy" title="复制" onclick="copyCodeSnippet(this)" aria-label="复制"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="9" width="13" height="13" rx="2" ry="2"></rect><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"></path></svg></button>
+                            <pre style="margin: 0; color: inherit; font-family: inherit; font-size: inherit; background: transparent; padding: 0; overflow-x: auto;">向量模型 base_url：http://<span class="cfg-host">127.0.0.1</span>:<span class="cfg-port">8787</span>/deeptutor/emb/embeddings</pre>
+                        </div>
                     </div>
                     <p style="font-size: 12px; margin-top: 8px; margin-bottom: 0; color: var(--text-secondary);">首次进入时若 DeepTutor 为空，网关会自动从 Codex 复制节点与密钥。</p>
                 </div>
 
                 <div class="endpoints-grid" id="deeptutor-endpoints"></div>
+            </section>
+
+            <!-- Custom agent-node groups (dynamically created clients).
+                 Each custom group renders its own section-header (matching the
+                 built-in agents), so this section only needs a bare container. -->
+            <section id="section-custom-clients" class="tab-section" style="display: none;">
+                <div id="custom-clients-container"></div>
             </section>
 
             <!-- Session Sync Section -->
@@ -3031,6 +3266,53 @@ experimental_bearer_token = "dummy"</pre>
             </div>
         </div>
     </div>
+
+    <div class="skill-modal-overlay" id="client-create-modal" onclick="if(event.target===this) closeClientCreateModal()">
+        <div class="skill-modal" role="dialog" aria-modal="true" style="width: min(480px, calc(100vw - 32px));">
+            <h3 class="skill-modal-title">新建代理节点</h3>
+            <div class="skill-modal-body" style="white-space: normal;">
+                <div class="client-create-field">
+                    <label for="client-create-name">节点标识</label>
+                    <input type="text" id="client-create-name" placeholder="例如 my-agent" autocomplete="off" />
+                    <div class="client-create-hint">用作配置 key 和 URL 路径。仅限字母、数字、连字符，创建后不可修改。</div>
+                </div>
+                <div class="client-create-field">
+                    <label>创建方式</label>
+                    <div class="client-create-mode">
+                        <label class="client-create-mode-option is-selected" id="client-create-mode-empty">
+                            <input type="radio" name="client-create-mode" value="empty" checked />
+                            <span class="client-create-mode-title">空白创建</span>
+                            <span class="client-create-mode-desc">创建一个不含任何节点的代理组，之后自行添加。</span>
+                        </label>
+                        <label class="client-create-mode-option" id="client-create-mode-copy">
+                            <input type="radio" name="client-create-mode" value="copy" />
+                            <span class="client-create-mode-title">从已有节点复制</span>
+                            <span class="client-create-mode-desc">复制选定代理组的全部节点配置和密钥。</span>
+                        </label>
+                    </div>
+                </div>
+                <div class="client-create-copy-config" id="client-create-copy-config">
+                    <div class="client-create-field">
+                        <label for="client-create-source">复制来源</label>
+                        <select id="client-create-source"></select>
+                        <div class="client-create-hint">会复制该代理组下所有节点（含密钥），并生成新的节点 ID。</div>
+                    </div>
+                </div>
+                <div class="client-create-field">
+                    <label for="client-create-protocol">接入协议</label>
+                    <select id="client-create-protocol">
+                        <option value="anthropic">Anthropic Messages 协议</option>
+                        <option value="openai">OpenAI 兼容协议（Chat / Responses）</option>
+                    </select>
+                    <div class="client-create-hint">决定该节点对外暴露的路由与请求格式。从 Codex/DeepTutor 复制时通常选 OpenAI 兼容，其余选 Anthropic。</div>
+                </div>
+            </div>
+            <div class="skill-modal-actions">
+                <button class="btn" onclick="closeClientCreateModal()">取消</button>
+                <button class="btn btn-primary" id="client-create-ok" onclick="submitCreateClient()">创建</button>
+            </div>
+        </div>
+    </div>
     <div class="toast-container" id="toast-container"></div>
 
 
@@ -3103,6 +3385,297 @@ experimental_bearer_token = "dummy"</pre>
             { value: "openai-responses", label: "OpenAI Responses (实验性)" },
             { value: "grok", label: "Grok 订阅" }
         ];
+
+        // The four shipped agent-node groups; the sidebar lists them first and they cannot be removed.
+        const BUILTIN_CLIENTS = ['code', 'desktop', 'codex', 'deeptutor'];
+
+        // Custom agent-node groups come from config.clients minus the built-ins.
+        function customClientNames() {
+            const all = Object.keys(config.clients || {});
+            return all.filter(name => !BUILTIN_CLIENTS.includes(name));
+        }
+
+        function isCustomClient(name) {
+            return Boolean(name) && !BUILTIN_CLIENTS.includes(name);
+        }
+
+        function protocolLabel(protocol) {
+            return protocol === 'openai' ? 'OpenAI 兼容' : 'Anthropic Messages';
+        }
+
+        // Update a custom agent-node group's protocol and persist it.
+        window.setCustomClientProtocol = async function(client, protocol) {
+            if (!isCustomClient(client)) return;
+            const previous = config.clients[client]?.protocol || 'anthropic';
+            if (config.clients[client]) config.clients[client].protocol = protocol;
+            render();
+            const saved = await saveConfig({ client, scope: 'node' });
+            if (!saved && config.clients[client]) config.clients[client].protocol = previous;
+            render();
+        };
+
+        // Normalize a user-supplied agent-node name into a stable, filesystem-safe key.
+        // Mirrors server.js slugifyClientName so both sides agree on the canonical form.
+        function slugifyClientName(value) {
+            return String(value || '')
+                .trim()
+                .toLowerCase()
+                .normalize('NFKD')
+                .replace(/[^\p{Letter}\p{Number}]+/gu, '-')
+                .replace(/^-+|-+$/g, '')
+                .slice(0, 40);
+        }
+
+        let clientCreateOpen = false;
+
+        window.openClientCreateModal = function(event) {
+            event?.preventDefault?.();
+            clientCreateOpen = true;
+            const overlay = document.getElementById('client-create-modal');
+            overlay.classList.add('open');
+            const nameInput = document.getElementById('client-create-name');
+            nameInput.value = '';
+            // Pre-select empty mode and refresh the source dropdown.
+            setClientCreateMode('empty');
+            refreshClientCreateSources();
+            // Reset the radio explicitly in case the DOM retained a prior selection.
+            const emptyRadio = document.querySelector('input[name="client-create-mode"][value="empty"]');
+            if (emptyRadio) emptyRadio.checked = true;
+            // Default protocol follows the copy source when one is selected.
+            syncClientCreateProtocol();
+            setTimeout(() => nameInput.focus(), 0);
+        };
+
+        // Keep the protocol picker in sync with the chosen source: codex/deeptutor
+        // imply OpenAI-compatible, everything else Anthropic.
+        function clientProtocolFor(clientName) {
+            if (clientName === 'codex' || clientName === 'deeptutor') return 'openai';
+            const configured = config.clients?.[clientName]?.protocol;
+            return configured === 'openai' ? 'openai' : 'anthropic';
+        }
+
+        function syncClientCreateProtocol() {
+            const select = document.getElementById('client-create-protocol');
+            if (!select) return;
+            const modeRadio = document.querySelector('input[name="client-create-mode"]:checked');
+            const useCopy = modeRadio && modeRadio.value === 'copy';
+            const source = document.getElementById('client-create-source')?.value || '';
+            select.value = useCopy ? clientProtocolFor(source) : 'anthropic';
+        }
+
+        window.closeClientCreateModal = function() {
+            clientCreateOpen = false;
+            const overlay = document.getElementById('client-create-modal');
+            overlay.classList.remove('open');
+        };
+
+        function setClientCreateMode(mode) {
+            const emptyOpt = document.getElementById('client-create-mode-empty');
+            const copyOpt = document.getElementById('client-create-mode-copy');
+            const copyConfig = document.getElementById('client-create-copy-config');
+            if (!emptyOpt || !copyOpt || !copyConfig) return;
+            emptyOpt.classList.toggle('is-selected', mode === 'empty');
+            copyOpt.classList.toggle('is-selected', mode === 'copy');
+            copyConfig.classList.toggle('is-visible', mode === 'copy');
+        }
+
+        // Radio change handler (wired in init via addEventListener for reliability).
+        function onClientCreateModeChange(event) {
+            setClientCreateMode(event.target.value);
+        }
+
+        function refreshClientCreateSources() {
+            const select = document.getElementById('client-create-source');
+            if (!select) return;
+            const names = Object.keys(config.clients || {});
+            select.innerHTML = names.map(name =>
+                `<option value="${escapeHtml(name)}">${escapeHtml(name)}</option>`
+            ).join('');
+        }
+
+        window.submitCreateClient = async function() {
+            const nameInput = document.getElementById('client-create-name');
+            const rawName = nameInput ? nameInput.value : '';
+            const client = slugifyClientName(rawName);
+            if (!client) { showToast('请填写有效的节点标识（字母、数字、连字符）', 'error'); return; }
+            const modeRadio = document.querySelector('input[name="client-create-mode"]:checked');
+            const useCopy = modeRadio && modeRadio.value === 'copy';
+            const copyFrom = useCopy ? (document.getElementById('client-create-source')?.value || '') : '';
+            if (useCopy && !copyFrom) { showToast('请选择复制来源', 'error'); return; }
+            if (useCopy && copyFrom === client) { showToast('复制来源不能和节点标识相同', 'error'); return; }
+
+            const okBtn = document.getElementById('client-create-ok');
+            const original = okBtn ? okBtn.innerHTML : '';
+            if (okBtn) { okBtn.disabled = true; okBtn.innerHTML = '创建中...'; }
+            try {
+                const protocol = document.getElementById('client-create-protocol')?.value || 'anthropic';
+            const body = useCopy
+                    ? { client, copyFrom, mode: 'replace', protocol }
+                    : { client, protocol };
+                const res = await fetch('/v1/config/add-client', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(body),
+                });
+                const data = await res.json().catch(() => ({}));
+                if (!res.ok || !data.success) {
+                    showToast(data.error || '创建代理节点失败', 'error');
+                    return;
+                }
+                await loadConfig();
+                window.closeClientCreateModal();
+                switchTab('custom-clients');
+                showToast(`已创建代理节点「${client}」`, 'success');
+            } catch (e) {
+                showToast('创建代理节点失败：网络错误', 'error');
+            } finally {
+                if (okBtn) { okBtn.disabled = false; okBtn.innerHTML = original; }
+            }
+        };
+
+        window.removeCustomClient = async function(client) {
+            if (!isCustomClient(client)) return;
+            if (!confirm(`确定删除代理节点「${client}」吗？
+
+该代理组下的所有节点配置和密钥都会被移除，此操作不可撤销。`)) return;
+            try {
+                const res = await fetch('/v1/config/remove-client', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ client }),
+                });
+                const data = await res.json().catch(() => ({}));
+                if (!res.ok || !data.success) {
+                    showToast(data.error || '删除代理节点失败', 'error');
+                    return;
+                }
+                if (activeClient === client) {
+                    activeClient = 'custom-clients';
+                }
+                await loadConfig();
+                render();
+                showToast(`已删除代理节点「${client}」`, 'success');
+            } catch (e) {
+                showToast('删除代理节点失败：网络错误', 'error');
+            }
+        };
+
+        // Render the sidebar nav items for custom agent-node groups.
+        function renderCustomClientNav() {
+            const container = document.getElementById('nav-custom-clients');
+            if (!container) return;
+            const names = customClientNames();
+            if (!names.length) { container.innerHTML = ''; return; }
+            container.innerHTML = names.map(name => `
+                <a href="#${escapeHtml(name)}" class="nav-item nav-item-custom" onclick="switchTab('${escapeHtml(name)}')">
+                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="margin-right: 8px; flex-shrink: 0;"><circle cx="12" cy="12" r="3"></circle><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"></path></svg>
+                    <span class="nav-item-name">${escapeHtml(name)}</span>
+                    <span class="nav-item-badge">自定义</span>
+                </a>
+            `).join('');
+        }
+
+        // Render the body of the custom-clients section: each custom group uses the
+        // same section-header + endpoints-grid layout as the built-in agents, so the
+        // visual treatment stays consistent across built-in and custom nodes.
+        function renderCustomClientSections() {
+            const container = document.getElementById('custom-clients-container');
+            if (!container) return;
+            const names = customClientNames();
+            const inDetail = selectedEndpoint && isCustomClient(selectedEndpoint.client);
+
+            if (!names.length) {
+                container.innerHTML = `
+                    <div class="empty-state">
+                        <p>还没有自定义代理节点。</p>
+                        <button class="btn" onclick="openClientCreateModal(event)">新建代理节点</button>
+                    </div>
+                `;
+                return;
+            }
+
+            container.innerHTML = names.map(client => {
+                const eps = config.clients[client].endpoints || [];
+                const protocol = config.clients[client].protocol || 'anthropic';
+                const detailForThis = inDetail && selectedEndpoint.client === client;
+                const header = `
+                    <div class="section-header custom-client-section-header" id="custom-client-block-${escapeHtml(client)}">
+                        <div>
+                            <h2>${escapeHtml(client)} 代理</h2>
+                            <p>接入协议：${escapeHtml(protocolLabel(protocol))} · 路由前缀 <code>/${escapeHtml(client)}/</code></p>
+                        </div>
+                        <div class="section-header-actions">
+                            <select class="custom-client-protocol-select" title="切换接入协议" onchange="setCustomClientProtocol('${escapeHtml(client)}', this.value)">
+                                <option value="anthropic" ${protocol !== 'openai' ? 'selected' : ''}>Anthropic</option>
+                                <option value="openai" ${protocol === 'openai' ? 'selected' : ''}>OpenAI 兼容</option>
+                            </select>
+                            <div class="add-node-dropdown" id="add-node-dropdown-${escapeHtml(client)}">
+                                <button type="button" class="btn add-node-trigger" aria-expanded="false" aria-haspopup="menu" onclick="toggleAddNodeMenu('${escapeHtml(client)}', event)">
+                                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="12" y1="5" x2="12" y2="19"></line><line x1="5" y1="12" x2="19" y2="12"></line></svg>
+                                    添加节点
+                                    <svg class="add-node-chevron" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 12 15 18 9"></polyline></svg>
+                                </button>
+                                <div class="add-node-popover" role="menu" data-client="${escapeHtml(client)}"></div>
+                            </div>
+                            <button class="btn btn-sm btn-danger" title="删除此代理节点" onclick="removeCustomClient('${escapeHtml(client)}')" aria-label="删除此代理节点">
+                                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="3 6 5 6 21 6"></polyline><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path></svg>
+                                删除代理节点
+                            </button>
+                        </div>
+                    </div>
+                `;
+                // Connection guide mirrors the built-in agents: show the base_url with
+                // a copy button. Only render it in list view (hidden in detail mode).
+                // Show a separate embedding base_url when the group has an embedding node.
+                const showGuide = !detailForThis;
+                const hasEmbedding = eps.some(ep => ep.purpose === 'embedding');
+                const copyIcon = '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="9" width="13" height="13" rx="2" ry="2"></rect><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"></path></svg>';
+                const copyBtn = `<button type="button" class="code-snippet-copy" title="复制" onclick="copyCodeSnippet(this)" aria-label="复制">${copyIcon}</button>`;
+                const preAttr = 'style="margin: 0; color: inherit; font-family: inherit; font-size: inherit; background: transparent; padding: 0; overflow-x: auto;"';
+                const chatSnippet = `
+                    <div class="code-snippet">
+                        ${copyBtn}
+                        <pre ${preAttr}>大语言模型 base_url：http://<span class="cfg-host">127.0.0.1</span>:<span class="cfg-port">8787</span>/${escapeHtml(client)}/</pre>
+                    </div>`;
+                const embeddingSnippet = hasEmbedding ? `
+                    <div class="code-snippet">
+                        ${copyBtn}
+                        <pre ${preAttr}>向量模型 base_url：http://<span class="cfg-host">127.0.0.1</span>:<span class="cfg-port">8787</span>/${escapeHtml(client)}/emb/embeddings</pre>
+                    </div>` : '';
+                const guide = showGuide ? `
+                    <div class="usage-guide">
+                        <h3>🚀 如何连接此网关？</h3>
+                        <p>${escapeHtml(client)} 走 ${escapeHtml(protocolLabel(protocol))} 协议。把下面的地址填入客户端作为 API 入口：</p>
+                        <div style="display:flex; flex-direction:column; gap:8px; margin-top: 10px;">
+                            ${chatSnippet}
+                            ${embeddingSnippet}
+                        </div>
+                        <p style="font-size: 12px; margin-top: 8px; margin-bottom: 0; color: var(--text-secondary);">保存节点配置后即时生效。客户端若已连接，重启或重载后可见。${hasEmbedding ? '' : '尚未配置向量节点，向量模型路径暂不展示。'}</p>
+                    </div>
+                ` : '';
+                let body;
+                const gridId = `${client}-endpoints`;
+                if (detailForThis) {
+                    const ep = eps[selectedEndpoint.index];
+                    body = `<div id="${gridId}" class="node-groups">${ep ? createEndpointDetailHTML(client, selectedEndpoint.index, ep) : ''}</div>`;
+                } else if (!eps.length) {
+                    body = guide + `
+                        <div id="${gridId}" class="node-groups">
+                            <div class="empty-state">
+                                <p>${escapeHtml(client)} 尚未配置任何节点。</p>
+                                <button class="btn" onclick="addEndpoint('${escapeHtml(client)}')">创建第一个节点</button>
+                            </div>
+                        </div>
+                    `;
+                } else {
+                    body = guide + `<div id="${gridId}" class="node-groups">${createEndpointGroupsHTML(client, eps)}</div>`;
+                }
+                return header + body;
+            }).join('');
+
+            // Populate add-node popovers for the freshly rendered custom blocks.
+            renderAddNodeMenus();
+        }
 
         const ADD_NODE_OPTIONS = [
             {
@@ -3212,6 +3785,22 @@ experimental_bearer_token = "dummy"</pre>
             }
         }
 
+        // Merge fetched clients onto the local model, preserving the four built-in
+        // groups and any custom agent-node groups the user created.
+        function mergeFetchedClients(data) {
+            const fetched = (data && data.clients) ? data.clients : {};
+            const merged = {
+                code: fetched.code || { endpoints: [], model_slots: {} },
+                desktop: fetched.desktop || { endpoints: [] },
+                codex: fetched.codex || { endpoints: [] },
+                deeptutor: fetched.deeptutor || { endpoints: [] },
+            };
+            for (const [name, body] of Object.entries(fetched)) {
+                if (!BUILTIN_CLIENTS.includes(name)) merged[name] = body || { endpoints: [] };
+            }
+            return merged;
+        }
+
         // Reload the public config from the gateway and re-render.
         async function loadConfig() {
             try {
@@ -3222,12 +3811,7 @@ experimental_bearer_token = "dummy"</pre>
                         config = {
                             ...config,
                             ...data,
-                            clients: {
-                                code: data.clients.code || { endpoints: [], model_slots: {} },
-                                desktop: data.clients.desktop || { endpoints: [] },
-                                codex: data.clients.codex || { endpoints: [] },
-                                deeptutor: data.clients.deeptutor || { endpoints: [] }
-                            }
+                            clients: mergeFetchedClients(data),
                         };
                         if (data?.codex_model_catalog?.path_posix) {
                             codexModelCatalogPath = data.codex_model_catalog.path_posix;
@@ -3251,12 +3835,7 @@ experimental_bearer_token = "dummy"</pre>
                         config = {
                             ...config,
                             ...data,
-                            clients: {
-                                code: data.clients.code || { endpoints: [], model_slots: {} },
-                                desktop: data.clients.desktop || { endpoints: [] },
-                                codex: data.clients.codex || { endpoints: [] },
-                                deeptutor: data.clients.deeptutor || { endpoints: [] }
-                            }
+                            clients: mergeFetchedClients(data),
                         };
                     }
                     if (data?.codex_model_catalog?.path_posix) {
@@ -4979,6 +5558,12 @@ ${(() => {
                     container.innerHTML = createEndpointGroupsHTML(client, eps);
                 }
             });
+
+            // Custom agent-node groups render into the shared custom-clients section.
+            renderCustomClientNav();
+            if (activeClient === 'custom-clients' || isCustomClient(activeClient) || (selectedEndpoint && isCustomClient(selectedEndpoint.client))) {
+                renderCustomClientSections();
+            }
         }
 
         function getClaudeCodeDefaultEndpoint() {
@@ -5049,8 +5634,11 @@ ${(() => {
         };
 
         window.switchTab = function(tabId) {
+            // Custom agent-node names share one section; route them there but remember
+            // which custom client is focused so render() can show its detail view.
+            const sectionId = isCustomClient(tabId) ? 'custom-clients' : tabId;
             activeClient = tabId;
-            // Leaving a tab exits detail view
+            // Leaving a tab exits detail view (custom clients keep detail only when re-selected)
             if (selectedEndpoint && selectedEndpoint.client !== tabId) {
                 selectedEndpoint = null;
             }
@@ -5069,7 +5657,7 @@ ${(() => {
                 el.style.display = 'none';
                 el.classList.remove('active');
             });
-            const activeSection = document.getElementById(`section-${tabId}`);
+            const activeSection = document.getElementById(`section-${sectionId}`);
             if (activeSection) {
                 activeSection.style.display = 'block';
                 activeSection.classList.add('active');
@@ -6614,6 +7202,31 @@ ${(() => {
             }
         }
 
+        // Copy the text content of a code-snippet block to the clipboard and briefly
+        // flash a check mark so the user sees it succeeded.
+        window.copyCodeSnippet = async function(btn) {
+            const snippet = btn.closest('.code-snippet');
+            const pre = snippet?.querySelector('pre');
+            const text = pre ? pre.textContent : '';
+            try {
+                await navigator.clipboard.writeText(text);
+            } catch {
+                // Fallback for non-secure contexts (headless / file origins).
+                const ta = document.createElement('textarea');
+                ta.value = text;
+                ta.style.position = 'fixed';
+                ta.style.opacity = '0';
+                document.body.appendChild(ta);
+                ta.select();
+                document.execCommand('copy');
+                ta.remove();
+            }
+            const original = btn.innerHTML;
+            btn.classList.add('copied');
+            btn.innerHTML = '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"></polyline></svg>';
+            setTimeout(() => { btn.classList.remove('copied'); btn.innerHTML = original; }, 1500);
+        };
+
         function showToast(message, type = 'success') {
             const container = document.getElementById('toast-container');
             const toast = document.createElement('div');
@@ -6664,6 +7277,20 @@ ${(() => {
 
         document.addEventListener('DOMContentLoaded', () => {
             renderAddNodeMenus();
+            // Wire the create-agent-node modal interactions once.
+            document.querySelectorAll('input[name="client-create-mode"]').forEach(radio => {
+                radio.addEventListener('change', (e) => { onClientCreateModeChange(e); syncClientCreateProtocol(); });
+            });
+            const clientCreateSource = document.getElementById('client-create-source');
+            if (clientCreateSource) {
+                clientCreateSource.addEventListener('change', syncClientCreateProtocol);
+            }
+            const createNameInput = document.getElementById('client-create-name');
+            if (createNameInput) {
+                createNameInput.addEventListener('keydown', (e) => {
+                    if (e.key === 'Enter') { e.preventDefault(); submitCreateClient(); }
+                });
+            }
             init();
             const currentTheme = document.documentElement.getAttribute('data-theme') || 'dark';
             updateThemeIcon(currentTheme);
@@ -6675,9 +7302,17 @@ ${(() => {
                 closeAllCtxWindowMenus();
                 closeAllCtxVisionMenus();
             }
+            // Close the create-agent-node modal when clicking outside its dialog.
+            if (clientCreateOpen && !e.target.closest('#client-create-modal .skill-modal') && !e.target.closest('.nav-create-client')) {
+                closeClientCreateModal();
+            }
         });
 
         document.addEventListener('keydown', (e) => {
+            if (e.key === 'Escape' && clientCreateOpen) {
+                closeClientCreateModal();
+                return;
+            }
             if (e.key === 'Escape' && document.querySelector('.add-node-dropdown.is-open')) {
                 closeAddNodeMenus();
                 return;

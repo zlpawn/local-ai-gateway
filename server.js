@@ -741,12 +741,11 @@ async function route(req, res) {
   req.gatewayContext = context;
   const url = context.url;
 
-  // DeepTutor embedding surface (/deeptutor/emb/*) only serves models + embeddings.
+  // Embedding surface (/<client>/emb/*) only serves models + embeddings.
   // DeepTutor posts embedding probes to the configured base_url verbatim (no
-  // /embeddings suffix), so treat POST /deeptutor/emb[/] as /v1/embeddings.
+  // /embeddings suffix), so treat POST /<client>/emb[/] as /v1/embeddings.
   if (
-    context.client === "deeptutor"
-    && context.capability === "embedding"
+    context.capability === "embedding"
     && req.method === "POST"
     && (context.path === "/" || context.path === "")
   ) {
@@ -754,8 +753,7 @@ async function route(req, res) {
   }
   const embReqPath = context.path;
   if (
-    context.client === "deeptutor"
-    && context.capability === "embedding"
+    context.capability === "embedding"
     && req.method !== "OPTIONS"
     && !(
       (embReqPath === "/v1/models" && req.method === "GET")
@@ -766,7 +764,7 @@ async function route(req, res) {
     sendJson(res, 404, {
       error: {
         type: "not_found",
-        message: `${req.method} ${url.pathname} is not available on the DeepTutor embedding base URL. Use /deeptutor/ for chat models and /deeptutor/emb or /deeptutor/emb/embeddings for embeddings.`,
+        message: `${req.method} ${url.pathname} is not available on the embedding base URL. Use /${context.client}/ for chat models and /${context.client}/emb or /${context.client}/emb/embeddings for embeddings.`,
       },
     });
     return;
@@ -906,6 +904,146 @@ async function route(req, res) {
       reloadGatewayConfig({ reloadFiles: false });
       logInfo("gateway_config_client_copied", { from, to, copied: result.copied });
       sendJson(res, 200, { success: true, from, to, mode, copied: result.copied, skipped: result.skipped || 0 });
+    } catch (error) {
+      if (error instanceof GatewayConfigError) {
+        sendJson(res, 400, {
+          error: {
+            type: error.code,
+            message: "Gateway configuration is invalid.",
+            issues: error.issues,
+          },
+        });
+      } else {
+        sendJson(res, 500, { error: error.message });
+      }
+    }
+    return;
+  }
+
+  // Create a new agent-node group (optionally seeded by copying from an existing client).
+  // Mirrors lib/clis/shrimp/domain/client-service.mjs addClient() but operates in-process
+  // so the desktop config panel can manage agent nodes without the CLI.
+  if (reqPath === "/v1/config/add-client" && req.method === "POST") {
+    if (!checkLocalAuth(req, res)) return;
+    try {
+      const payload = JSON.parse(await readText(req) || "{}");
+      const client = slugifyClientName(payload.client);
+      const copyFrom = payload.copyFrom ? slugifyClientName(payload.copyFrom) : "";
+      const mode = String(payload.mode || "replace").trim();
+      const protocol = String(payload.protocol || "").trim().toLowerCase();
+      if (!client) { sendJson(res, 400, { error: "client name is required" }); return; }
+      if (!["replace", "merge", "fill-empty"].includes(mode)) {
+        sendJson(res, 400, { error: "mode must be replace|merge|fill-empty" }); return; }
+      if (protocol && !["anthropic", "openai"].includes(protocol)) {
+        sendJson(res, 400, { error: "protocol must be anthropic|openai" }); return;
+      }
+      if (copyFrom && !GATEWAY_CONFIG.clients?.[copyFrom]) {
+        sendJson(res, 400, { error: "client '" + copyFrom + "' not found" }); return;
+      }
+      if (copyFrom === client) {
+        sendJson(res, 400, { error: "copyFrom and client must differ" }); return;
+      }
+
+      const nextConfig = structuredClone(GATEWAY_CONFIG);
+      const nextSecrets = structuredClone(GATEWAY_SECRETS);
+
+      // Resolve the protocol the new group will serve. Explicit payload wins;
+      // otherwise inherit from the source client (codex/deeptutor -> openai,
+      // code/desktop -> anthropic), defaulting to anthropic for empty creates.
+      const resolvedProtocol = resolveClientProtocol(protocol, copyFrom);
+
+      // Empty create: add an empty client group (no endpoints yet).
+      if (!copyFrom) {
+        if (nextConfig.clients?.[client]) {
+          sendJson(res, 409, { error: "client '" + client + "' already exists" }); return;
+        }
+        nextConfig.clients = {
+          ...(nextConfig.clients || {}),
+          [client]: { endpoints: [], protocol: resolvedProtocol },
+        };
+      } else {
+        // Seed from another client: clone endpoints + carry over secrets by endpoint id.
+        copyClientEndpoints({
+          config: nextConfig,
+          secrets: nextSecrets,
+          from: copyFrom,
+          to: client,
+          mode,
+        });
+        if (nextConfig.clients?.[client]) {
+          nextConfig.clients[client].protocol = resolvedProtocol;
+        }
+      }
+
+      fs.writeFileSync(GATEWAY_SECRETS_FILE, JSON.stringify(nextSecrets || { api_keys: {} }, null, 2) + "\n", { mode: 0o600 });
+      const saved = saveGatewayState({
+        configPath: GATEWAY_CONFIG_FILE,
+        secretsPath: GATEWAY_SECRETS_FILE,
+        config: nextConfig,
+        officialCodexIds: OFFICIAL_CODEX_MODEL_IDS,
+      });
+      GATEWAY_CONFIG = saved.config;
+      GATEWAY_SECRETS = nextSecrets || saved.secrets;
+      reloadGatewayConfig({ reloadFiles: false });
+      logInfo("gateway_config_client_added", { client, copy_from: copyFrom || null, mode: copyFrom ? mode : null });
+      sendJson(res, 200, {
+        success: true,
+        client,
+        copy_from: copyFrom || null,
+        mode: copyFrom ? mode : null,
+        endpoint_count: GATEWAY_CONFIG.clients?.[client]?.endpoints?.length || 0,
+      });
+    } catch (error) {
+      if (error instanceof GatewayConfigError) {
+        sendJson(res, 400, {
+          error: {
+            type: error.code,
+            message: "Gateway configuration is invalid.",
+            issues: error.issues,
+          },
+        });
+      } else {
+        sendJson(res, 500, { error: error.message });
+      }
+    }
+    return;
+  }
+
+  // Remove a custom agent-node group along with its endpoint secrets.
+  // The four built-in clients (code/desktop/codex/deeptutor) are protected and cannot be removed.
+  if (reqPath === "/v1/config/remove-client" && req.method === "POST") {
+    if (!checkLocalAuth(req, res)) return;
+    try {
+      const payload = JSON.parse(await readText(req) || "{}");
+      const client = slugifyClientName(payload.client);
+      if (!client) { sendJson(res, 400, { error: "client name is required" }); return; }
+      if (BUILTIN_CLIENTS.has(client)) {
+        sendJson(res, 400, { error: "built-in client '" + client + "' cannot be removed" }); return;
+      }
+      if (!GATEWAY_CONFIG.clients?.[client]) {
+        sendJson(res, 404, { error: "client '" + client + "' not found" }); return;
+      }
+
+      const nextConfig = structuredClone(GATEWAY_CONFIG);
+      const nextSecrets = structuredClone(GATEWAY_SECRETS);
+      const removedEndpoints = nextConfig.clients[client].endpoints || [];
+      for (const ep of removedEndpoints) {
+        if (nextSecrets?.api_keys) delete nextSecrets.api_keys[ep.id];
+      }
+      delete nextConfig.clients[client];
+
+      fs.writeFileSync(GATEWAY_SECRETS_FILE, JSON.stringify(nextSecrets || { api_keys: {} }, null, 2) + "\n", { mode: 0o600 });
+      const saved = saveGatewayState({
+        configPath: GATEWAY_CONFIG_FILE,
+        secretsPath: GATEWAY_SECRETS_FILE,
+        config: nextConfig,
+        officialCodexIds: OFFICIAL_CODEX_MODEL_IDS,
+      });
+      GATEWAY_CONFIG = saved.config;
+      GATEWAY_SECRETS = nextSecrets || saved.secrets;
+      reloadGatewayConfig({ reloadFiles: false });
+      logInfo("gateway_config_client_removed", { client, endpoint_count: removedEndpoints.length });
+      sendJson(res, 200, { success: true, client, removed: removedEndpoints.length });
     } catch (error) {
       if (error instanceof GatewayConfigError) {
         sendJson(res, 400, {
@@ -1574,9 +1712,11 @@ function collectGroupedModelsFromConfig(config) {
     const healthModels =
       context.client === "codex"
         ? codexModelDiscovery().data.map((model) => model.id)
-        : context.client === "deeptutor"
-          ? deeptutorModelDiscovery().data.map((model) => model.id)
-          : modelDiscovery().data.map((model) => model.id);
+        : context.capability === "embedding"
+          ? clientEmbeddingModelDiscovery(context.client).data.map((model) => model.id)
+          : context.client === "deeptutor"
+            ? deeptutorModelDiscovery().data.map((model) => model.id)
+            : modelDiscovery(context.client).data.map((model) => model.id);
     sendJson(res, 200, {
       ok: true,
       service: "shrimp",
@@ -1600,14 +1740,8 @@ function collectGroupedModelsFromConfig(config) {
     });
     if (context.client === "codex") {
       sendJson(res, 200, await codexModelDiscoveryFresh(context.client));
-    } else if (context.client === "deeptutor") {
-      sendJson(
-        res,
-        200,
-        context.capability === "embedding"
-          ? deeptutorEmbeddingModelDiscovery()
-          : deeptutorModelDiscovery(),
-      );
+    } else if (context.capability === "embedding") {
+      sendJson(res, 200, clientEmbeddingModelDiscovery(context.client));
     } else {
       sendJson(res, 200, modelDiscovery(context.client));
     }
@@ -7221,11 +7355,12 @@ function normalizeClientPath(pathname) {
 
   let index = 1;
   let capability = "";
-  // DeepTutor embeds a sub-capability segment so LLM and embedding surfaces can
-  // use separate base URLs:
-  //   /deeptutor/            -> chat models
-  //   /deeptutor/emb/         -> embedding models
-  if (client === "deeptutor" && parts[1]) {
+  // DeepTutor and custom agent-nodes both embed a sub-capability segment so
+  // LLM and embedding surfaces can use separate base URLs:
+  //   /<client>/            -> chat models
+  //   /<client>/emb/         -> embedding models
+  // Built-in LLM-only clients (code/desktop/codex) do not use this segment.
+  if (parts[1] && client !== "code" && client !== "desktop" && client !== "codex") {
     const maybeCapability = normalizeDeepTutorCapability(parts[1]);
     if (maybeCapability) {
       capability = maybeCapability;
@@ -7250,11 +7385,50 @@ function normalizeClientName(value) {
   if (["desktop", "claude-desktop", "claude_desktop", "claude"].includes(text)) return "desktop";
   if (["codex", "codex-desktop", "codex_desktop"].includes(text)) return "codex";
   if (["deeptutor", "deep-tutor", "deep_tutor", "deeptutor-desktop", "deeptutor_desktop"].includes(text)) return "deeptutor";
+  // Pass through any other configured client (custom agent-node groups created
+  // via the config panel). Unknown names fall through to "" so root routes
+  // (e.g. /health, /config) keep working on the un-prefixed path.
+  if (GATEWAY_CONFIG.clients && Object.prototype.hasOwnProperty.call(GATEWAY_CONFIG.clients, text)) {
+    return text;
+  }
   return "";
 }
 
+// Whether a client speaks the OpenAI-compatible protocol (chat/responses/embeddings)
+// versus the Anthropic Messages protocol. Built-ins are fixed; custom agent-node
+// groups declare this via a `protocol` field on the client group ("openai" | "anthropic").
 function isOpenAIClient(client) {
-  return client === "codex" || client === "deeptutor";
+  if (client === "codex" || client === "deeptutor") return true;
+  const configured = GATEWAY_CONFIG.clients?.[client];
+  if (configured && String(configured.protocol || "").toLowerCase() === "openai") return true;
+  return false;
+}
+
+// The four shipped agent-node groups; created by the gateway and protected from removal.
+const BUILTIN_CLIENTS = new Set(["code", "desktop", "codex", "deeptutor"]);
+
+// Normalize a user-supplied agent-node name into a stable, filesystem-safe key.
+// Mirrors the frontend slugifyClientName so client/server agree on the canonical form.
+function slugifyClientName(value) {
+  return String(value || "")
+    .trim()
+    .toLowerCase()
+    .normalize("NFKD")
+    .replace(/[^\p{Letter}\p{Number}]+/gu, "-")
+    .replace(/^-+|-+$/g, "")
+    .slice(0, 40);
+}
+
+// Decide the protocol a newly created agent-node group serves.
+// An explicit choice always wins; otherwise inherit from the source client's
+// built-in protocol (codex/deeptutor are OpenAI-compatible, the rest Anthropic),
+// defaulting to anthropic when there is no source.
+function resolveClientProtocol(explicit, copyFrom) {
+  if (explicit === "anthropic" || explicit === "openai") return explicit;
+  if (copyFrom && (copyFrom === "codex" || copyFrom === "deeptutor")) return "openai";
+  const configured = copyFrom ? GATEWAY_CONFIG.clients?.[copyFrom]?.protocol : null;
+  if (configured === "openai" || configured === "anthropic") return configured;
+  return "anthropic";
 }
 
 function embeddingEndpointMatchesModel(endpoint, modelId) {
@@ -7278,9 +7452,11 @@ function selectEmbeddingEndpointForModel(endpoints = [], modelId = "") {
 }
 
 // DeepTutor exposes only its own configured models (no official Codex catalog).
-function deeptutorModelDiscovery() {
+// Chat-model discovery for the /<client>/ surface. Used by DeepTutor and any
+// custom agent-node that serves an OpenAI-compatible chat surface.
+function clientChatModelDiscovery(client) {
   const now = Math.floor(Date.now() / 1000);
-  const endpoints = GATEWAY_CONFIG.clients?.deeptutor?.endpoints || [];
+  const endpoints = GATEWAY_CONFIG.clients?.[client]?.endpoints || [];
   const merged = new Map();
   for (const endpoint of endpoints) {
     if (isCapabilityEndpoint(endpoint)) continue;
@@ -7294,18 +7470,18 @@ function deeptutorModelDiscovery() {
         id: modelId,
         object: "model",
         created: now,
-        owned_by: endpoint.id || "deeptutor",
+        owned_by: endpoint.id || client,
       });
     }
   }
   return formatDeepTutorModelList(merged, now);
 }
 
-// Separate model list for the /deeptutor/emb/ surface.
-function deeptutorEmbeddingModelDiscovery() {
+// Embedding-model discovery for the /<client>/emb/ surface.
+function clientEmbeddingModelDiscovery(client) {
   const now = Math.floor(Date.now() / 1000);
   const endpoints = selectEmbeddingEndpoints(
-    GATEWAY_CONFIG.clients?.deeptutor?.endpoints || [],
+    GATEWAY_CONFIG.clients?.[client]?.endpoints || [],
   );
   const merged = new Map();
   for (const endpoint of endpoints) {
@@ -7321,11 +7497,19 @@ function deeptutorEmbeddingModelDiscovery() {
         id: modelId,
         object: "model",
         created: now,
-        owned_by: endpoint.id || "deeptutor-embedding",
+        owned_by: endpoint.id || `${client}-embedding`,
       });
     }
   }
   return formatDeepTutorModelList(merged, now);
+}
+
+// DeepTutor wrappers kept for any direct callers.
+function deeptutorModelDiscovery() {
+  return clientChatModelDiscovery("deeptutor");
+}
+function deeptutorEmbeddingModelDiscovery() {
+  return clientEmbeddingModelDiscovery("deeptutor");
 }
 
 function formatDeepTutorModelList(merged, now = Math.floor(Date.now() / 1000)) {
