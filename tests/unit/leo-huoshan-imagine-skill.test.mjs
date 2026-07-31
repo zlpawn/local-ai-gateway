@@ -95,35 +95,11 @@ test("Huoshan Imagine Skill - buildVideoContent skips missing image paths", () =
   assert.equal(content.length, 1); // text only; bad path skipped
 });
 
-test("Huoshan Imagine Skill - resolveApiKey precedence", () => {
-  // explicit beats env
-  assert.equal(resolveApiKey("explicit-key"), "explicit-key");
-
-  // env fallback when no explicit and no resolvable gateway secrets
-  const prevEnv = process.env.ARK_API_KEY;
-  const prevDataDir = process.env.GATEWAY_DATA_DIR;
-  const tmpHome = fs.mkdtempSync(path.join(os.tmpdir(), "huoshan-key-"));
-  try {
-    // point gateway data dir at an empty temp dir so no secrets/config are found
-    process.env.GATEWAY_DATA_DIR = tmpHome;
-    process.env.ARK_API_KEY = "env-key";
-    assert.equal(resolveApiKey(), "env-key");
-  } finally {
-    if (prevEnv === undefined) delete process.env.ARK_API_KEY;
-    else process.env.ARK_API_KEY = prevEnv;
-    if (prevDataDir === undefined) delete process.env.GATEWAY_DATA_DIR;
-    else process.env.GATEWAY_DATA_DIR = prevDataDir;
-    fs.rmSync(tmpHome, { recursive: true, force: true });
-  }
-});
-
 test("Huoshan Imagine Skill - resolveApiKey reads gateway endpoint key by name", () => {
   const tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), "huoshan-gw-"));
   const prevDataDir = process.env.GATEWAY_DATA_DIR;
-  const prevEnv = process.env.ARK_API_KEY;
   try {
     process.env.GATEWAY_DATA_DIR = tmpDir;
-    delete process.env.ARK_API_KEY;
     // simulate a gateway with a huoshan-agentplan endpoint + stored key
     fs.writeFileSync(
       path.join(tmpDir, "gateway.config.json"),
@@ -146,8 +122,29 @@ test("Huoshan Imagine Skill - resolveApiKey reads gateway endpoint key by name",
     );
     assert.equal(resolveApiKey(), "ark-secret-from-gateway");
   } finally {
-    if (prevEnv === undefined) delete process.env.ARK_API_KEY;
-    else process.env.ARK_API_KEY = prevEnv;
+    if (prevDataDir === undefined) delete process.env.GATEWAY_DATA_DIR;
+    else process.env.GATEWAY_DATA_DIR = prevDataDir;
+    fs.rmSync(tmpDir, { recursive: true, force: true });
+  }
+});
+
+test("Huoshan Imagine Skill - resolveApiKey returns empty without gateway endpoint", () => {
+  const tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), "huoshan-empty-"));
+  const prevDataDir = process.env.GATEWAY_DATA_DIR;
+  try {
+    process.env.GATEWAY_DATA_DIR = tmpDir;
+    fs.writeFileSync(
+      path.join(tmpDir, "gateway.config.json"),
+      JSON.stringify({ clients: { codex: { endpoints: [{ id: "ep_other", name: "other-node" }] } } }),
+      "utf-8",
+    );
+    fs.writeFileSync(
+      path.join(tmpDir, "gateway.secrets.json"),
+      JSON.stringify({ api_keys: { ep_other: "wrong-key" } }),
+      "utf-8",
+    );
+    assert.equal(resolveApiKey(), "");
+  } finally {
     if (prevDataDir === undefined) delete process.env.GATEWAY_DATA_DIR;
     else process.env.GATEWAY_DATA_DIR = prevDataDir;
     fs.rmSync(tmpDir, { recursive: true, force: true });

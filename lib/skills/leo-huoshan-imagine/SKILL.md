@@ -1,6 +1,6 @@
 ---
 name: leo-huoshan-imagine
-description: 使用火山引擎方舟 ARK_API_KEY 调用豆包 Seedance 2.0 进行文生视频 / 图生视频、Seedream 进行文生图 / 图文生图，并通过 Seed TTS 2.0 进行文本转语音。
+description: 使用网关 huoshan-agentplan 节点凭证调用豆包 Seedance 2.0 进行文生视频 / 图生视频、Seedream 进行文生图 / 图文生图，并通过 Seed TTS 2.0 进行文本转语音。
 ---
 
 # Huoshan Imagine Skill (火山引擎视频 / 图片生成 + 文本转语音)
@@ -16,9 +16,9 @@ description: 使用火山引擎方舟 ARK_API_KEY 调用豆包 Seedance 2.0 进�
 - **图文生图 / 多图融合**: "基于这张图改风格" / "把这几张图融合成一张"
 
 ## 依赖与前提条件
-1. **鉴权凭证**: 本技能自动读取火山方舟 API Key（优先级：`--api-key` 参数 > 环境变量 `ARK_API_KEY` > 网关 `gateway.secrets.json` 中名为 `huoshan-agentplan` 的节点 key）。
+1. **鉴权凭证**: 本技能不接收也不存储 API Key。运行时自动从网关 `gateway.secrets.json` 读取名为 `huoshan-agentplan` 的节点 key。
    - 默认复用 Codex 客户端下 `huoshan-agentplan` 节点已配置的 key，无需额外配置。
-   - 若运行时提示 `未找到 ARK_API_KEY`，请确认网关 secrets 中存在该节点 key，或设置环境变量 `ARK_API_KEY` / 通过 `--api-key` 传入。
+   - 若运行时提示未找到 key，请在网关配置面板为 `huoshan-agentplan` 节点配置 API Key。
    - 需在火山方舟控制台开通 Doubao Seedance 2.0 系列模型。
 2. **执行环境**: 本技能包含标准 Node.js ES Module 脚本 `scripts/leo_huoshan_imagine.mjs`，零运行时依赖（仅用 Node 内置 `fetch` + 系统 `curl` 回退下载）。
 
@@ -123,7 +123,7 @@ node ~/.agents/skills/leo-huoshan-imagine/scripts/leo_huoshan_imagine.mjs tts --
    这样用户的 AI 客户端界面才能直接渲染预览与一键拉起播放器！
 
 ## 异常处理与恢复指引
-- **未找到 ARK_API_KEY**: 告知用户检查网关 `gateway.secrets.json` 中 `huoshan-agentplan` 节点 key，或设置 `ARK_API_KEY` / 通过 `--api-key` 传入；并确认方舟控制台已开通 Seedance / Seedream / Seed TTS 模型。
+- **未找到 API Key**: 告知用户在网关配置面板为 `huoshan-agentplan` 节点配置 API Key；并确认方舟控制台已开通 Seedance / Seedream / Seed TTS 模型。
 - **创建视频任务失败 (HTTP 4xx)**: 检查提示词、模型 ID、分辨率/时长参数是否在该模型支持范围内。
 - **轮询超时**: 脚本会将任务 ID 附带在错误信息中，Agent 应告知用户并自动调用 `--check-status "<task_id>"` 进行轮询恢复。
 - **任务失败 (status=failed)**: 检查 `error.message`，常见原因为图片审核未通过、参数越界。
