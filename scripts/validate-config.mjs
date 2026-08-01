@@ -99,6 +99,9 @@ function validateEndpoint(label, endpoint) {
   }
   if (!endpoint.id || typeof endpoint.id !== "string") errors.push(`${label} must set string id.`);
   if (endpoint.purpose === "web_search") return;
+  if (["image_generation", "video_generation", "audio_tts"].includes(endpoint.purpose)) {
+    return;
+  }
 
   const type = endpoint.type || "openai-chat";
   if (!VALID_PROVIDER_TYPES.has(type)) {
