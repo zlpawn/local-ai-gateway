@@ -3547,6 +3547,37 @@ experimental_bearer_token = "dummy"</pre>
             { value: "antigravity", label: "Antigravity（Google 订阅）" },
             { value: "codex-subscription", label: "Codex 订阅（ChatGPT）" }
         ];
+        const CODEX_ENDPOINT_TYPE_VALUES = ['anthropic', 'openai-responses', 'openai-chat', 'grok', 'antigravity'];
+
+        // Media endpoints use purpose + provider; `type` remains exclusive to chat protocols.
+        const MEDIA_ENDPOINT_PURPOSES = [
+            { purpose: 'image_generation', title: '图片生成节点', groupTitle: '图片生成', description: '配置图片生成服务商', icon: '<rect x="3" y="3" width="18" height="18" rx="2"></rect><circle cx="8.5" cy="8.5" r="1.5"></circle><path d="m21 15-5-5L5 21"></path>' },
+            { purpose: 'video_generation', title: '视频生成节点', groupTitle: '视频生成', description: '配置视频生成服务商', icon: '<rect x="3" y="5" width="14" height="14" rx="2"></rect><path d="m17 10 4-2v8l-4-2z"></path>' },
+            { purpose: 'audio_tts', title: 'TTS 节点', groupTitle: 'TTS 语音合成', description: '配置文本转语音服务商', icon: '<path d="M11 5 6 9H2v6h4l5 4z"></path><path d="M15.5 8.5a5 5 0 0 1 0 7"></path><path d="M19 5a10 10 0 0 1 0 14"></path>' },
+        ];
+        const MEDIA_PROVIDERS = [
+            { value: 'grok-subscription', label: 'Grok 订阅', baseUrl: 'https://cli-chat-proxy.grok.com/v1', subscription: true },
+            { value: 'codex-subscription', label: 'Codex 订阅（ChatGPT）', baseUrl: 'https://chatgpt.com/backend-api/codex', subscription: true },
+            { value: 'antigravity', label: 'Antigravity（Google 订阅）', baseUrl: 'https://daily-cloudcode-pa.googleapis.com', subscription: true },
+            { value: 'huoshan-agentplan', label: '火山 AgentPlan', baseUrl: 'https://ark.cn-beijing.volces.com/api/v3', subscription: false },
+        ];
+
+        function mediaPurposeDefinition(purpose) {
+            return MEDIA_ENDPOINT_PURPOSES.find(item => item.purpose === purpose);
+        }
+
+        function isMediaEndpoint(endpoint) {
+            return Boolean(mediaPurposeDefinition(endpoint?.purpose));
+        }
+
+        function mediaProviderDefinition(provider) {
+            return MEDIA_PROVIDERS.find(item => item.value === provider) || MEDIA_PROVIDERS[0];
+        }
+
+        function mediaProviderBaseUrl(endpoint) {
+            const provider = mediaProviderDefinition(endpoint?.provider);
+            return provider.subscription ? provider.baseUrl : (endpoint?.base_url || provider.baseUrl);
+        }
 
         // The four shipped agent-node groups; the sidebar lists them first and they cannot be removed.
         const BUILTIN_CLIENTS = ['code', 'desktop', 'codex', 'deeptutor'];
@@ -3864,6 +3895,7 @@ experimental_bearer_token = "dummy"</pre>
                 description: '配置 OpenAI 兼容 Embeddings 接口',
                 icon: '<circle cx="5" cy="12" r="2"></circle><circle cx="12" cy="5" r="2"></circle><circle cx="19" cy="12" r="2"></circle><circle cx="12" cy="19" r="2"></circle><path d="M6.5 10.5l4-4M13.5 6.5l4 4M17.5 13.5l-4 4M10.5 17.5l-4-4"></path>',
             },
+            ...MEDIA_ENDPOINT_PURPOSES,
         ];
 
         function createAddNodeOptionsHTML(client) {
@@ -5230,11 +5262,14 @@ experimental_bearer_token = "dummy"</pre>
             const isVisionFallback = ep.purpose === 'vision_fallback';
             const isWebSearch = ep.purpose === 'web_search';
             const isEmbedding = ep.purpose === 'embedding';
-            const isCapabilityNode = isVisionFallback || isWebSearch || isEmbedding;
+            const isMedia = isMediaEndpoint(ep);
+            const mediaPurpose = mediaPurposeDefinition(ep.purpose);
+            const mediaProvider = mediaProviderDefinition(ep.provider);
+            const isCapabilityNode = isVisionFallback || isWebSearch || isEmbedding || isMedia;
             const isDisabled = ep.enabled === false;
             const name = escapeHtml(ep.name || `节点 ${index + 1}`);
-            const type = escapeHtml(isEmbedding ? 'OpenAI Embeddings 协议' : typeLabel(ep.type));
-            const url = escapeHtml(ep.type === 'antigravity' ? 'Google v1internal gRPC · OAuth' : (ep.type === 'codex-subscription' ? 'ChatGPT Codex · 本地订阅' : shortUrl(ep.base_url)));
+            const type = escapeHtml(isEmbedding ? 'OpenAI Embeddings 协议' : (isMedia ? `${mediaPurpose?.groupTitle || '媒体'} · ${mediaProvider.label}` : typeLabel(ep.type)));
+            const url = escapeHtml(isMedia ? shortUrl(mediaProviderBaseUrl(ep)) : (ep.type === 'antigravity' ? 'Google v1internal gRPC · OAuth' : (ep.type === 'codex-subscription' ? 'ChatGPT Codex · 本地订阅' : shortUrl(ep.base_url))));
             const models = Array.isArray(ep.models) ? ep.models : [];
             const mappingCount = Object.keys(ep.model_mapping || {}).length;
             const previewModels = models.slice(0, 3).map(m =>
@@ -5293,11 +5328,12 @@ experimental_bearer_token = "dummy"</pre>
                             ${isVisionFallback ? '<span class="badge badge-default">视觉兜底</span>' : ''}
                             ${isWebSearch ? '<span class="badge badge-default">联网搜索</span>' : ''}
                             ${isEmbedding ? '<span class="badge badge-default">向量模型</span>' : ''}
+                            ${isMedia ? `<span class="badge badge-default">${escapeHtml(mediaPurpose?.groupTitle || '媒体')}</span>` : ''}
                             ${ep.is_default ? '<span class="badge badge-default">默认</span>' : ''}
                             ${isDisabled ? '<span class="badge" style="background: var(--input-bg); color: var(--text-secondary);">已禁用</span>' : ''}
                         </div>
                         <div class="node-card-row">
-                            <span class="mono" title="${escapeHtml(isWebSearch ? (ep.provider || 'tavily') : (ep.base_url || ''))}">${isWebSearch ? escapeHtml(ep.provider || 'tavily') : url}</span>
+                            <span class="mono" title="${escapeHtml(isWebSearch ? (ep.provider || 'tavily') : (isMedia ? mediaProviderBaseUrl(ep) : (ep.base_url || '')))}">${isWebSearch ? escapeHtml(ep.provider || 'tavily') : url}</span>
                         </div>
                         <div class="node-card-models">
                             ${isWebSearch
@@ -5310,7 +5346,7 @@ experimental_bearer_token = "dummy"</pre>
                     </div>
                     <div class="node-card-footer">
                         <span>${isCapabilityNode
-                            ? `${escapeHtml(isWebSearch ? (ep.provider || 'tavily') : (isEmbedding ? (ep.embedding_model || '向量模型') : (ep.vision_model || '视觉兜底')))}${isDisabled ? ' · 已禁用' : ' · 已启用'}`
+                            ? `${escapeHtml(isWebSearch ? (ep.provider || 'tavily') : (isEmbedding ? (ep.embedding_model || '向量模型') : (isMedia ? mediaProvider.label : (ep.vision_model || '视觉兜底'))))}${isDisabled ? ' · 已禁用' : ' · 已启用'}`
                             : `${models.length} 模型 · ${mappingCount} 映射`}</span>
                         <span class="node-card-cta">打开配置 →</span>
                     </div>
@@ -5322,12 +5358,16 @@ experimental_bearer_token = "dummy"</pre>
             const isVisionFallback = ep.purpose === 'vision_fallback';
             const isWebSearch = ep.purpose === 'web_search';
             const isEmbedding = ep.purpose === 'embedding';
-            const isCapabilityNode = isVisionFallback || isWebSearch || isEmbedding;
+            const isMedia = isMediaEndpoint(ep);
+            const mediaPurpose = mediaPurposeDefinition(ep.purpose);
+            const mediaProvider = mediaProviderDefinition(ep.provider);
+            const isMediaSubscription = isMedia && mediaProvider.subscription;
+            const isCapabilityNode = isVisionFallback || isWebSearch || isEmbedding || isMedia;
             const availableTypes = isEmbedding
                 ? [{ value: 'openai-chat', label: 'OpenAI Embeddings 协议' }]
                 : (client === 'code' || client === 'desktop')
                 ? ENDPOINT_TYPES.filter(t => ['anthropic', 'openai-chat', 'grok', 'codex-subscription'].includes(t.value))
-                : ENDPOINT_TYPES.filter(t => ['anthropic', 'openai-responses', 'openai-chat', 'grok', 'antigravity', 'codex-subscription'].includes(t.value));
+                : ENDPOINT_TYPES.filter(t => [...CODEX_ENDPOINT_TYPE_VALUES, 'codex-subscription'].includes(t.value));
 
             const typeOptions = availableTypes.map(t =>
                 `<option value="${t.value}" ${ep.type === t.value ? 'selected' : ''}>${t.label}</option>`
@@ -5337,6 +5377,9 @@ experimental_bearer_token = "dummy"</pre>
             ];
             const webSearchProviderOptions = webSearchProviders.map(p =>
                 `<option value="${p.value}" ${(ep.provider || 'tavily') === p.value ? 'selected' : ''}>${p.label}</option>`
+            ).join('');
+            const mediaProviderOptions = MEDIA_PROVIDERS.map(provider =>
+                `<option value="${provider.value}" ${mediaProvider.value === provider.value ? 'selected' : ''}>${provider.label}</option>`
             ).join('');
 
             const title = escapeHtml(ep.name || `节点 ${index + 1}`);
@@ -5403,6 +5446,28 @@ experimental_bearer_token = "dummy"</pre>
                                     <option value="false" ${ep.enabled === false ? 'selected' : ''}>已关闭</option>
                                 </select>
                             </div>
+                            ` : isMedia ? `
+                            <div class="form-group">
+                                <label>媒体类型</label>
+                                <input type="text" value="${escapeHtml(mediaPurpose?.groupTitle || '媒体')}" readonly>
+                            </div>
+                            <div class="form-group">
+                                <label>提供商</label>
+                                <select onchange="updateMediaProvider('${client}', ${index}, this.value)">
+                                    ${mediaProviderOptions}
+                                </select>
+                            </div>
+                            <div class="form-group">
+                                <label>启用状态</label>
+                                <select onchange="updateEndpoint('${client}', ${index}, 'enabled', this.value === 'true')">
+                                    <option value="true" ${ep.enabled !== false ? 'selected' : ''}>已启用</option>
+                                    <option value="false" ${ep.enabled === false ? 'selected' : ''}>已关闭</option>
+                                </select>
+                            </div>
+                            <div class="form-group full">
+                                <label>接口地址 (Base URL)</label>
+                                <input class="mono" type="text" value="${escapeHtml(mediaProviderBaseUrl(ep))}" ${isMediaSubscription ? 'readonly' : ''} onchange="updateEndpoint('${client}', ${index}, 'base_url', this.value)">
+                            </div>
                             ` : `
                             <div class="form-group">
                                 <label>类型</label>
@@ -5432,7 +5497,7 @@ experimental_bearer_token = "dummy"</pre>
                             </div>
                             `}
                             `}
-                            ${(isWebSearch || (ep.type !== 'antigravity' && ep.type !== 'codex-subscription')) ? `
+                            ${(isWebSearch || (isMedia ? !isMediaSubscription : (ep.type !== 'antigravity' && ep.type !== 'codex-subscription'))) ? `
                             <div class="form-group full">
                                 <label>${isWebSearch ? 'Tavily API Key' : '密钥 (API Key)'} ${ep.has_api_key ? '· 已配置' : '· 未配置'}</label>
                                 <div class="password-input-wrapper">
@@ -5647,7 +5712,7 @@ ${(() => {
             const groups = [
                 {
                     title: '聊天模型',
-                    matches: endpoint => !['vision_fallback', 'web_search', 'embedding'].includes(endpoint.purpose),
+                    matches: endpoint => !['vision_fallback', 'web_search', 'embedding', ...MEDIA_ENDPOINT_PURPOSES.map(item => item.purpose)].includes(endpoint.purpose),
                 },
                 {
                     title: '视觉兜底',
@@ -5661,6 +5726,10 @@ ${(() => {
                     title: '向量模型',
                     matches: endpoint => endpoint.purpose === 'embedding',
                 },
+                ...MEDIA_ENDPOINT_PURPOSES.map(item => ({
+                    title: item.groupTitle,
+                    matches: endpoint => endpoint.purpose === item.purpose,
+                })),
             ];
 
             return groups.map(group => {
@@ -7146,6 +7215,8 @@ ${(() => {
                 addWebSearchEndpoint(client);
             } else if (purpose === 'embedding') {
                 addEmbeddingEndpoint(client);
+            } else if (mediaPurposeDefinition(purpose)) {
+                addMediaEndpoint(client, purpose);
             } else {
                 addEndpoint(client);
             }
@@ -7192,6 +7263,35 @@ ${(() => {
                 embedding_model: ""
             });
             selectedEndpoint = { client, index: 0 };
+            render();
+        }
+
+        window.addMediaEndpoint = function(client, purpose) {
+            const mediaPurpose = mediaPurposeDefinition(purpose);
+            if (!mediaPurpose) return;
+            config.clients[client].endpoints = config.clients[client].endpoints || [];
+            config.clients[client].endpoints.unshift({
+                id: `ep_${crypto.randomUUID()}`,
+                name: mediaPurpose.title,
+                purpose,
+                provider: 'grok-subscription',
+                base_url: mediaProviderDefinition('grok-subscription').baseUrl,
+                api_key: '',
+                enabled: true,
+                is_default: false,
+                models: [],
+                model_mapping: {}
+            });
+            selectedEndpoint = { client, index: 0 };
+            render();
+        }
+
+        window.updateMediaProvider = function(client, index, provider) {
+            const endpoint = config.clients[client]?.endpoints?.[index];
+            const nextProvider = mediaProviderDefinition(provider);
+            if (!endpoint || !isMediaEndpoint(endpoint)) return;
+            endpoint.provider = nextProvider.value;
+            endpoint.base_url = nextProvider.baseUrl;
             render();
         }
 
