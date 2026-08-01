@@ -382,6 +382,17 @@ test("image generation mini-tool keeps executable DOM action arguments safe", as
   assert.match(firstDocument, /JSON\.stringify\(path\)/);
 });
 
+test("media previews use history-owned same-origin files and history actions use a registry", async () => {
+  const html = await readFile(path.join(ROOT, "desktop", "config-panel.html"), "utf8");
+  const firstDocument = html.slice(0, html.indexOf("</html>") + "</html>".length);
+  assert.match(firstDocument, /\/v1\/media\/files\//);
+  assert.doesNotMatch(firstDocument, /file:\/\//);
+  assert.match(firstDocument, /MEDIA_HISTORY_TOOL_REGISTRY/);
+  assert.match(firstDocument, /registry\.state\.client/);
+  assert.match(firstDocument, /registry\.render\(\)/);
+  assert.doesNotMatch(firstDocument, /deleteMediaHistoryEntry[\s\S]{0,800}imageGenState\.client/);
+});
+
 test("tools cards list renders classification metrics lab card", async () => {
   const html = await readFile(path.join(ROOT, "desktop", "config-panel.html"), "utf8");
   assert.match(html, /分类评估实验室/);

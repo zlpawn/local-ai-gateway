@@ -1,7 +1,8 @@
 import assert from "node:assert/strict";
 import { spawn } from "node:child_process";
 import { once } from "node:events";
-import { mkdtemp, rm, writeFile } from "node:fs/promises";
+import { mkdir, mkdtemp, rm, symlink, writeFile } from "node:fs/promises";
+import { existsSync } from "node:fs";
 import os from "node:os";
 import path from "node:path";
 import test from "node:test";
@@ -173,6 +174,99 @@ test("failed media generation is recorded in history without changing the error 
   assert.equal(ttsHistory.entries.length, 1);
   assert.equal(ttsHistory.entries[0].status, "failed");
   assert.match(ttsHistory.entries[0].error, /Huoshan API Key not found/);
+});
+
+test("media routes reject invalid reference paths before calling an upstream provider", async (t) => {
+  const tempDir = await mkdtemp(path.join(os.tmpdir(), "gateway-media-reference-invalid-"));
+  const configPath = path.join(tempDir, "gateway.config.json");
+  await writeFile(configPath, JSON.stringify({
+    server: { host: "127.0.0.1", port: GATEWAY_PORT },
+    clients: { codex: { endpoints: [{ id: "grok-image", purpose: "image_generation", provider: "grok-subscription" }] } },
+  }));
+  await writeFile(path.join(tempDir, "gateway.secrets.json"), JSON.stringify({ api_keys: {} }));
+  const gateway = spawn(process.execPath, ["server.js"], {
+    cwd: ROOT, env: testGatewayEnv(tempDir, configPath), stdio: ["ignore", "pipe", "pipe"], windowsHide: true,
+  });
+  t.after(async () => { gateway.kill(); await once(gateway, "exit").catch(() => {}); await rm(tempDir, { recursive: true, force: true }); });
+  await waitForHealth(gateway);
+
+  const response = await fetch(`http://127.0.0.1:${GATEWAY_PORT}/v1/media/image`, {
+    method: "POST", headers: { "content-type": "application/json", "x-gateway-client": "codex" },
+    body: JSON.stringify({ prompt: "invalid reference", image_paths: [path.join(tempDir, "missing.png")] }),
+  });
+  const body = await response.json();
+  assert.equal(response.status, 400);
+  assert.match(body.error.message, /does not exist or cannot be read/);
+});
+
+test("media routes normalize valid reference paths before provider authentication", async (t) => {
+  const tempDir = await mkdtemp(path.join(os.tmpdir(), "gateway-media-reference-valid-"));
+  const configPath = path.join(tempDir, "gateway.config.json");
+  const referencePath = path.join(tempDir, "reference.png");
+  await writeFile(referencePath, Buffer.from("reference-image"));
+  await writeFile(configPath, JSON.stringify({
+    server: { host: "127.0.0.1", port: GATEWAY_PORT },
+    clients: { codex: { endpoints: [{ id: "grok-image", purpose: "image_generation", provider: "grok-subscription" }] } },
+  }));
+  await writeFile(path.join(tempDir, "gateway.secrets.json"), JSON.stringify({ api_keys: {} }));
+  const gateway = spawn(process.execPath, ["server.js"], {
+    cwd: ROOT, env: testGatewayEnv(tempDir, configPath, { GROK_AUTH_PATH: path.join(tempDir, "missing-grok-auth.json") }), stdio: ["ignore", "pipe", "pipe"], windowsHide: true,
+  });
+  t.after(async () => { gateway.kill(); await once(gateway, "exit").catch(() => {}); await rm(tempDir, { recursive: true, force: true }); });
+  await waitForHealth(gateway);
+
+  const response = await fetch(`http://127.0.0.1:${GATEWAY_PORT}/v1/media/image`, {
+    method: "POST", headers: { "content-type": "application/json", "x-gateway-client": "codex" },
+    body: JSON.stringify({ prompt: "valid reference", image_paths: [referencePath] }),
+  });
+  const body = await response.json();
+  assert.equal(response.status, 500);
+  assert.match(body.error.message, /Grok auth not found/);
+});
+
+test("media file route serves only a history-owned gateway output", async (t) => {
+  const tempDir = await mkdtemp(path.join(os.tmpdir(), "gateway-media-files-"));
+  const configPath = path.join(tempDir, "gateway.config.json");
+  const imageDir = path.join(ROOT, "images");
+  const imagePath = path.join(imageDir, `media-route-${Date.now()}.png`);
+  const linkedImagePath = path.join(imageDir, `media-route-link-${Date.now()}.png`);
+  const outsidePath = path.join(tempDir, "outside.png");
+  await writeFile(configPath, JSON.stringify({ server: { host: "127.0.0.1", port: GATEWAY_PORT }, clients: { codex: { endpoints: [] } } }));
+  await writeFile(path.join(tempDir, "gateway.secrets.json"), JSON.stringify({ api_keys: {} }));
+  await writeFile(outsidePath, "outside");
+  await mkdir(imageDir, { recursive: true });
+  await writeFile(imagePath, Buffer.from("inside"));
+  await writeFile(path.join(tempDir, "media-history.json"), JSON.stringify({ entries: [
+    { id: "owned-image", media_type: "image", file_path: imagePath },
+    { id: "outside-image", media_type: "image", file_path: outsidePath },
+    { id: "linked-image", media_type: "image", file_path: linkedImagePath },
+  ] }));
+  const gateway = spawn(process.execPath, ["server.js"], {
+    cwd: ROOT, env: testGatewayEnv(tempDir, configPath), stdio: ["ignore", "pipe", "pipe"], windowsHide: true,
+  });
+  t.after(async () => {
+    gateway.kill(); await once(gateway, "exit").catch(() => {});
+    if (existsSync(imagePath)) await rm(imagePath, { force: true });
+    if (existsSync(linkedImagePath)) await rm(linkedImagePath, { force: true });
+    await rm(tempDir, { recursive: true, force: true });
+  });
+  await waitForHealth(gateway);
+
+  const owned = await fetch(`http://127.0.0.1:${GATEWAY_PORT}/v1/media/files/owned-image`, { headers: { "x-gateway-client": "codex" } });
+  assert.equal(owned.status, 200);
+  assert.equal(owned.headers.get("content-type"), "image/png");
+  assert.equal(owned.headers.get("cache-control"), "no-store");
+  assert.equal(await owned.text(), "inside");
+
+  const outside = await fetch(`http://127.0.0.1:${GATEWAY_PORT}/v1/media/files/outside-image`, { headers: { "x-gateway-client": "codex" } });
+  assert.equal(outside.status, 404);
+  try { await symlink(outsidePath, linkedImagePath); } catch { /* symlinks can require elevated Windows permissions */ }
+  if (existsSync(linkedImagePath)) {
+    const linked = await fetch(`http://127.0.0.1:${GATEWAY_PORT}/v1/media/files/linked-image`, { headers: { "x-gateway-client": "codex" } });
+    assert.equal(linked.status, 404);
+  }
+  const traversal = await fetch(`http://127.0.0.1:${GATEWAY_PORT}/v1/media/files/%2e%2e%2foutside-image`, { headers: { "x-gateway-client": "codex" } });
+  assert.equal(traversal.status, 404);
 });
 
 test.skip("POST /v1/media/image generates an image through its configured provider");

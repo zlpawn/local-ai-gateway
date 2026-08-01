@@ -105,6 +105,7 @@ import {
   loadHistory,
   selectMediaEndpointForRequest,
 } from "./lib/media/index.mjs";
+import { normalizeMediaReferenceImages } from "./lib/media/request-normalizer.mjs";
 
 const PROJECT_ROOT = path.dirname(fileURLToPath(import.meta.url));
 
@@ -1951,8 +1952,14 @@ async function routeMediaRequest(req, res, context, reqPath) {
     return;
   }
 
+  const fileHistoryId = reqPath.match(/^\/v1\/media\/files\/([^/]+)$/)?.[1];
+  if (fileHistoryId && req.method === "GET") {
+    sendMediaHistoryFile(res, fileHistoryId);
+    return;
+  }
+
   if (reqPath === "/v1/media/image" && req.method === "POST") {
-    const body = await readMediaRequestBody(req);
+    const body = normalizeMediaReferenceImages(await readMediaRequestBody(req));
     const selection = resolveMediaSelection(context, body, "image_generation");
     if (!selection) return sendMediaEndpointNotFound(res, context, body.endpoint_id, "image_generation");
     if (typeof selection.provider.generateImage !== "function") {
@@ -1978,7 +1985,7 @@ async function routeMediaRequest(req, res, context, reqPath) {
   }
 
   if (reqPath === "/v1/media/video" && req.method === "POST") {
-    const body = await readMediaRequestBody(req);
+    const body = normalizeMediaReferenceImages(await readMediaRequestBody(req));
     const selection = resolveMediaSelection(context, body, "video_generation");
     if (!selection) return sendMediaEndpointNotFound(res, context, body.endpoint_id, "video_generation");
     if (typeof selection.provider.createVideoTask !== "function") {
@@ -2130,6 +2137,57 @@ function allGatewayEndpoints() {
 
 function mediaDataDir() {
   return path.dirname(GATEWAY_CONFIG_FILE);
+}
+
+const MEDIA_FILE_CONTENT_TYPES = new Map([
+  [".png", "image/png"],
+  [".jpg", "image/jpeg"],
+  [".jpeg", "image/jpeg"],
+  [".webp", "image/webp"],
+  [".gif", "image/gif"],
+  [".mp4", "video/mp4"],
+  [".webm", "video/webm"],
+  [".mp3", "audio/mpeg"],
+  [".wav", "audio/wav"],
+  [".ogg", "audio/ogg"],
+  [".m4a", "audio/mp4"],
+]);
+
+function sendMediaHistoryFile(res, historyId) {
+  const entry = loadHistory(mediaDataDir()).entries.find((item) => item.id === historyId);
+  if (!entry?.file_path) {
+    sendJson(res, 404, { error: { type: "media_history_not_found", message: "Media history file not found." } });
+    return;
+  }
+  const outputType = entry.media_type === "tts" ? "audio" : entry.media_type;
+  let outputDir;
+  let filePath;
+  try {
+    outputDir = fs.realpathSync(ensureOutputDir(outputType));
+    filePath = fs.realpathSync(entry.file_path);
+  } catch {
+    sendJson(res, 404, { error: { type: "media_file_not_found", message: "Media file is unavailable." } });
+    return;
+  }
+  const relativePath = path.relative(outputDir, filePath);
+  if (relativePath.startsWith("..") || path.isAbsolute(relativePath)) {
+    sendJson(res, 404, { error: { type: "media_file_not_found", message: "Media file is unavailable." } });
+    return;
+  }
+  let stats;
+  try {
+    stats = fs.statSync(filePath);
+  } catch {
+    sendJson(res, 404, { error: { type: "media_file_not_found", message: "Media file is unavailable." } });
+    return;
+  }
+  if (!stats.isFile()) {
+    sendJson(res, 404, { error: { type: "media_file_not_found", message: "Media file is unavailable." } });
+    return;
+  }
+  const contentType = MEDIA_FILE_CONTENT_TYPES.get(path.extname(filePath).toLowerCase()) || "application/octet-stream";
+  res.writeHead(200, { "Content-Type": contentType, "Content-Length": stats.size, "Cache-Control": "no-store" });
+  fs.createReadStream(filePath).pipe(res);
 }
 
 function mediaResultResponse(result) {

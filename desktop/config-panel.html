@@ -3581,6 +3581,11 @@ experimental_bearer_token = "dummy"</pre>
             video: '/v1/media/history?media_type=video',
             tts: '/v1/media/history?media_type=tts'
         };
+        // Tools register their own state/render pair, so history actions stay media-type neutral.
+        const MEDIA_HISTORY_TOOL_REGISTRY = new Map();
+        function registerMediaHistoryTool(mediaType, toolId, state, render) {
+            MEDIA_HISTORY_TOOL_REGISTRY.set(mediaType, { toolId, state, render });
+        }
         let lastLoadedSyncTargets = { antigravity: true, claude: true, codex: true };
 
         const ENDPOINT_TYPES = [
@@ -6931,10 +6936,8 @@ ${(() => {
             );
         }
 
-        function mediaHistoryPreviewUrl(filePath) {
-            // The gateway deliberately has no static arbitrary-file route. file:// is the desktop shell's local preview contract.
-            const normalized = String(filePath || '').replaceAll('\\', '/');
-            return normalized ? 'file:///' + encodeURI(normalized.replace(/^\/+/, '')) : '';
+        function mediaHistoryPreviewUrl(historyId) {
+            return historyId ? '/v1/media/files/' + encodeURIComponent(historyId) : '';
         }
 
         function parseImagePaths(value) {
@@ -6952,7 +6955,7 @@ ${(() => {
             if (!entries.length) return '<div class="media-gen-tip">暂无本地生成历史。</div>';
             return '<div class="media-gen-history">' + entries.map(entry => {
                 const path = String(entry.file_path || '');
-                const previewUrl = mediaHistoryPreviewUrl(path);
+                const previewUrl = mediaHistoryPreviewUrl(entry.id);
                 const prompt = entry.prompt || '未记录提示词';
                 const timestamp = entry.timestamp ? new Date(entry.timestamp).toLocaleString('zh-CN', { hour12: false }) : '';
                 const preview = path
@@ -6966,9 +6969,12 @@ ${(() => {
             }).join('') + '</div>';
         }
 
-        async function loadMediaHistory(state, mediaType) {
+        async function loadMediaHistory(mediaType) {
+            const registry = MEDIA_HISTORY_TOOL_REGISTRY.get(mediaType);
+            if (!registry) return;
+            const { state } = registry;
             state.historyLoading = true;
-            if (mediaType === 'image' && toolsView === 'image-gen') renderImageGenDetail();
+            if (toolsView === registry.toolId) registry.render();
             try {
                 const res = await fetch(MEDIA_HISTORY_PATHS[mediaType] || ('/v1/media/history?media_type=' + encodeURIComponent(mediaType)), {
                     headers: { 'X-Gateway-Client': state.client }
@@ -6983,7 +6989,7 @@ ${(() => {
                 state.error = state.error || (err.message || String(err));
             } finally {
                 state.historyLoading = false;
-                if (mediaType === 'image' && toolsView === 'image-gen') renderImageGenDetail();
+                if (toolsView === registry.toolId) registry.render();
             }
         }
 
@@ -7040,7 +7046,7 @@ ${(() => {
                     </div>
                     <div class="media-gen-panel"><h3>结果</h3>${resultHtml}<h3 style="margin-top:18px;">本地历史</h3>${historyHtml}</div>
                 </div>`;
-            if (!imageGenState.historyLoading && !imageGenState.historyLoaded) loadMediaHistory(imageGenState, 'image');
+            if (!imageGenState.historyLoading && !imageGenState.historyLoaded) loadMediaHistory('image');
         };
 
         window.onImageGenClientChange = function(client) {
@@ -7083,11 +7089,12 @@ ${(() => {
             if (imageGenState.error) return '<div class="media-gen-error">' + escapeHtml(imageGenState.error) + '</div>';
             if (!imageGenState.result) return '<div class="media-gen-tip">生成完成后会显示本地文件预览和可复制路径。</div>';
             const path = imageGenState.result.file_path || imageGenState.result.filePath || '';
-            const url = mediaHistoryPreviewUrl(path);
+            const historyId = imageGenState.result.history_id || imageGenState.result.historyId || '';
+            const url = mediaHistoryPreviewUrl(historyId);
             return (path ? '<img class="media-gen-preview" src="' + escapeHtml(url) + '" alt="生成的图片" onerror="this.insertAdjacentHTML(\'afterend\', \'<div class=&quot;media-gen-notice&quot;>本地文件无法由当前浏览器预览，但文件已保存，可复制路径后打开。</div>\')">' : '') +
                 '<div class="media-gen-path">' + escapeHtml(path || '服务未返回 file_path') + '</div>' +
                 '<div class="media-gen-actions">' + (path ? '<button class="btn" onclick="copyMediaPath(' + escapeHtml(JSON.stringify(path)) + ')">复制路径</button>' : '') +
-                (imageGenState.result.history_id || imageGenState.result.historyId ? '<span class="media-gen-tip" style="margin:0;">历史 ID: ' + escapeHtml(imageGenState.result.history_id || imageGenState.result.historyId) + '</span>' : '') + '</div>';
+                (historyId ? '<span class="media-gen-tip" style="margin:0;">历史 ID: ' + escapeHtml(historyId) + '</span>' : '') + '</div>';
         }
 
         window.runImageGeneration = async function() {
@@ -7110,7 +7117,7 @@ ${(() => {
                 if (!res.ok) throw new Error(json?.error?.message || '生成失败 (' + res.status + ')');
                 if (!json.file_path && !json.filePath) throw new Error('服务返回成功但缺少 file_path');
                 imageGenState.result = json;
-                await loadMediaHistory(imageGenState, 'image');
+                await loadMediaHistory('image');
             } catch (err) {
                 imageGenState.error = err.message || String(err);
             } finally {
@@ -7124,18 +7131,20 @@ ${(() => {
         };
 
         window.deleteMediaHistoryEntry = async function(mediaType, historyId) {
+            const registry = MEDIA_HISTORY_TOOL_REGISTRY.get(mediaType);
+            if (!registry) return;
             try {
                 const res = await fetch('/v1/media/history/' + encodeURIComponent(historyId), {
-                    method: 'DELETE', headers: { 'X-Gateway-Client': imageGenState.client }
+                    method: 'DELETE', headers: { 'X-Gateway-Client': registry.state.client }
                 });
                 const json = await res.json();
                 if (!res.ok) throw new Error(json?.error?.message || '删除失败 (' + res.status + ')');
-                if (mediaType === 'image') {
-                    imageGenState.history = imageGenState.history.filter(entry => entry.id !== historyId);
-                    if (toolsView === 'image-gen') renderImageGenDetail();
-                }
+                registry.state.history = registry.state.history.filter(entry => entry.id !== historyId);
+                if (toolsView === registry.toolId) registry.render();
             } catch (err) { showToast('删除历史失败: ' + (err.message || err), 'danger'); }
         };
+
+        registerMediaHistoryTool('image', 'image-gen', imageGenState, () => renderImageGenDetail());
 
         window.renderToolsDetail = function() {
             if (toolsView === 'classification-metrics') {
