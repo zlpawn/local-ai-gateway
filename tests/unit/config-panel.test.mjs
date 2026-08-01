@@ -53,7 +53,7 @@ test("Codex endpoint editor offers Anthropic Messages protocol and auth selectio
   assert.match(html, /Anthropic Messages 协议/);
   assert.match(
     html,
-    /\['anthropic',\s*'openai-responses',\s*'openai-chat',\s*'grok'\]/,
+    /\['anthropic',\s*'openai-responses',\s*'openai-chat',\s*'grok',\s*'antigravity'\]/,
   );
   assert.match(html, /<label>鉴权方式<\/label>/);
   assert.match(html, /value="bearer"/);
@@ -442,4 +442,23 @@ test("custom agent-node blocks show the protocol and allow changing it inline", 
   assert.match(html, /protocolLabel/);
   assert.match(html, /setCustomClientProtocol/);
   assert.match(html, /custom-client-protocol-select/);
+});
+
+
+test("tools cards list renders antigravity subscribe card", async () => {
+  const html = await readFile(path.join(ROOT, "desktop", "config-panel.html"), "utf8");
+  assert.match(html, /接入 Antigravity 订阅/);
+  assert.match(html, /openTool\('antigravity-subscribe'\)/);
+  assert.match(html, /window\.renderAntigravitySubscribeDetail/);
+  assert.match(html, /\/v1\/subscription-auth\/antigravity\/status/);
+  assert.match(html, /从本机提取/);
+  assert.match(html, /一键登录/);
+});
+
+test("endpoint type list includes antigravity google subscription label", async () => {
+  const html = await readFile(path.join(ROOT, "desktop", "config-panel.html"), "utf8");
+  assert.match(html, /value: "antigravity"/);
+  assert.match(html, /Antigravity（Google 订阅）/);
+  assert.match(html, /\['anthropic',\s*'openai-responses',\s*'openai-chat',\s*'grok',\s*'antigravity'\]/);
+  assert.match(html, /Google v1internal gRPC/);
 });

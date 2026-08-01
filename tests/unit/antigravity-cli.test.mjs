@@ -1,4 +1,4 @@
-import { test } from "node:test";
+﻿import { test } from "node:test";
 import assert from "node:assert/strict";
 import os from "node:os";
 import fs from "node:fs";
@@ -24,6 +24,7 @@ test("help subcommand prints usage with login and status", async () => {
     const out = io.lines.join("\n");
     assert.match(out, /login/);
     assert.match(out, /status/);
+    assert.match(out, /discover/);
   } finally {
     process.env.ANTIGRAVITY_SECRETS_FILE = old;
   }

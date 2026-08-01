@@ -46,6 +46,11 @@ import {
   computeSessionFingerprint as computeAntigravitySessionFp,
 } from "./lib/antigravity/index.mjs";
 import {
+  getProviderStatus as getSubscriptionAuthStatus,
+  listProviders as listSubscriptionAuthProviders,
+  runProviderAction as runSubscriptionAuthAction,
+} from "./lib/subscription-auth/index.mjs";
+import {
   GatewayConfigError,
   buildClaudeCodeModelRoutes,
   buildClaudeInferenceModels,
@@ -1746,6 +1751,69 @@ function collectGroupedModelsFromConfig(config) {
       sendJson(res, 200, modelDiscovery(context.client));
     }
     return;
+  }
+
+  if (reqPath === "/v1/subscription-auth/providers" && req.method === "GET") {
+    if (!checkLocalAuth(req, res)) return;
+    sendJson(res, 200, { providers: listSubscriptionAuthProviders() });
+    return;
+  }
+
+  if (reqPath.startsWith("/v1/subscription-auth/") && req.method === "GET") {
+    if (!checkLocalAuth(req, res)) return;
+    const parts = reqPath.split("/").filter(Boolean);
+    // /v1/subscription-auth/:provider/status
+    if (parts.length === 4 && parts[3] === "status") {
+      try {
+        const status = getSubscriptionAuthStatus(parts[2], { config: GATEWAY_CONFIG });
+        sendJson(res, 200, status);
+      } catch (error) {
+        const code = error?.code || "subscription_auth_error";
+        const httpStatus = code === "unknown_provider" ? 404 : 400;
+        sendJson(res, httpStatus, {
+          error: { type: code, message: error?.message || String(error) },
+        });
+      }
+      return;
+    }
+  }
+
+  if (reqPath.startsWith("/v1/subscription-auth/") && req.method === "POST") {
+    if (!checkLocalAuth(req, res)) return;
+    const parts = reqPath.split("/").filter(Boolean);
+    // /v1/subscription-auth/:provider/:action
+    if (parts.length === 4) {
+      const providerId = parts[2];
+      const action = parts[3];
+      try {
+        const body = JSON.parse((await readText(req)) || "{}");
+        const result = await runSubscriptionAuthAction(providerId, action, {
+          config: GATEWAY_CONFIG,
+          payload: body,
+          save: body.save !== false,
+        });
+        sendJson(res, 200, { success: true, ...result });
+      } catch (error) {
+        const code = error?.code || "subscription_auth_error";
+        const httpStatus =
+          code === "unknown_provider" ? 404 :
+          code === "unsupported_action" ? 400 :
+          code === "missing_client_credentials" ? 400 :
+          code === "invalid_client_credentials" ? 400 :
+          code === "invalid_client_id" ? 400 :
+          code === "callback_port_in_use" ? 409 :
+          500;
+        sendJson(res, httpStatus, {
+          success: false,
+          error: {
+            type: code,
+            message: error?.message || String(error),
+            auth_url: error?.auth_url || undefined,
+          },
+        });
+      }
+      return;
+    }
   }
 
   if (reqPath === "/v1/config" && req.method === "GET") {
