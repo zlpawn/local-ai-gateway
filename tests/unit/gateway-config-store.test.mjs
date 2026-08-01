@@ -6,6 +6,7 @@ import test from "node:test";
 
 import {
   GatewayConfigError,
+  isCapabilityEndpoint,
   buildClaudeCodeModelRoutes,
   buildClaudeInferenceModels,
   getEndpointApiKey,
@@ -15,6 +16,8 @@ import {
   selectExposedEndpoints,
   selectEmbeddingEndpoints,
   selectDefaultEmbeddingEndpoint,
+  selectMediaEndpoints,
+  selectDefaultMediaEndpoint,
   validateGatewayConfig,
 } from "../../lib/config/gateway-config-store.mjs";
 
@@ -631,4 +634,62 @@ test("validateGatewayConfig accepts valid positive integer context_window", () =
   });
   const ctxIssues = issues.filter((i) => i.code === "invalid_context_window");
   assert.equal(ctxIssues.length, 0);
+});
+
+test("media generation endpoints are capability endpoints", () => {
+  assert.ok(isCapabilityEndpoint({ purpose: "image_generation" }));
+  assert.ok(isCapabilityEndpoint({ purpose: "video_generation" }));
+  assert.ok(isCapabilityEndpoint({ purpose: "audio_tts" }));
+});
+
+test("selectMediaEndpoints filters by purpose", () => {
+  const endpoints = [
+    { id: "ep1", purpose: "image_generation", provider: "grok-subscription", models: ["m1"] },
+    { id: "ep2", purpose: "video_generation", provider: "huoshan-agentplan", models: ["m2"] },
+    { id: "ep3", purpose: "chat" },
+  ];
+  assert.deepEqual(selectMediaEndpoints(endpoints, "image_generation").map((e) => e.id), ["ep1"]);
+  assert.deepEqual(selectMediaEndpoints(endpoints, "video_generation").map((e) => e.id), ["ep2"]);
+});
+
+test("selectDefaultMediaEndpoint prefers is_default", () => {
+  const endpoints = [
+    { id: "ep1", purpose: "image_generation", provider: "grok-subscription" },
+    { id: "ep2", purpose: "image_generation", provider: "huoshan-agentplan", is_default: true },
+  ];
+  assert.equal(selectDefaultMediaEndpoint(endpoints, "image_generation").id, "ep2");
+});
+
+test("validateGatewayConfig rejects media endpoint with unsupported provider", () => {
+  const config = {
+    server: { host: "127.0.0.1", port: 8787 },
+    clients: { codex: { endpoints: [
+      { id: "ep1", purpose: "image_generation", provider: "unknown-provider", models: ["m1"] },
+    ] } },
+  };
+  const issues = validateGatewayConfig(config);
+  assert.ok(issues.some((i) => i.code === "unsupported_media_provider"));
+});
+
+test("validateGatewayConfig rejects provider/purpose mismatch", () => {
+  const config = {
+    server: { host: "127.0.0.1", port: 8787 },
+    clients: { codex: { endpoints: [
+      { id: "ep1", purpose: "video_generation", provider: "codex-subscription", models: ["m1"] },
+    ] } },
+  };
+  const issues = validateGatewayConfig(config);
+  assert.ok(issues.some((i) => i.code === "media_provider_purpose_mismatch"));
+});
+
+test("validateGatewayConfig rejects multiple defaults for same media purpose", () => {
+  const config = {
+    server: { host: "127.0.0.1", port: 8787 },
+    clients: { codex: { endpoints: [
+      { id: "ep1", purpose: "image_generation", provider: "grok-subscription", is_default: true },
+      { id: "ep2", purpose: "image_generation", provider: "huoshan-agentplan", is_default: true },
+    ] } },
+  };
+  const issues = validateGatewayConfig(config);
+  assert.ok(issues.some((i) => i.code === "multiple_default_media_endpoints"));
 });
