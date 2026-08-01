@@ -182,6 +182,25 @@
     "codex": {
       "endpoints": [
         {
+          "id": "ep_4806b00f-553c-4651-b395-23215904373b",
+          "name": "codex 订阅",
+          "type": "codex-subscription",
+          "base_url": "",
+          "auth": "bearer",
+          "models": [
+            "gpt-5.3"
+          ],
+          "model_mapping": {},
+          "capabilities": {
+            "input_modalities": [
+              "text",
+              "image"
+            ],
+            "reasoning": true,
+            "tools": true
+          }
+        },
+        {
           "id": "ep_48cfa1ed-c07a-43bb-bdc4-f5bfd47e3602",
           "name": "huoshan-agentplan",
           "purpose": "embedding",

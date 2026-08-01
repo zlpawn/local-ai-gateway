@@ -5934,8 +5934,14 @@ ${(() => {
         };
 
         function subauthBadgeClass(state) {
-            if (state === 'logged_in') return 'is-ok';
-            if (state === 'expiring_soon' || state === 'ready_to_login') return 'is-warn';
+            if (state === 'logged_in' || state === 'ready') return 'is-ok';
+            if (
+                state === 'expiring_soon' ||
+                state === 'ready_to_login' ||
+                state === 'token_expired' ||
+                state === 'loading' ||
+                state === 'unknown'
+            ) return 'is-warn';
             return 'is-bad';
         }
 
@@ -6003,45 +6009,63 @@ ${(() => {
             const busy = Boolean(codexAuthState.busyAction);
             const state = s?.state || (codexAuthState.loading ? 'loading' : 'unknown');
             const stateLabel = s?.state_label || (codexAuthState.loading ? '加载中' : '未知');
-            const nextSteps = (s?.next_steps || []).map((step) => '<li>' + escapeHtml(step) + '</li>').join('');
+            const badgeClass = subauthBadgeClass(state);
+            const nextSteps = (s?.next_steps || []).map((step) => '<li>' + escapeHtml(step) + '</li>').join('')
+                || '<li>打开工具后会自动检查本机 Codex 登录态。</li>';
             const nodeHint = s?.nodes?.configured
-                ? ('已配置 ' + s.nodes.count + ' 个 codex-subscription 节点。')
+                ? ('已检测到 ' + s.nodes.count + ' 个 Codex 订阅节点。')
                 : '尚未配置 type=codex-subscription 的节点。确认登录后，请到 Claude Desktop / DeepTutor / Codex 节点页手动添加。';
+            const tokenHint = s?.token?.access_token_configured
+                ? (s.token.access_token_masked || '已配置')
+                : '未配置';
+            const refreshHint = s?.token?.refresh_token_configured
+                ? (s.token.refresh_token_masked || '已配置')
+                : '未配置';
 
             detail.innerHTML = [
-                '<div class="detail-view">',
-                '  <div class="detail-toolbar">',
-                '    <div class="detail-toolbar-left">',
-                '      <button class="btn btn-sm" onclick="backToToolsCards()">返回</button>',
-                '      <div><div class="detail-title">接入 Codex 订阅</div><div class="detail-subtitle">本机 ChatGPT/Codex 登录态 · 多客户端节点复用</div></div>',
-                '    </div>',
-                '  </div>',
+                '<button class="tools-detail-back" onclick="backToToolsCards()">返回工具列表</button>',
+                '<div class="subauth-layout">',
                 '  <div class="subauth-panel">',
-                '    <div class="subauth-status">状态：<strong>' + escapeHtml(stateLabel) + '</strong> <span class="subauth-muted">(' + escapeHtml(state) + ')</span></div>',
-                '    <div class="subauth-muted" style="margin-top:8px;">' + escapeHtml(nodeHint) + '</div>',
+                '    <h3>接入 Codex 订阅</h3>',
+                '    <div class="subauth-status-grid">',
+                '      <div class="subauth-stat"><div class="subauth-stat-label">当前状态</div><div class="subauth-stat-value"><span class="subauth-badge ' + badgeClass + '">' + escapeHtml(stateLabel) + '</span></div></div>',
+                '      <div class="subauth-stat"><div class="subauth-stat-label">账号</div><div class="subauth-stat-value">' + escapeHtml(s?.token?.account_id || '未登录') + '</div></div>',
+                '      <div class="subauth-stat"><div class="subauth-stat-label">Token 剩余</div><div class="subauth-stat-value">' + escapeHtml(formatExpiresIn(s?.token?.expires_in_seconds)) + '</div></div>',
+                '      <div class="subauth-stat"><div class="subauth-stat-label">登录模式</div><div class="subauth-stat-value">' + escapeHtml(s?.token?.auth_mode || '未知') + '</div></div>',
+                '    </div>',
                 codexAuthState.error ? ('    <div class="subauth-error">' + escapeHtml(codexAuthState.error) + '</div>') : '',
                 codexAuthState.message ? ('    <div class="subauth-success">' + escapeHtml(codexAuthState.message) + '</div>') : '',
-                '    <div class="subauth-meta">',
+                '    <div class="subauth-help">',
                 '      <div>Auth 文件：<span class="subauth-path">' + escapeHtml(s?.auth_path || '~/.codex/auth.json') + '</span></div>',
-                '      <div>account_id：' + escapeHtml(s?.token?.account_id || '(none)') + '</div>',
-                '      <div>auth_mode：' + escapeHtml(s?.token?.auth_mode || '(none)') + '</div>',
-                '      <div>access_token：' + (s?.token?.access_token_configured ? escapeHtml(s.token.access_token_masked || '(set)') : '(none)') + '</div>',
-                '      <div>refresh_token：' + (s?.token?.refresh_token_configured ? escapeHtml(s.token.refresh_token_masked || '(set)') : '(none)') + '</div>',
-                '      <div>expires_at：' + escapeHtml(s?.token?.expires_at || '(unknown)') + '</div>',
+                '      <div style="margin-top:6px;">access_token：' + escapeHtml(tokenHint) + '</div>',
+                '      <div style="margin-top:6px;">refresh_token：' + escapeHtml(refreshHint) + '</div>',
+                '      <div style="margin-top:6px;">expires_at：' + escapeHtml(s?.token?.expires_at || '未知') + '</div>',
+                '      <div style="margin-top:6px;">节点配置：' + escapeHtml(nodeHint) + '</div>',
                 '    </div>',
-                nextSteps ? ('    <ol class="subauth-steps">' + nextSteps + '</ol>') : '',
                 '    <div class="subauth-actions">',
                 '      <button class="btn" onclick="loadCodexAuthStatus()" ' + (busy ? 'disabled' : '') + '>刷新状态</button>',
                 '      <button class="btn btn-primary" onclick="discoverCodexAuth()" ' + (busy ? 'disabled' : '') + '>' + (codexAuthState.busyAction === 'discover' ? '检测中...' : '检测本机登录态') + '</button>',
                 '      <button class="btn" onclick="refreshCodexAuthToken()" ' + (busy ? 'disabled' : '') + '>' + (codexAuthState.busyAction === 'refresh' ? '刷新中...' : '尝试刷新 Token') + '</button>',
                 '    </div>',
-                '    <div class="usage-guide" style="margin-top:16px;">',
-                '      <p style="margin:0 0 8px 0;"><strong>怎么给其他客户端用？</strong></p>',
-                '      <p style="margin:0;">1. 确认本机 Codex 已登录；2. 到 Claude Desktop / DeepTutor / Codex 节点页新增节点；3. 类型选「Codex 订阅（ChatGPT）」；4. 填入官方模型 ID（如 gpt-5.4 / gpt-5.6-sol）。</p>',
+                '  </div>',
+                '  <div class="subauth-panel">',
+                '    <h3>接下来做什么</h3>',
+                '    <ol class="subauth-steps">' + nextSteps + '</ol>',
+                '    <div class="subauth-help">',
+                '      <div><strong>真实上游协议</strong></div>',
+                '      <div class="subauth-muted" style="margin-top:6px;">' + escapeHtml((s?.notes && s.notes[0]) || 'Codex 订阅节点真实上游是 chatgpt.com backend-api/codex/responses，读取本机 ~/.codex/auth.json，不需要 API Key。') + '</div>',
+                '      <div style="margin-top:12px;"><strong>怎么给其他客户端用</strong></div>',
+                '      <div class="subauth-muted" style="margin-top:6px;">到 Claude Desktop / DeepTutor / Codex 节点页新增节点，类型选「Codex 订阅（ChatGPT）」，填入当前账号可用的官方模型 ID（如 gpt-5.4）。</div>',
+                '      <div style="margin-top:12px;"><strong>等价 CLI</strong></div>',
+                '      <div class="subauth-muted" style="margin-top:6px;">',
+                '        <div><code>' + escapeHtml(s?.commands?.discover || 'shrimp upstream codex-oauth discover') + '</code></div>',
+                '        <div><code>' + escapeHtml(s?.commands?.status || 'shrimp upstream codex-oauth status') + '</code></div>',
+                '        <div><code>shrimp upstream codex-oauth refresh</code></div>',
+                '      </div>',
                 '    </div>',
                 '  </div>',
-                '</div>',
-            ].join('\n');
+                '</div>'
+            ].join('');
         };
 
         window.discoverCodexAuth = async function() {
