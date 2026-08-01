@@ -3465,7 +3465,14 @@ experimental_bearer_token = "dummy"</pre>
         // Craft-style navigation: null = card list, {client,index} = detail editor
         let selectedEndpoint = null;
         let activeClient = 'code';
-        let toolsView = 'cards'; // 'cards' | 'embedding' | 'classification-metrics' | 'antigravity-subscribe'
+        let toolsView = 'cards'; // 'cards' | 'embedding' | 'classification-metrics' | 'antigravity-subscribe' | 'codex-subscribe'
+        let codexAuthState = {
+            loading: false,
+            busyAction: '',
+            error: '',
+            message: '',
+            status: null,
+        };
         let antigravityAuthState = {
             loading: false,
             busyAction: '',
@@ -3537,7 +3544,8 @@ experimental_bearer_token = "dummy"</pre>
             { value: "openai-chat", label: "OpenAI Chat 补全格式" },
             { value: "openai-responses", label: "OpenAI Responses (实验性)" },
             { value: "grok", label: "Grok 订阅" },
-            { value: "antigravity", label: "Antigravity（Google 订阅）" }
+            { value: "antigravity", label: "Antigravity（Google 订阅）" },
+            { value: "codex-subscription", label: "Codex 订阅（ChatGPT）" }
         ];
 
         // The four shipped agent-node groups; the sidebar lists them first and they cannot be removed.
@@ -5226,7 +5234,7 @@ experimental_bearer_token = "dummy"</pre>
             const isDisabled = ep.enabled === false;
             const name = escapeHtml(ep.name || `节点 ${index + 1}`);
             const type = escapeHtml(isEmbedding ? 'OpenAI Embeddings 协议' : typeLabel(ep.type));
-            const url = escapeHtml(ep.type === 'antigravity' ? 'Google v1internal gRPC · OAuth' : shortUrl(ep.base_url));
+            const url = escapeHtml(ep.type === 'antigravity' ? 'Google v1internal gRPC · OAuth' : (ep.type === 'codex-subscription' ? 'ChatGPT Codex · 本地订阅' : shortUrl(ep.base_url)));
             const models = Array.isArray(ep.models) ? ep.models : [];
             const mappingCount = Object.keys(ep.model_mapping || {}).length;
             const previewModels = models.slice(0, 3).map(m =>
@@ -5318,8 +5326,8 @@ experimental_bearer_token = "dummy"</pre>
             const availableTypes = isEmbedding
                 ? [{ value: 'openai-chat', label: 'OpenAI Embeddings 协议' }]
                 : (client === 'code' || client === 'desktop')
-                ? ENDPOINT_TYPES.filter(t => ['anthropic', 'openai-chat', 'grok'].includes(t.value))
-                : ENDPOINT_TYPES.filter(t => ['anthropic', 'openai-responses', 'openai-chat', 'grok', 'antigravity'].includes(t.value));
+                ? ENDPOINT_TYPES.filter(t => ['anthropic', 'openai-chat', 'grok', 'codex-subscription'].includes(t.value))
+                : ENDPOINT_TYPES.filter(t => ['anthropic', 'openai-responses', 'openai-chat', 'grok', 'antigravity', 'codex-subscription'].includes(t.value));
 
             const typeOptions = availableTypes.map(t =>
                 `<option value="${t.value}" ${ep.type === t.value ? 'selected' : ''}>${t.label}</option>`
@@ -5402,11 +5410,11 @@ experimental_bearer_token = "dummy"</pre>
                                     ${typeOptions}
                                 </select>
                             </div>
-                            ${ep.type === 'antigravity' ? `
+                            ${(ep.type === 'antigravity' || ep.type === 'codex-subscription') ? `
                             <div class="form-group full">
                                 <label>上游协议</label>
                                 <div class="usage-guide" style="margin:0;">
-                                    <p style="margin:0;">Antigravity 走 Google Cloud Code v1internal gRPC，使用本地 OAuth 订阅鉴权，不需要 Base URL 或 API Key。请到迷你工具「接入 Antigravity 订阅」完成登录。</p>
+                                    <p style="margin:0;">${ep.type === 'codex-subscription' ? 'Codex 订阅走 chatgpt.com backend-api/codex/responses，读取本机 ~/.codex/auth.json，不需要 Base URL 或 API Key。请到迷你工具「接入 Codex 订阅」确认登录态。' : 'Antigravity 走 Google Cloud Code v1internal gRPC，使用本地 OAuth 订阅鉴权，不需要 Base URL 或 API Key。请到迷你工具「接入 Antigravity 订阅」完成登录。'}</p>
                                 </div>
                             </div>
                             ` : `
@@ -5424,7 +5432,7 @@ experimental_bearer_token = "dummy"</pre>
                             </div>
                             `}
                             `}
-                            ${(isWebSearch || ep.type !== 'antigravity') ? `
+                            ${(isWebSearch || (ep.type !== 'antigravity' && ep.type !== 'codex-subscription')) ? `
                             <div class="form-group full">
                                 <label>${isWebSearch ? 'Tavily API Key' : '密钥 (API Key)'} ${ep.has_api_key ? '· 已配置' : '· 未配置'}</label>
                                 <div class="password-input-wrapper">
@@ -5890,6 +5898,13 @@ ${(() => {
                     <div class="tools-card-name">接入 Antigravity 订阅</div>
                     <div class="tools-card-desc">从本机提取 OAuth 凭据，登录 Google 订阅账号，让网关使用 Antigravity 的 Gemini 模型。</div>
                 </div>
+                <div class="tools-card" onclick="openTool('codex-subscribe')">
+                    <div class="tools-card-icon">
+                        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"></circle><path d="M8 12h8"></path><path d="M12 8v8"></path></svg>
+                    </div>
+                    <div class="tools-card-name">接入 Codex 订阅</div>
+                    <div class="tools-card-desc">读取本机 Codex/ChatGPT 登录态，把官方模型做成可给 Claude Desktop / DeepTutor 使用的节点。</div>
+                </div>
             `;
         };
 
@@ -5897,6 +5912,7 @@ ${(() => {
             toolsView = toolId;
             if (toolId === 'classification-metrics') renderClassificationMetricsDetail();
             else if (toolId === 'antigravity-subscribe') renderAntigravitySubscribeDetail();
+            else if (toolId === 'codex-subscribe') renderCodexSubscribeDetail();
             else renderToolsDetail();
         };
 
@@ -5953,6 +5969,131 @@ ${(() => {
                 renderAntigravitySubscribeDetail(false);
             }
         }
+
+
+        async function loadCodexAuthStatus() {
+            codexAuthState.loading = true;
+            codexAuthState.error = '';
+            renderCodexSubscribeDetail(false);
+            try {
+                const res = await fetch('/v1/subscription-auth/codex/status');
+                const json = await res.json();
+                if (!res.ok) throw new Error(json?.error?.message || '加载状态失败');
+                codexAuthState.status = json;
+            } catch (err) {
+                codexAuthState.error = err.message || String(err);
+            } finally {
+                codexAuthState.loading = false;
+                renderCodexSubscribeDetail(false);
+            }
+        }
+
+        window.renderCodexSubscribeDetail = function(autoLoad = true) {
+            const cards = document.getElementById('tools-cards');
+            const detail = document.getElementById('tools-detail');
+            if (!cards || !detail) return;
+            cards.style.display = 'none';
+            toolsView = 'codex-subscribe';
+
+            if (autoLoad && !codexAuthState.status && !codexAuthState.loading && !codexAuthState.error) {
+                loadCodexAuthStatus();
+            }
+
+            const s = codexAuthState.status;
+            const busy = Boolean(codexAuthState.busyAction);
+            const state = s?.state || (codexAuthState.loading ? 'loading' : 'unknown');
+            const stateLabel = s?.state_label || (codexAuthState.loading ? '加载中' : '未知');
+            const nextSteps = (s?.next_steps || []).map((step) => '<li>' + escapeHtml(step) + '</li>').join('');
+            const nodeHint = s?.nodes?.configured
+                ? ('已配置 ' + s.nodes.count + ' 个 codex-subscription 节点。')
+                : '尚未配置 type=codex-subscription 的节点。确认登录后，请到 Claude Desktop / DeepTutor / Codex 节点页手动添加。';
+
+            detail.innerHTML = [
+                '<div class="detail-view">',
+                '  <div class="detail-toolbar">',
+                '    <div class="detail-toolbar-left">',
+                '      <button class="btn btn-sm" onclick="backToToolsCards()">返回</button>',
+                '      <div><div class="detail-title">接入 Codex 订阅</div><div class="detail-subtitle">本机 ChatGPT/Codex 登录态 · 多客户端节点复用</div></div>',
+                '    </div>',
+                '  </div>',
+                '  <div class="subauth-panel">',
+                '    <div class="subauth-status">状态：<strong>' + escapeHtml(stateLabel) + '</strong> <span class="subauth-muted">(' + escapeHtml(state) + ')</span></div>',
+                '    <div class="subauth-muted" style="margin-top:8px;">' + escapeHtml(nodeHint) + '</div>',
+                codexAuthState.error ? ('    <div class="subauth-error">' + escapeHtml(codexAuthState.error) + '</div>') : '',
+                codexAuthState.message ? ('    <div class="subauth-success">' + escapeHtml(codexAuthState.message) + '</div>') : '',
+                '    <div class="subauth-meta">',
+                '      <div>Auth 文件：<span class="subauth-path">' + escapeHtml(s?.auth_path || '~/.codex/auth.json') + '</span></div>',
+                '      <div>account_id：' + escapeHtml(s?.token?.account_id || '(none)') + '</div>',
+                '      <div>auth_mode：' + escapeHtml(s?.token?.auth_mode || '(none)') + '</div>',
+                '      <div>access_token：' + (s?.token?.access_token_configured ? escapeHtml(s.token.access_token_masked || '(set)') : '(none)') + '</div>',
+                '      <div>refresh_token：' + (s?.token?.refresh_token_configured ? escapeHtml(s.token.refresh_token_masked || '(set)') : '(none)') + '</div>',
+                '      <div>expires_at：' + escapeHtml(s?.token?.expires_at || '(unknown)') + '</div>',
+                '    </div>',
+                nextSteps ? ('    <ol class="subauth-steps">' + nextSteps + '</ol>') : '',
+                '    <div class="subauth-actions">',
+                '      <button class="btn" onclick="loadCodexAuthStatus()" ' + (busy ? 'disabled' : '') + '>刷新状态</button>',
+                '      <button class="btn btn-primary" onclick="discoverCodexAuth()" ' + (busy ? 'disabled' : '') + '>' + (codexAuthState.busyAction === 'discover' ? '检测中...' : '检测本机登录态') + '</button>',
+                '      <button class="btn" onclick="refreshCodexAuthToken()" ' + (busy ? 'disabled' : '') + '>' + (codexAuthState.busyAction === 'refresh' ? '刷新中...' : '尝试刷新 Token') + '</button>',
+                '    </div>',
+                '    <div class="usage-guide" style="margin-top:16px;">',
+                '      <p style="margin:0 0 8px 0;"><strong>怎么给其他客户端用？</strong></p>',
+                '      <p style="margin:0;">1. 确认本机 Codex 已登录；2. 到 Claude Desktop / DeepTutor / Codex 节点页新增节点；3. 类型选「Codex 订阅（ChatGPT）」；4. 填入官方模型 ID（如 gpt-5.4 / gpt-5.6-sol）。</p>',
+                '    </div>',
+                '  </div>',
+                '</div>',
+            ].join('\n');
+        };
+
+        window.discoverCodexAuth = async function() {
+            codexAuthState.busyAction = 'discover';
+            codexAuthState.error = '';
+            codexAuthState.message = '';
+            renderCodexSubscribeDetail(false);
+            try {
+                const res = await fetch('/v1/subscription-auth/codex/discover', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({}),
+                });
+                const json = await res.json();
+                if (!res.ok || json.success === false) {
+                    throw new Error(json?.error?.message || json?.message || '检测失败');
+                }
+                codexAuthState.status = json.status || codexAuthState.status;
+                codexAuthState.message = json.message || '已检测本机 Codex 登录态';
+            } catch (err) {
+                codexAuthState.error = err.message || String(err);
+            } finally {
+                codexAuthState.busyAction = '';
+                renderCodexSubscribeDetail(false);
+            }
+        };
+
+        window.refreshCodexAuthToken = async function() {
+            codexAuthState.busyAction = 'refresh';
+            codexAuthState.error = '';
+            codexAuthState.message = '';
+            renderCodexSubscribeDetail(false);
+            try {
+                const res = await fetch('/v1/subscription-auth/codex/refresh', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({}),
+                });
+                const json = await res.json();
+                if (!res.ok || json.success === false) {
+                    throw new Error(json?.error?.message || json?.message || '刷新失败');
+                }
+                codexAuthState.status = json.status || codexAuthState.status;
+                codexAuthState.message = json.message || 'Token 状态已更新';
+            } catch (err) {
+                codexAuthState.error = err.message || String(err);
+            } finally {
+                codexAuthState.busyAction = '';
+                renderCodexSubscribeDetail(false);
+            }
+        };
+
 
         window.renderAntigravitySubscribeDetail = function(autoLoad = true) {
             const cards = document.getElementById('tools-cards');
@@ -6648,6 +6789,10 @@ ${(() => {
             if (toolsView === 'antigravity-subscribe') {
                 renderAntigravitySubscribeDetail();
                 return;
+            if (toolsView === 'codex-subscribe') {
+                renderCodexSubscribeDetail();
+                return;
+            }
             }
             const cards = document.getElementById('tools-cards');
             const detail = document.getElementById('tools-detail');
@@ -8461,6 +8606,10 @@ ${(() => {
             if (toolsView === 'antigravity-subscribe') {
                 renderAntigravitySubscribeDetail();
                 return;
+            if (toolsView === 'codex-subscribe') {
+                renderCodexSubscribeDetail();
+                return;
+            }
             }
             const cards = document.getElementById('tools-cards');
             const detail = document.getElementById('tools-detail');

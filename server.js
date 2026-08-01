@@ -51,6 +51,10 @@ import {
   runProviderAction as runSubscriptionAuthAction,
 } from "./lib/subscription-auth/index.mjs";
 import {
+  ensureFreshCodexAuth,
+  resolveCodexAuthPath,
+} from "./lib/codex/local-auth.mjs";
+import {
   GatewayConfigError,
   buildClaudeCodeModelRoutes,
   buildClaudeInferenceModels,
@@ -1929,7 +1933,8 @@ async function forwardAnthropicMessagesResolved(body, clientReq, clientRes, cont
   // third-party configured providers on non-stream turns.
   const canUseGatewaySearch = Boolean(route.provider)
     && route.kind !== "official"
-    && route.provider?.type !== "grok";
+    && route.provider?.type !== "grok"
+    && !isCodexSubscriptionProvider(route.provider);
   const injectedSearch = canUseGatewaySearch
     ? maybeInjectGatewayWebSearch(body, {
       endpoints: GATEWAY_CONFIG.clients?.[context.client]?.endpoints || [],
@@ -2107,6 +2112,43 @@ async function forwardAnthropicMessagesResolved(body, clientReq, clientRes, cont
       return;
     }
   }
+
+  if (isCodexSubscriptionProvider(route.provider)) {
+    const chatBody = anthropicMessagesToOpenAIChat(body, route.model);
+    const responsesBody = openAIChatCompletionsToResponses(chatBody, route.model);
+    let upstream = await fetchCodexSubscriptionResponses(route.provider, responsesBody, clientReq, signal);
+    upstream = await maybeRetryAfterImageError({
+      upstream,
+      originalBody: body,
+      route,
+      clientReq,
+      context,
+      fetchAgain: (retryBody) => fetchCodexSubscriptionResponses(
+        route.provider,
+        openAIChatCompletionsToResponses(
+          anthropicMessagesToOpenAIChat(retryBody, route.model),
+          route.model,
+        ),
+        clientReq,
+        signal,
+      ),
+    });
+    logInfo("codex_subscription_messages_response", {
+      request_id: context.requestId,
+      status: upstream.status,
+      provider: route.provider?.id || null,
+    });
+    if (body.stream) {
+      await streamOpenAIResponseAsAnthropicMessages(upstream, clientRes, requestedModel, context.requestId);
+    } else {
+      if (await grokSendErrorIfNotOk(upstream, clientRes)) return;
+      const completion = await collectResponsesSseAsChatCompletion(upstream, requestedModel);
+      clientRes.writeHead(200, { "Content-Type": "application/json; charset=utf-8", "Access-Control-Allow-Origin": "*" });
+      clientRes.end(JSON.stringify(openAIChatCompletionToAnthropicMessage(completion, requestedModel)));
+    }
+    return;
+  }
+
   if (route.provider?.type === "grok") {
     const backend = grokBackendFor(route.model);
     if (backend === "responses") {
@@ -2251,12 +2293,13 @@ async function forwardOpenAIChatCompletionsResolved(body, clientReq, clientRes, 
     );
   }
 
-  const route = resolveConfiguredModel(requestedModel, ["anthropic", "openai-chat", "openai-responses", "grok"], context.client);
+  const route = resolveConfiguredModel(requestedModel, ["anthropic", "openai-chat", "openai-responses", "grok", "codex-subscription", "chatgpt-codex"], context.client);
   const resolvedModel = route?.upstream_model || resolveModel(requestedModel);
   body = await maybePreprocessImages(body, route, clientReq, context);
 
   const canUseGatewaySearch = Boolean(route?.provider)
-    && route.provider?.type !== "grok";
+    && route.provider?.type !== "grok"
+    && !isCodexSubscriptionProvider(route.provider);
   const injectedSearch = canUseGatewaySearch
     ? maybeInjectGatewayWebSearch(body, {
       endpoints: GATEWAY_CONFIG.clients?.[context.client]?.endpoints || [],
@@ -2529,6 +2572,39 @@ async function forwardOpenAIChatCompletionsResolved(body, clientReq, clientRes, 
       }
       return;
     }
+  }
+
+
+  if (isCodexSubscriptionProvider(route?.provider)) {
+    const responsesBody = openAIChatCompletionsToResponses(body, resolvedModel);
+    let upstream = await fetchCodexSubscriptionResponses(route.provider, responsesBody, clientReq, signal);
+    upstream = await maybeRetryAfterImageError({
+      upstream,
+      originalBody: body,
+      route,
+      clientReq,
+      context,
+      fetchAgain: (retryBody) => fetchCodexSubscriptionResponses(
+        route.provider,
+        openAIChatCompletionsToResponses(retryBody, resolvedModel),
+        clientReq,
+        signal,
+      ),
+    });
+    logInfo("codex_subscription_chat_response", {
+      request_id: context.requestId,
+      status: upstream.status,
+      provider: route.provider?.id || null,
+    });
+    if (body.stream) {
+      await streamOpenAIResponseAsChatCompletion(upstream, clientRes, requestedModel, context.requestId);
+    } else {
+      if (await grokSendErrorIfNotOk(upstream, clientRes)) return;
+      const completion = await collectResponsesSseAsChatCompletion(upstream, requestedModel);
+      clientRes.writeHead(200, { "Content-Type": "application/json; charset=utf-8", "Access-Control-Allow-Origin": "*" });
+      clientRes.end(JSON.stringify(completion));
+    }
+    return;
   }
 
   if (route?.provider?.type === "grok") {
@@ -2901,7 +2977,15 @@ async function forwardResolvedCodexResponse({
   signal,
 }) {
   const requestedModel = body.model;
-  if (context.client === "codex" && isOfficialCodexModel(requestedModel)) {
+  // Prefer an explicitly configured node (including codex-subscription) over the
+  // implicit official chatgpt-codex route. This lets Desktop reuse local subscription
+  // models through gateway endpoints instead of always short-circuiting official IDs.
+  let route = resolveConfiguredModel(
+    requestedModel,
+    ["anthropic", "openai-chat", "openai-responses", "grok", "antigravity", "codex-subscription", "chatgpt-codex"],
+    context.client,
+  );
+  if (!route && context.client === "codex" && isOfficialCodexModel(requestedModel)) {
     logInfo("openai_responses_request", {
       request_id: context.requestId,
       client: context.client,
@@ -2915,12 +2999,7 @@ async function forwardResolvedCodexResponse({
     await proxyOfficialCodexResponse(body, clientReq, clientRes, context, signal);
     return;
   }
-
-  const route = resolveConfiguredModel(
-    requestedModel,
-    ["anthropic", "openai-chat", "openai-responses", "grok", "antigravity"],
-    context.client,
-  );
+  // Keep variable name for the rest of the function.
   const resolvedModel = route?.upstream_model || resolveModel(requestedModel);
   body = await maybePreprocessImages(body, route, clientReq, context);
   body = promoteAdditionalTools(body);
@@ -3032,6 +3111,19 @@ async function forwardResolvedCodexResponse({
       clientRes.writeHead(200, { "Content-Type": "application/json; charset=utf-8", "Access-Control-Allow-Origin": "*" });
       clientRes.end(JSON.stringify(response));
     }
+    return;
+  }
+
+
+  if (isCodexSubscriptionProvider(route?.provider)) {
+    await proxyCodexSubscriptionResponse(
+      { ...body, model: resolvedModel },
+      clientReq,
+      clientRes,
+      context,
+      signal,
+      route,
+    );
     return;
   }
 
@@ -4958,14 +5050,20 @@ function resolveCapabilityForProtocol(model, protocol, client = null) {
     const translations = {
       anthropic_messages: {
         "openai-chat": "anthropic_messages_to_openai_chat",
+        "codex-subscription": "anthropic_messages_to_codex_subscription",
+        "chatgpt-codex": "anthropic_messages_to_codex_subscription",
       },
       openai_chat: {
         anthropic: "openai_chat_to_anthropic_messages",
         "openai-responses": "openai_chat_to_openai_responses",
+        "codex-subscription": "openai_chat_to_codex_subscription",
+        "chatgpt-codex": "openai_chat_to_codex_subscription",
       },
       openai_responses: {
         anthropic: "openai_responses_to_anthropic_messages",
         "openai-chat": "openai_responses_to_openai_chat",
+        "codex-subscription": "direct",
+        "chatgpt-codex": "direct",
       },
     };
     const translation = translations[protocol]?.[providerType] || null;
@@ -5926,9 +6024,9 @@ function resolveModel(requestedModel) {
 }
 
 function resolveAnthropicRoute(requestedModel, client) {
-  const configured = resolveConfiguredModel(requestedModel, ["anthropic", "openai-chat", "grok"], client);
+  const configured = resolveConfiguredModel(requestedModel, ["anthropic", "openai-chat", "grok", "codex-subscription", "chatgpt-codex"], client);
   if (configured) {
-    if (!["anthropic", "openai-chat", "grok"].includes(configured.provider.type)) {
+    if (!["anthropic", "openai-chat", "grok", "codex-subscription", "chatgpt-codex"].includes(configured.provider.type)) {
       throw httpError(
         400,
         `Model ${requestedModel} is configured for provider ${configured.provider.id} (${configured.provider.type}), which cannot serve Anthropic Messages requests yet.`,
@@ -5954,6 +6052,7 @@ function hasConfiguredApiKey(ep) {
   if (ep.type === "official" || ep.name === "official") return true;
   if (ep.type === "grok") return grokHasCredentials(ep);
   if (ep.type === "antigravity") return true; // OAuth-based, no API key needed
+  if (isCodexSubscriptionProvider(ep)) return Boolean(resolveCodexSubscriptionAuthPresence(ep));
   if (getEndpointApiKey(ep, GATEWAY_SECRETS)) return true;
   if (!ep.api_key) return false;
   if (ep.api_key.startsWith("env:")) {
@@ -7816,6 +7915,192 @@ function writeCodexModelCatalog() {
   fs.writeFileSync(CODEX_MODEL_CATALOG_PATH, JSON.stringify(catalog, null, 2), "utf8");
   _codexModelsDiscoveryCache = null;
   return CODEX_MODEL_CATALOG_PATH;
+}
+
+
+function resolveCodexSubscriptionAuthPresence(providerOrEndpoint = null) {
+  try {
+    const authPath = codexSubscriptionAuthPathFor(providerOrEndpoint);
+    if (process.env.OPENAI_API_KEY) return true;
+    if (!fs.existsSync(authPath)) return false;
+    const auth = JSON.parse(fs.readFileSync(authPath, "utf8"));
+    return Boolean(
+      auth?.tokens?.access_token ||
+      auth?.access_token ||
+      auth?.tokens?.refresh_token ||
+      auth?.OPENAI_API_KEY,
+    );
+  } catch {
+    return Boolean(process.env.OPENAI_API_KEY);
+  }
+}
+
+function isCodexSubscriptionProvider(providerOrEndpoint) {
+  const type = String(providerOrEndpoint?.type || "").toLowerCase();
+  return type === "codex-subscription" || type === "chatgpt-codex";
+}
+
+function codexSubscriptionAuthPathFor(providerOrEndpoint = null) {
+  return resolveCodexAuthPath({
+    authPath: providerOrEndpoint?.auth_path || "",
+    env: process.env,
+  });
+}
+
+function codexSubscriptionProxyUrl(providerOrEndpoint = null) {
+  if (providerOrEndpoint?.proxy) return String(providerOrEndpoint.proxy);
+  return officialCodexProxyUrl();
+}
+
+async function ensureCodexSubscriptionAuth({
+  provider = null,
+  clientReq = null,
+  skewSeconds = 300,
+} = {}) {
+  const proxyUrl = codexSubscriptionProxyUrl(provider);
+  return ensureFreshCodexAuth({
+    authPath: codexSubscriptionAuthPathFor(provider),
+    env: process.env,
+    clientReq,
+    allowApiKeyFallback: true,
+    skewSeconds,
+    proxyFetch: (url, init = {}) => fetchWithOptionalProxy(url, {
+      method: init.method || "GET",
+      headers: init.headers || {},
+      body: init.body || null,
+      signal: init.signal || null,
+      proxyUrl,
+    }),
+  });
+}
+
+async function fetchCodexSubscriptionResponses(provider, body, clientReq, signal) {
+  const auth = await ensureCodexSubscriptionAuth({ provider, clientReq });
+  if (!auth) {
+    throw httpError(
+      401,
+      "Codex subscription auth not found. Sign in to Codex locally (write ~/.codex/auth.json) or set OPENAI_API_KEY.",
+    );
+  }
+  const proxyUrl = codexSubscriptionProxyUrl(provider);
+  const controller = new AbortController();
+  const timeout = setTimeout(() => controller.abort(), REQUEST_TIMEOUT_MS);
+  const requestSignal = signal || controller.signal;
+  try {
+    const outbound = {
+      ...body,
+      // chatgpt-codex rejects non-stream requests.
+      stream: auth.backend === "chatgpt-codex" ? true : Boolean(body?.stream),
+    };
+    return await fetchWithOptionalProxy(auth.url, {
+      method: "POST",
+      headers: officialUpstreamHeaders(clientReq, auth),
+      body: JSON.stringify(normalizeOfficialCodexBody(outbound, auth.backend)),
+      signal: requestSignal,
+      proxyUrl,
+    });
+  } catch (error) {
+    const cause = error?.cause?.code || error?.code || error?.cause?.message || "";
+    const detail = [error?.message || error, cause].filter(Boolean).join(": ");
+    const message = error?.name === "AbortError"
+      ? "Timed out calling Codex subscription backend"
+      : "Failed to call Codex subscription backend: " + detail + (proxyUrl ? " (proxy " + proxyUrl + ")" : "");
+    throw httpError(502, message);
+  } finally {
+    clearTimeout(timeout);
+  }
+}
+
+async function proxyCodexSubscriptionResponse(body, clientReq, clientRes, context, signal, route = null) {
+  const provider = route?.provider || null;
+  const auth = await ensureCodexSubscriptionAuth({ provider, clientReq });
+  if (!auth) {
+    throw httpError(
+      401,
+      "Codex subscription auth not found. Sign in to Codex locally (write ~/.codex/auth.json) or set OPENAI_API_KEY.",
+    );
+  }
+
+  const withTools = maybeInjectOfficialHostedTools(body, clientReq);
+  const clientWantsStream = Boolean(body?.stream);
+  const outboundBody = {
+    ...withTools.body,
+    // chatgpt-codex requires stream=true; collect for non-stream clients.
+    stream: auth.backend === "chatgpt-codex" ? true : clientWantsStream,
+  };
+  const proxyUrl = codexSubscriptionProxyUrl(provider);
+  const controller = new AbortController();
+  const timeout = setTimeout(() => controller.abort(), REQUEST_TIMEOUT_MS);
+  const requestSignal = signal || controller.signal;
+
+  try {
+    const upstream = await fetchWithOptionalProxy(auth.url, {
+      method: "POST",
+      headers: officialUpstreamHeaders(clientReq, auth),
+      body: JSON.stringify(normalizeOfficialCodexBody(outboundBody, auth.backend)),
+      signal: requestSignal,
+      proxyUrl,
+    });
+
+    const toolTypes = Array.isArray(outboundBody?.tools)
+      ? outboundBody.tools.map((tool) => tool?.type || tool?.name || "unknown").slice(0, 20)
+      : [];
+    logInfo("openai_responses_response", {
+      request_id: context.requestId,
+      client: context.client,
+      status: upstream.status,
+      route: provider?.id || "codex-subscription",
+      backend: auth.backend,
+      provider_type: "codex-subscription",
+      proxy: proxyUrl || null,
+      tool_count: toolTypes.length,
+      tool_types: toolTypes,
+      has_web_search_tool: toolTypes.some((type) => /web_search/i.test(String(type))),
+      has_image_generation_tool: toolTypes.some((type) => /image_generation/i.test(String(type))),
+      injected_web_search: withTools.injected,
+      injected_hosted_tools: withTools.injected_types || [],
+      stripped_hosted_tools: withTools.stripped_types || [],
+      originator: firstHeaderValue(clientReq.headers["originator"]) || null,
+    });
+
+    if (clientWantsStream) {
+      await pipeResponsesUpstream(upstream, clientRes, {
+        requestId: context.requestId,
+        model: body.model || null,
+        logName: "openai_responses_stream_complete",
+      });
+    } else {
+      if (!upstream.ok) {
+        clientRes.writeHead(upstream.status, responseHeaders(upstream.headers));
+        clientRes.end(await upstream.text());
+        return;
+      }
+      const response = await collectResponsesStream(upstream.body, body.model || null);
+      clientRes.writeHead(200, {
+        "Content-Type": "application/json; charset=utf-8",
+        "Access-Control-Allow-Origin": "*",
+      });
+      clientRes.end(JSON.stringify(response));
+    }
+  } catch (error) {
+    if (error?.statusCode) throw error;
+    const cause = error?.cause?.code || error?.code || error?.cause?.message || "";
+    const detail = [error?.message || error, cause].filter(Boolean).join(": ");
+    const message = error?.name === "AbortError"
+      ? "Timed out calling Codex subscription backend"
+      : "Failed to call Codex subscription backend: " + detail + (proxyUrl ? " (proxy " + proxyUrl + ")" : "");
+    logInfo("openai_responses_upstream_fetch_failed", {
+      request_id: context.requestId,
+      backend: auth.backend,
+      url: auth.url,
+      proxy: proxyUrl || null,
+      error: String(error?.message || error),
+      cause: cause || null,
+    });
+    throw httpError(502, message);
+  } finally {
+    clearTimeout(timeout);
+  }
 }
 
 function getOfficialCodexAuth(clientReq) {
