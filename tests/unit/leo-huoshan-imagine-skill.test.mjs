@@ -231,4 +231,11 @@ test("Huoshan Imagine Skill - SkillInstaller recognizes the managed skill", () =
   assert.ok(skill, "leo-huoshan-imagine should be a registered managed skill");
   assert.equal(skill.category, "media");
   assert.equal(skill.builtin, true);
+  assert.equal(skill.title, "火山引擎多模态生成");
+  assert.match(skill.summary, /Seedance/);
+  assert.match(skill.summary, /Seedream/);
+  assert.match(skill.summary, /Seed TTS|文本转语音/);
+  assert.ok(skill.tags.includes("image"));
+  assert.ok(skill.tags.includes("tts"));
+  assert.ok(skill.tags.includes("video"));
 });

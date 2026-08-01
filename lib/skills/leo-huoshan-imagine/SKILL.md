@@ -19,7 +19,7 @@ description: 使用网关 huoshan-agentplan 节点凭证调用豆包 Seedance 2.
 1. **鉴权凭证**: 本技能不接收也不存储 API Key。运行时自动从网关 `gateway.secrets.json` 读取名为 `huoshan-agentplan` 的节点 key。
    - 默认复用 Codex 客户端下 `huoshan-agentplan` 节点已配置的 key，无需额外配置。
    - 若运行时提示未找到 key，请在网关配置面板为 `huoshan-agentplan` 节点配置 API Key。
-   - 需在火山方舟控制台开通 Doubao Seedance 2.0 系列模型。
+   - 需在火山方舟控制台开通 Doubao Seedance 2.0、Seedream、Seed TTS 2.0 相关模型。
 2. **执行环境**: 本技能包含标准 Node.js ES Module 脚本 `scripts/leo_huoshan_imagine.mjs`，零运行时依赖（仅用 Node 内置 `fetch` + 系统 `curl` 回退下载）。
 
 ## 🤖 大模型工具调用与参数规范 (LLM Call Constraints)
