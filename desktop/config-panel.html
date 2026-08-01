@@ -3570,6 +3570,11 @@ experimental_bearer_token = "dummy"</pre>
             return Boolean(mediaPurposeDefinition(endpoint?.purpose));
         }
 
+        function isCapabilityEndpointPurpose(purpose) {
+            return ['vision_fallback', 'web_search', 'embedding'].includes(purpose)
+                || Boolean(mediaPurposeDefinition(purpose));
+        }
+
         function mediaProviderDefinition(provider) {
             return MEDIA_PROVIDERS.find(item => item.value === provider) || MEDIA_PROVIDERS[0];
         }
@@ -5712,7 +5717,7 @@ ${(() => {
             const groups = [
                 {
                     title: '聊天模型',
-                    matches: endpoint => !['vision_fallback', 'web_search', 'embedding', ...MEDIA_ENDPOINT_PURPOSES.map(item => item.purpose)].includes(endpoint.purpose),
+                    matches: endpoint => !isCapabilityEndpointPurpose(endpoint.purpose),
                 },
                 {
                     title: '视觉兜底',
@@ -5810,7 +5815,7 @@ ${(() => {
 
         function getClaudeCodeDefaultEndpoint() {
             const endpoints = (config.clients?.code?.endpoints || [])
-                .filter(endpoint => !['vision_fallback', 'web_search', 'embedding'].includes(endpoint.purpose));
+                .filter(endpoint => !isCapabilityEndpointPurpose(endpoint.purpose));
             return endpoints.find(endpoint => endpoint.is_default === true)
                 || (endpoints.length === 1 ? endpoints[0] : null);
         }

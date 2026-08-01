@@ -177,6 +177,16 @@ test("Claude Code config exposes four default-endpoint model slot selectors", as
   assert.match(html, /X-Gateway-Config-Client/);
 });
 
+test("Claude Code default chat endpoint excludes every capability purpose", async () => {
+  const html = await readFile(path.join(ROOT, "desktop", "config-panel.html"), "utf8");
+  const source = html.match(
+    /function getClaudeCodeDefaultEndpoint\(\) \{[\s\S]*?\n        \}/,
+  )?.[0] || "";
+
+  assert.match(html, /function isCapabilityEndpointPurpose\(purpose\)/);
+  assert.match(source, /\.filter\(endpoint => !isCapabilityEndpointPurpose\(endpoint\.purpose\)\)/);
+});
+
 test("Claude Code and Desktop guides describe automatic sync and restart only", async () => {
   const html = await readFile(path.join(ROOT, "desktop", "config-panel.html"), "utf8");
   const codeSection = html.match(/<section id="section-code"[\s\S]*?<\/section>/)?.[0] || "";
