@@ -2127,6 +2127,127 @@
         .media-gen-form-group label { display: block; margin-bottom: 8px; font-size: 12px; font-weight: 500; color: var(--text-secondary); letter-spacing: 0.01em; }
         .media-gen-form-control { width: 100%; padding: 10px 12px; border: 1px solid var(--border-color); border-radius: var(--radius-md); background: var(--input-bg); color: var(--text-primary); font: inherit; font-size: 13px; transition: border-color var(--transition-fast), background var(--transition-fast); }
         .media-gen-form-control:focus { outline: none; border-color: var(--text-secondary); background: var(--surface-hover); }
+        .ui-select-dropdown {
+            position: relative;
+            width: 100%;
+        }
+        .ui-select-trigger {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            gap: 10px;
+            width: 100%;
+            min-height: 42px;
+            padding: 10px 12px;
+            text-align: left;
+            cursor: pointer;
+            appearance: none;
+            -webkit-appearance: none;
+        }
+        .ui-select-trigger:disabled,
+        .ui-select-dropdown.is-disabled .ui-select-trigger {
+            opacity: 0.55;
+            cursor: not-allowed;
+        }
+        .ui-select-label {
+            min-width: 0;
+            flex: 1 1 auto;
+            overflow: hidden;
+            text-overflow: ellipsis;
+            white-space: nowrap;
+            color: var(--text-primary);
+        }
+        .ui-select-chevron {
+            flex: 0 0 auto;
+            color: var(--text-secondary);
+            transition: transform var(--transition-fast);
+        }
+        .ui-select-dropdown.is-open .ui-select-trigger {
+            border-color: var(--text-secondary);
+            background: var(--surface-hover);
+        }
+        .ui-select-dropdown.is-open .ui-select-chevron {
+            transform: rotate(180deg);
+        }
+        .ui-select-popover {
+            position: absolute;
+            top: calc(100% + 8px);
+            left: 0;
+            right: 0;
+            z-index: 140;
+            display: none;
+            max-height: min(320px, 50vh);
+            overflow-y: auto;
+            padding: 6px;
+            background: var(--surface);
+            border: 1px solid var(--border-color);
+            border-radius: var(--radius-lg);
+            box-shadow: 0 16px 40px rgba(0, 0, 0, 0.14);
+        }
+        .ui-select-dropdown.is-open .ui-select-popover {
+            display: block;
+        }
+        .ui-select-option {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            width: 100%;
+            min-height: 42px;
+            padding: 8px 10px;
+            border: 0;
+            border-radius: var(--radius-md);
+            background: transparent;
+            color: var(--text-primary);
+            font: inherit;
+            font-size: 13px;
+            text-align: left;
+            cursor: pointer;
+        }
+        .ui-select-option:hover,
+        .ui-select-option:focus-visible {
+            background: var(--surface-hover);
+            outline: none;
+        }
+        .ui-select-option.is-active {
+            font-weight: 600;
+        }
+        .ui-select-option-copy {
+            display: flex;
+            flex-direction: column;
+            gap: 2px;
+            min-width: 0;
+            flex: 1 1 auto;
+        }
+        .ui-select-option-title {
+            overflow: hidden;
+            text-overflow: ellipsis;
+            white-space: nowrap;
+            line-height: 1.35;
+        }
+        .ui-select-option-description {
+            overflow: hidden;
+            color: var(--text-secondary);
+            font-size: 11px;
+            font-weight: 400;
+            line-height: 1.4;
+            text-overflow: ellipsis;
+            white-space: nowrap;
+        }
+        .ui-select-check {
+            flex: 0 0 auto;
+            margin-left: auto;
+            color: var(--text-secondary);
+            font-size: 12px;
+            opacity: 0;
+        }
+        .ui-select-option.is-active .ui-select-check {
+            opacity: 1;
+        }
+        .ui-select-empty {
+            padding: 10px 12px;
+            color: var(--text-secondary);
+            font-size: 12px;
+        }
         .media-gen-textarea { min-height: 120px; resize: vertical; line-height: 1.6; }
         .media-gen-tags { display: flex; flex-wrap: wrap; gap: 8px; margin: 4px 0 16px; }
         .media-gen-tag { border: 1px solid var(--border-color); background: var(--input-bg); color: var(--text-secondary); border-radius: 999px; padding: 6px 12px; font-size: 12px; font-weight: 500; cursor: pointer; transition: all var(--transition-fast); }
@@ -3703,6 +3824,12 @@ experimental_bearer_token = "dummy"</pre>
 
         // The four shipped agent-node groups; the sidebar lists them first and they cannot be removed.
         const BUILTIN_CLIENTS = ['code', 'desktop', 'codex', 'deeptutor'];
+        const CLIENT_DISPLAY_NAMES = {
+            code: 'Claude Code',
+            desktop: 'Claude Desktop',
+            codex: 'Codex',
+            deeptutor: 'DeepTutor',
+        };
 
         // Custom agent-node groups come from config.clients minus the built-ins.
         function customClientNames() {
@@ -3712,6 +3839,12 @@ experimental_bearer_token = "dummy"</pre>
 
         function isCustomClient(name) {
             return Boolean(name) && !BUILTIN_CLIENTS.includes(name) && Boolean(config.clients?.[name]);
+        }
+
+        function clientDisplayName(client) {
+            const key = String(client || '').trim();
+            if (!key) return '';
+            return CLIENT_DISPLAY_NAMES[key] || key;
         }
 
         function protocolLabel(protocol) {
@@ -7013,6 +7146,94 @@ ${(() => {
             `;
         };
 
+        // Shared custom select for mini-tools. Mirrors the add-node popover styling so long labels stay readable.
+        const UI_SELECT_HANDLERS = new Map();
+
+        function renderUiSelectHtml({ id, value, options = [], disabled = false, placeholder = '请选择', onChange = null }) {
+            if (typeof onChange === 'function') {
+                UI_SELECT_HANDLERS.set(id, onChange);
+            } else {
+                UI_SELECT_HANDLERS.delete(id);
+            }
+
+            const items = Array.isArray(options) ? options : [];
+            const selected = items.find(item => String(item.value) === String(value));
+            const label = selected?.label || placeholder;
+            const optionsHtml = items.length
+                ? items.map(item => {
+                    const active = String(item.value) === String(value);
+                    const description = item.description
+                        ? '<span class="ui-select-option-description">' + escapeHtml(item.description) + '</span>'
+                        : '';
+                    return '<button type="button" class="ui-select-option' + (active ? ' is-active' : '') + '" role="option" data-value="' + escapeHtml(String(item.value)) + '"'
+                        + " onclick='chooseUiSelectOption(" + JSON.stringify(id) + ", " + JSON.stringify(String(item.value)) + ", event)'>"
+                        + '<span class="ui-select-option-copy">'
+                        + '<span class="ui-select-option-title">' + escapeHtml(item.label) + '</span>'
+                        + description
+                        + '</span>'
+                        + '<span class="ui-select-check" aria-hidden="true">' + (active ? '✓' : '') + '</span>'
+                        + '</button>';
+                }).join('')
+                : '<div class="ui-select-empty">' + escapeHtml(placeholder || '暂无选项') + '</div>';
+
+            return '<div class="ui-select-dropdown' + (disabled ? ' is-disabled' : '') + '" id="ui-select-' + escapeHtml(id) + '" data-ui-select-id="' + escapeHtml(id) + '">'
+                + '<button type="button" class="ui-select-trigger media-gen-form-control" ' + (disabled ? 'disabled' : '')
+                + ' aria-expanded="false" aria-haspopup="listbox"'
+                + " onclick='toggleUiSelect(" + JSON.stringify(id) + ", event)'>"
+                + '<span class="ui-select-label">' + escapeHtml(label) + '</span>'
+                + '<svg class="ui-select-chevron" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 12 15 18 9"></polyline></svg>'
+                + '</button>'
+                + '<div class="ui-select-popover" role="listbox">' + optionsHtml + '</div>'
+                + '</div>';
+        }
+
+        window.closeUiSelects = function(exceptId = '') {
+            document.querySelectorAll('.ui-select-dropdown.is-open').forEach(dropdown => {
+                if (exceptId && dropdown.dataset.uiSelectId === exceptId) return;
+                dropdown.classList.remove('is-open');
+                dropdown.querySelector('.ui-select-trigger')?.setAttribute('aria-expanded', 'false');
+            });
+        };
+
+        window.toggleUiSelect = function(id, event) {
+            event?.stopPropagation();
+            const dropdown = document.getElementById('ui-select-' + id);
+            if (!dropdown || dropdown.classList.contains('is-disabled')) return;
+            const trigger = dropdown.querySelector('.ui-select-trigger');
+            if (trigger?.disabled) return;
+            const shouldOpen = !dropdown.classList.contains('is-open');
+            closeUiSelects(id);
+            closeAddNodeMenus();
+            closeAllCtxWindowMenus();
+            closeAllCtxVisionMenus();
+            dropdown.classList.toggle('is-open', shouldOpen);
+            trigger?.setAttribute('aria-expanded', shouldOpen ? 'true' : 'false');
+            if (shouldOpen) {
+                dropdown.querySelector('.ui-select-option.is-active, .ui-select-option')?.focus();
+            }
+        };
+
+        window.chooseUiSelectOption = function(id, value, event) {
+            event?.stopPropagation();
+            const dropdown = document.getElementById('ui-select-' + id);
+            if (dropdown) {
+                const labelEl = dropdown.querySelector('.ui-select-label');
+                dropdown.querySelectorAll('.ui-select-option').forEach(btn => {
+                    const active = btn.getAttribute('data-value') === String(value);
+                    btn.classList.toggle('is-active', active);
+                    const check = btn.querySelector('.ui-select-check');
+                    if (check) check.textContent = active ? '✓' : '';
+                    if (active && labelEl) {
+                        const title = btn.querySelector('.ui-select-option-title');
+                        if (title) labelEl.textContent = title.textContent;
+                    }
+                });
+            }
+            closeUiSelects();
+            const handler = UI_SELECT_HANDLERS.get(id);
+            if (typeof handler === 'function') handler(value);
+        };
+
         // Shared by image/video/TTS mini-tools. Capability type is selected by endpoint purpose, never protocol type.
         function getMediaEndpoints(client, purpose) {
             return (config.clients[client]?.endpoints || []).filter(
@@ -7093,9 +7314,39 @@ ${(() => {
             const models = selectedEndpoint?.models || [];
             if (models.length && !models.includes(imageGenState.model)) imageGenState.model = models[0];
             const clients = Object.keys(config.clients || {});
-            const clientOptions = clients.map(client => '<option value="' + escapeHtml(client) + '" ' + (client === imageGenState.client ? 'selected' : '') + '>' + escapeHtml(client) + '</option>').join('');
-            const endpointOptions = endpoints.map(ep => '<option value="' + escapeHtml(ep.id) + '" ' + (ep.id === imageGenState.endpointId ? 'selected' : '') + '>' + escapeHtml(ep.name || ep.id) + (ep.provider ? ' · ' + escapeHtml(ep.provider) : '') + '</option>').join('');
-            const modelOptions = models.map(model => '<option value="' + escapeHtml(model) + '" ' + (model === imageGenState.model ? 'selected' : '') + '>' + escapeHtml(model) + '</option>').join('');
+            const clientSelect = renderUiSelectHtml({
+                id: 'image-gen-client',
+                value: imageGenState.client,
+                options: clients.map(client => ({ value: client, label: clientDisplayName(client) })),
+                placeholder: '选择 Client',
+                onChange: (value) => onImageGenClientChange(value),
+            });
+            const endpointSelect = renderUiSelectHtml({
+                id: 'image-gen-endpoint',
+                value: imageGenState.endpointId || '',
+                options: endpoints.length
+                    ? endpoints.map(ep => ({ value: ep.id, label: ep.name || ep.id, description: ep.provider || '' }))
+                    : [{ value: '', label: '无可用节点' }],
+                disabled: !endpoints.length,
+                placeholder: '无可用节点',
+                onChange: (value) => onImageGenEndpointChange(value),
+            });
+            const modelSelect = renderUiSelectHtml({
+                id: 'image-gen-model',
+                value: imageGenState.model || '',
+                options: models.length
+                    ? models.map(model => ({ value: model, label: model }))
+                    : [{ value: '', label: '使用节点默认模型' }],
+                disabled: !models.length,
+                placeholder: '使用节点默认模型',
+                onChange: (value) => { imageGenState.model = value; },
+            });
+            const aspectSelect = renderUiSelectHtml({
+                id: 'image-gen-aspect',
+                value: imageGenState.aspectRatio,
+                options: ['1:1','16:9','9:16','3:2','2:3','auto'].map(ratio => ({ value: ratio, label: ratio })),
+                onChange: (value) => { imageGenState.aspectRatio = value; },
+            });
             const noNodeHint = endpoints.length === 0 ? '<div class="media-gen-error">该 client 没有已启用的图片生成节点。请到代理节点添加 purpose=image_generation 的节点。</div>' : '';
             const resultHtml = renderImageGenResult();
             const historyHtml = imageGenState.historyLoading ? '<div class="media-gen-tip">正在加载历史...</div>' : renderMediaHistoryHtml(imageGenState.history, 'image');
@@ -7107,11 +7358,11 @@ ${(() => {
                         <h3>图片生成</h3>
                         ${noNodeHint}
                         <div class="media-gen-form-group"><label>Client</label>
-                            <select class="media-gen-form-control" onchange="onImageGenClientChange(this.value)">${clientOptions}</select></div>
+                            ${clientSelect}</div>
                         <div class="media-gen-form-group"><label>图片生成节点</label>
-                            <select class="media-gen-form-control" onchange="onImageGenEndpointChange(this.value)" ${endpoints.length ? '' : 'disabled'}>${endpointOptions || '<option>无可用节点</option>'}</select></div>
+                            ${endpointSelect}</div>
                         <div class="media-gen-form-group"><label>模型</label>
-                            <select class="media-gen-form-control" onchange="imageGenState.model=this.value" ${models.length ? '' : 'disabled'}>${modelOptions || '<option value="">使用节点默认模型</option>'}</select></div>
+                            ${modelSelect}</div>
                         <div class="media-gen-form-group"><label>提示词</label>
                             <textarea id="image-gen-prompt" class="media-gen-form-control media-gen-textarea" placeholder="描述主体、风格、构图和你不希望出现的元素" oninput="imageGenState.prompt=this.value">${escapeHtml(imageGenState.prompt)}</textarea></div>
                         <div class="media-gen-tags">
@@ -7119,9 +7370,7 @@ ${(() => {
                         </div>
                         <div class="media-gen-tip"><strong>提示模板：</strong>主体/风格/构图/光影/约束。例：主体：玻璃杯中的柠檬气泡水；风格：高级商业摄影；构图：居中近景；光影：柔和侧逆光；约束：无文字、无水印。</div>
                         <div class="media-gen-form-group"><label>画面比例</label>
-                            <select class="media-gen-form-control" onchange="imageGenState.aspectRatio=this.value">
-                                ${['1:1','16:9','9:16','3:2','2:3','auto'].map(ratio => '<option value="' + ratio + '" ' + (ratio === imageGenState.aspectRatio ? 'selected' : '') + '>' + ratio + '</option>').join('')}
-                            </select></div>
+                            ${aspectSelect}</div>
                         <div class="media-gen-form-group"><label>参考图片路径（逗号或换行分隔）</label>
                             <textarea class="media-gen-form-control" rows="3" placeholder="C:\\images\\reference.png" oninput="imageGenState.imagePaths=this.value">${escapeHtml(imageGenState.imagePaths)}</textarea></div>
                         <div class="media-gen-notice">参考图路径会按 <code>image_paths</code> 提交给本地网关读取。浏览器不会直接读取任意本地路径；请确认路径对运行网关的本机账户可访问。</div>
@@ -7245,9 +7494,39 @@ ${(() => {
             const models = selectedEndpoint?.models || [];
             if (models.length && !models.includes(videoGenState.model)) videoGenState.model = models[0];
             const clients = Object.keys(config.clients || {});
-            const clientOptions = clients.map(client => '<option value="' + escapeHtml(client) + '" ' + (client === videoGenState.client ? 'selected' : '') + '>' + escapeHtml(client) + '</option>').join('');
-            const endpointOptions = endpoints.map(ep => '<option value="' + escapeHtml(ep.id) + '" ' + (ep.id === videoGenState.endpointId ? 'selected' : '') + '>' + escapeHtml(ep.name || ep.id) + (ep.provider ? ' · ' + escapeHtml(ep.provider) : '') + '</option>').join('');
-            const modelOptions = models.map(model => '<option value="' + escapeHtml(model) + '" ' + (model === videoGenState.model ? 'selected' : '') + '>' + escapeHtml(model) + '</option>').join('');
+            const clientSelect = renderUiSelectHtml({
+                id: 'video-gen-client',
+                value: videoGenState.client,
+                options: clients.map(client => ({ value: client, label: clientDisplayName(client) })),
+                placeholder: '选择 Client',
+                onChange: (value) => onVideoGenClientChange(value),
+            });
+            const endpointSelect = renderUiSelectHtml({
+                id: 'video-gen-endpoint',
+                value: videoGenState.endpointId || '',
+                options: endpoints.length
+                    ? endpoints.map(ep => ({ value: ep.id, label: ep.name || ep.id, description: ep.provider || '' }))
+                    : [{ value: '', label: '无可用节点' }],
+                disabled: !endpoints.length,
+                placeholder: '无可用节点',
+                onChange: (value) => onVideoGenEndpointChange(value),
+            });
+            const modelSelect = renderUiSelectHtml({
+                id: 'video-gen-model',
+                value: videoGenState.model || '',
+                options: models.length
+                    ? models.map(model => ({ value: model, label: model }))
+                    : [{ value: '', label: '使用节点默认模型' }],
+                disabled: !models.length,
+                placeholder: '使用节点默认模型',
+                onChange: (value) => { videoGenState.model = value; },
+            });
+            const aspectSelect = renderUiSelectHtml({
+                id: 'video-gen-aspect',
+                value: videoGenState.aspectRatio,
+                options: ['16:9','9:16','1:1','4:3','3:4'].map(ratio => ({ value: ratio, label: ratio })),
+                onChange: (value) => { videoGenState.aspectRatio = value; },
+            });
             const noNodeHint = endpoints.length === 0 ? '<div class="media-gen-error">该 client 没有已启用的视频生成节点。请到代理节点添加 purpose=video_generation 的节点。</div>' : '';
             const resultHtml = renderVideoGenResult();
             const historyHtml = videoGenState.historyLoading ? '<div class="media-gen-tip">正在加载历史...</div>' : renderMediaHistoryHtml(videoGenState.history, 'video');
@@ -7259,11 +7538,11 @@ ${(() => {
                         <h3>视频生成</h3>
                         ${noNodeHint}
                         <div class="media-gen-form-group"><label>Client</label>
-                            <select class="media-gen-form-control" onchange="onVideoGenClientChange(this.value)">${clientOptions}</select></div>
+                            ${clientSelect}</div>
                         <div class="media-gen-form-group"><label>视频生成节点</label>
-                            <select class="media-gen-form-control" onchange="onVideoGenEndpointChange(this.value)" ${endpoints.length ? '' : 'disabled'}>${endpointOptions || '<option>无可用节点</option>'}</select></div>
+                            ${endpointSelect}</div>
                         <div class="media-gen-form-group"><label>模型</label>
-                            <select class="media-gen-form-control" onchange="videoGenState.model=this.value" ${models.length ? '' : 'disabled'}>${modelOptions || '<option value="">使用节点默认模型</option>'}</select></div>
+                            ${modelSelect}</div>
                         <div class="media-gen-form-group"><label>提示词</label>
                             <textarea id="video-gen-prompt" class="media-gen-form-control media-gen-textarea" placeholder="描述视频内容、镜头运动和风格" oninput="videoGenState.prompt=this.value">${escapeHtml(videoGenState.prompt)}</textarea></div>
                         <div class="media-gen-tags">
@@ -7271,9 +7550,7 @@ ${(() => {
                         </div>
                         <div class="media-gen-tip"><strong>分镜模板：</strong>镜头1/镜头2/镜头3，每个镜头含景别/动作/运镜，加上光影色调与画质约束。例：镜头1：近景，咖啡杯被端起，缓慢推近；镜头2：中景，窗边晨光，固定机位；镜头3：特写，蒸汽升起，微距。色调：温暖晨光。约束：无字幕、无水印。</div>
                         <div class="media-gen-form-group"><label>画面比例</label>
-                            <select class="media-gen-form-control" onchange="videoGenState.aspectRatio=this.value">
-                                ${['16:9','9:16','1:1','4:3','3:4'].map(ratio => '<option value="' + ratio + '" ' + (ratio === videoGenState.aspectRatio ? 'selected' : '') + '>' + ratio + '</option>').join('')}
-                            </select></div>
+                            ${aspectSelect}</div>
                         <div class="media-gen-form-group"><label>时长（秒）</label>
                             <input type="number" class="media-gen-form-control" min="3" max="15" value="${videoGenState.duration}" onchange="videoGenState.duration=Number(this.value)"></div>
                         <div class="media-gen-form-group"><label>参考图片路径（逗号或换行分隔，可选）</label>
@@ -7432,9 +7709,33 @@ ${(() => {
             const models = selectedEndpoint?.models || [];
             if (models.length && !models.includes(ttsGenState.model)) ttsGenState.model = models[0];
             const clients = Object.keys(config.clients || {});
-            const clientOptions = clients.map(client => '<option value="' + escapeHtml(client) + '" ' + (client === ttsGenState.client ? 'selected' : '') + '>' + escapeHtml(client) + '</option>').join('');
-            const endpointOptions = endpoints.map(ep => '<option value="' + escapeHtml(ep.id) + '" ' + (ep.id === ttsGenState.endpointId ? 'selected' : '') + '>' + escapeHtml(ep.name || ep.id) + (ep.provider ? ' · ' + escapeHtml(ep.provider) : '') + '</option>').join('');
-            const modelOptions = models.map(model => '<option value="' + escapeHtml(model) + '" ' + (model === ttsGenState.model ? 'selected' : '') + '>' + escapeHtml(model) + '</option>').join('');
+            const clientSelect = renderUiSelectHtml({
+                id: 'tts-gen-client',
+                value: ttsGenState.client,
+                options: clients.map(client => ({ value: client, label: clientDisplayName(client) })),
+                placeholder: '选择 Client',
+                onChange: (value) => onTtsGenClientChange(value),
+            });
+            const endpointSelect = renderUiSelectHtml({
+                id: 'tts-gen-endpoint',
+                value: ttsGenState.endpointId || '',
+                options: endpoints.length
+                    ? endpoints.map(ep => ({ value: ep.id, label: ep.name || ep.id, description: ep.provider || '' }))
+                    : [{ value: '', label: '无可用节点' }],
+                disabled: !endpoints.length,
+                placeholder: '无可用节点',
+                onChange: (value) => onTtsGenEndpointChange(value),
+            });
+            const modelSelect = renderUiSelectHtml({
+                id: 'tts-gen-model',
+                value: ttsGenState.model || '',
+                options: models.length
+                    ? models.map(model => ({ value: model, label: model }))
+                    : [{ value: '', label: '使用节点默认模型' }],
+                disabled: !models.length,
+                placeholder: '使用节点默认模型',
+                onChange: (value) => { ttsGenState.model = value; },
+            });
             const noNodeHint = endpoints.length === 0 ? '<div class="media-gen-error">该 client 没有已启用的 TTS 节点。请到代理节点添加 purpose=audio_tts 的节点。</div>' : '';
             const resultHtml = renderTtsGenResult();
             const historyHtml = ttsGenState.historyLoading ? '<div class="media-gen-tip">正在加载历史...</div>' : renderMediaHistoryHtml(ttsGenState.history, 'tts');
@@ -7448,9 +7749,19 @@ ${(() => {
                 { value: 'en_male_rm_emo', label: '英文情感男声 (en_male_rm_emo)' },
                 { value: 'en_female_rm_emo', label: '英文情感女声 (en_female_rm_emo)' }
             ];
-            const voiceOptions = voices.map(v => '<option value="' + escapeHtml(v.value) + '" ' + (v.value === ttsGenState.voice ? 'selected' : '') + '>' + escapeHtml(v.label) + '</option>').join('');
+            const voiceSelect = renderUiSelectHtml({
+                id: 'tts-gen-voice',
+                value: ttsGenState.voice,
+                options: voices,
+                onChange: (value) => { ttsGenState.voice = value; },
+            });
             const encodings = ['mp3', 'wav', 'ogg_opus', 'pcm'];
-            const encodingOptions = encodings.map(enc => '<option value="' + enc + '" ' + (enc === ttsGenState.encoding ? 'selected' : '') + '>' + enc + '</option>').join('');
+            const encodingSelect = renderUiSelectHtml({
+                id: 'tts-gen-encoding',
+                value: ttsGenState.encoding,
+                options: encodings.map(enc => ({ value: enc, label: enc })),
+                onChange: (value) => { ttsGenState.encoding = value; },
+            });
 
             detail.innerHTML = `
                 <button class="tools-detail-back" onclick="backToToolsCards()">返回工具列表</button>
@@ -7459,17 +7770,17 @@ ${(() => {
                         <h3>TTS 语音合成</h3>
                         ${noNodeHint}
                         <div class="media-gen-form-group"><label>Client</label>
-                            <select class="media-gen-form-control" onchange="onTtsGenClientChange(this.value)">${clientOptions}</select></div>
+                            ${clientSelect}</div>
                         <div class="media-gen-form-group"><label>TTS 节点</label>
-                            <select class="media-gen-form-control" onchange="onTtsGenEndpointChange(this.value)" ${endpoints.length ? '' : 'disabled'}>${endpointOptions || '<option>无可用节点</option>'}</select></div>
+                            ${endpointSelect}</div>
                         <div class="media-gen-form-group"><label>模型</label>
-                            <select class="media-gen-form-control" onchange="ttsGenState.model=this.value" ${models.length ? '' : 'disabled'}>${modelOptions || '<option value="">使用节点默认模型</option>'}</select></div>
+                            ${modelSelect}</div>
                         <div class="media-gen-form-group"><label>待合成文本</label>
                             <textarea id="tts-gen-text" class="media-gen-form-control media-gen-textarea" rows="5" placeholder="输入要转为语音的文本" oninput="ttsGenState.text=this.value">${escapeHtml(ttsGenState.text)}</textarea></div>
                         <div class="media-gen-form-group"><label>音色</label>
-                            <select class="media-gen-form-control" onchange="ttsGenState.voice=this.value">${voiceOptions}</select></div>
+                            ${voiceSelect}</div>
                         <div class="media-gen-form-group"><label>音频格式</label>
-                            <select class="media-gen-form-control" onchange="ttsGenState.encoding=this.value">${encodingOptions}</select></div>
+                            ${encodingSelect}</div>
                         <div class="media-gen-form-group"><label>语速倍率（0.5 - 2.0）</label>
                             <input type="range" class="media-gen-form-control" min="0.5" max="2.0" step="0.1" value="${ttsGenState.speedRatio}" onchange="ttsGenState.speedRatio=Number(this.value)" style="width:100%;">
                             <span class="media-gen-tip" id="tts-speed-value">${ttsGenState.speedRatio}x</span></div>
@@ -7906,6 +8217,7 @@ ${(() => {
             if (!dropdown) return;
             const shouldOpen = !dropdown.classList.contains('is-open');
             closeAddNodeMenus(client);
+            closeUiSelects();
             dropdown.classList.toggle('is-open', shouldOpen);
             dropdown.querySelector('.add-node-trigger')
                 ?.setAttribute('aria-expanded', shouldOpen ? 'true' : 'false');
@@ -8718,6 +9030,7 @@ ${(() => {
 
         document.addEventListener('click', (e) => {
             if (!e.target.closest('.add-node-dropdown')) closeAddNodeMenus();
+            if (!e.target.closest('.ui-select-dropdown')) closeUiSelects();
             if (!e.target.closest('.ctx-window-dropdown')) {
                 closeAllCtxWindowMenus();
                 closeAllCtxVisionMenus();
@@ -8737,6 +9050,10 @@ ${(() => {
                 closeAddNodeMenus();
                 return;
             }
+            if (e.key === 'Escape' && document.querySelector('.ui-select-dropdown.is-open')) {
+                closeUiSelects();
+                return;
+            }
             if (e.key === 'Escape' && document.querySelector('.ctx-window-dropdown.is-open')) {
                 closeAllCtxWindowMenus();
                 closeAllCtxVisionMenus();
@@ -8751,7 +9068,8 @@ ${(() => {
         });
     </script>
 </body>
-</html>                '    <div class="subauth-actions">',
+</html>
+                '    <div class="subauth-actions">',
                 '      <button class="btn" onclick="loadAntigravityAuthStatus()" ' + (antigravityAuthState.busyAction === 'login-start' || antigravityAuthState.busyAction === 'discover' || antigravityAuthState.busyAction === 'save-client' ? 'disabled' : '') + '>刷新状态</button>',
                 '      <button class="btn btn-primary" onclick="discoverAntigravityClient()" ' + (antigravityAuthState.busyAction === 'login-start' || antigravityAuthState.busyAction === 'discover' || antigravityAuthState.busyAction === 'save-client' ? 'disabled' : '') + '>' + (antigravityAuthState.busyAction === 'discover' ? '提取中...' : '从本机提取') + '</button>',
                 '      <button class="btn" onclick="toggleAntigravityManualForm()" ' + (antigravityAuthState.busyAction === 'login-start' ? 'disabled' : '') + '>手动填写</button>',

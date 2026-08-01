@@ -536,3 +536,27 @@ test("config panel includes TTS mini-tool card and detail", async () => {
   assert.match(html, /zh_female_qingxin/);
   assert.match(html, /speedRatio/);
 });
+
+test("media mini-tools use shared custom select popovers instead of native selects", async () => {
+  const html = await readFile(path.join(ROOT, "desktop", "config-panel.html"), "utf8");
+  const firstDocument = html.slice(0, html.indexOf("</html>") + "</html>".length);
+  assert.match(firstDocument, /function renderUiSelectHtml\(/);
+  assert.match(firstDocument, /window\.toggleUiSelect\s*=\s*function/);
+  assert.match(firstDocument, /window\.chooseUiSelectOption\s*=\s*function/);
+  assert.match(firstDocument, /\.ui-select-dropdown/);
+  assert.match(firstDocument, /id: 'image-gen-endpoint'/);
+  assert.match(firstDocument, /id: 'video-gen-endpoint'/);
+  assert.match(firstDocument, /id: 'tts-gen-voice'/);
+  assert.doesNotMatch(firstDocument, /onImageGenClientChange\(this\.value\)/);
+  assert.doesNotMatch(firstDocument, /onVideoGenClientChange\(this\.value\)/);
+  assert.doesNotMatch(firstDocument, /onTtsGenClientChange\(this\.value\)/);
+});
+
+test("media mini-tools show full built-in client display names", async () => {
+  const html = await readFile(path.join(ROOT, "desktop", "config-panel.html"), "utf8");
+  const firstDocument = html.slice(0, html.indexOf("</html>") + "</html>".length);
+  assert.match(firstDocument, /function clientDisplayName\(client\)/);
+  assert.match(firstDocument, /code:\s*'Claude Code'/);
+  assert.match(firstDocument, /desktop:\s*'Claude Desktop'/);
+  assert.match(firstDocument, /label:\s*clientDisplayName\(client\)/);
+});
