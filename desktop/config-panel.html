@@ -2134,6 +2134,8 @@
         .media-gen-notice { border: 1px dashed var(--border-color); }
         .media-gen-error { margin: 10px 0; padding: 9px 10px; color: var(--danger); background: var(--danger-bg); border-radius: var(--radius-md); font-size: 12px; }
         .media-gen-preview { display: block; width: 100%; max-height: 360px; object-fit: contain; border-radius: var(--radius-md); background: var(--input-bg); border: 1px solid var(--border-color); }
+        .media-gen-progress-bar { width: 100%; height: 8px; background: var(--input-bg); border-radius: 4px; overflow: hidden; margin-top: 8px; }
+        .media-gen-progress-fill { height: 100%; background: var(--accent, #4f46e5); border-radius: 4px; transition: width 0.4s ease; }
         .media-gen-path { margin-top: 8px; font-family: var(--font-mono); font-size: 11px; color: var(--text-secondary); word-break: break-all; }
         .media-gen-actions { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 10px; }
         .media-gen-history { display: grid; gap: 8px; }
@@ -3568,6 +3570,25 @@ experimental_bearer_token = "dummy"</pre>
             prompt: '',
             aspectRatio: 'auto',
             imagePaths: '',
+            result: null,
+            loading: false,
+            error: '',
+            history: [],
+            historyLoading: false,
+            historyLoaded: false,
+            referenceNotice: ''
+        };
+        const videoGenState = {
+            client: 'codex',
+            endpointId: '',
+            model: '',
+            prompt: '',
+            aspectRatio: '16:9',
+            duration: 5,
+            imagePaths: '',
+            taskId: null,
+            pollStatus: '',
+            pollProgress: null,
             result: null,
             loading: false,
             error: '',
@@ -6007,6 +6028,13 @@ ${(() => {
                     <div class="tools-card-name">图片生成</div>
                     <div class="tools-card-desc">使用已配置的图片生成节点，编写提示词、选择画面比例，并查看本地生成历史。</div>
                 </div>
+                <div class="tools-card" id="video-gen" onclick="openTool('video-gen')">
+                    <div class="tools-card-icon">
+                        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="4" width="14" height="16" rx="2"></rect><path d="m22 8-6 4 6 4V8z"></path></svg>
+                    </div>
+                    <div class="tools-card-name">视频生成</div>
+                    <div class="tools-card-desc">使用已配置的视频生成节点，编写分镜提示词，提交异步任务并轮询结果，查看本地生成历史。</div>
+                </div>
                 <div class="tools-card" onclick="openTool('embedding')">
                     <div class="tools-card-icon">
                         <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z"></path></svg>
@@ -6041,6 +6069,7 @@ ${(() => {
         window.openTool = function(toolId) {
             toolsView = toolId;
             if (toolId === 'image-gen') renderImageGenDetail();
+            else if (toolId === 'video-gen') renderVideoGenDetail();
             else if (toolId === 'classification-metrics') renderClassificationMetricsDetail();
             else if (toolId === 'antigravity-subscribe') renderAntigravitySubscribeDetail();
             else if (toolId === 'codex-subscribe') renderCodexSubscribeDetail();
@@ -7144,7 +7173,194 @@ ${(() => {
             } catch (err) { showToast('删除历史失败: ' + (err.message || err), 'danger'); }
         };
 
+
+        window.renderVideoGenDetail = function() {
+            const cards = document.getElementById('tools-cards');
+            const detail = document.getElementById('tools-detail');
+            if (!cards || !detail) return;
+            cards.style.display = 'none';
+            toolsView = 'video-gen';
+
+            const endpoints = getMediaEndpoints(videoGenState.client, 'video_generation');
+            const selectedEndpoint = endpoints.find(ep => ep.id === videoGenState.endpointId) || endpoints[0] || null;
+            if (selectedEndpoint && videoGenState.endpointId !== selectedEndpoint.id) {
+                videoGenState.endpointId = selectedEndpoint.id;
+                videoGenState.model = selectedEndpoint.models?.[0] || '';
+            }
+            const models = selectedEndpoint?.models || [];
+            if (models.length && !models.includes(videoGenState.model)) videoGenState.model = models[0];
+            const clients = Object.keys(config.clients || {});
+            const clientOptions = clients.map(client => '<option value="' + escapeHtml(client) + '" ' + (client === videoGenState.client ? 'selected' : '') + '>' + escapeHtml(client) + '</option>').join('');
+            const endpointOptions = endpoints.map(ep => '<option value="' + escapeHtml(ep.id) + '" ' + (ep.id === videoGenState.endpointId ? 'selected' : '') + '>' + escapeHtml(ep.name || ep.id) + (ep.provider ? ' · ' + escapeHtml(ep.provider) : '') + '</option>').join('');
+            const modelOptions = models.map(model => '<option value="' + escapeHtml(model) + '" ' + (model === videoGenState.model ? 'selected' : '') + '>' + escapeHtml(model) + '</option>').join('');
+            const noNodeHint = endpoints.length === 0 ? '<div class="media-gen-error">该 client 没有已启用的视频生成节点。请到代理节点添加 purpose=video_generation 的节点。</div>' : '';
+            const resultHtml = renderVideoGenResult();
+            const historyHtml = videoGenState.historyLoading ? '<div class="media-gen-tip">正在加载历史...</div>' : renderMediaHistoryHtml(videoGenState.history, 'video');
+
+            detail.innerHTML = `
+                <button class="tools-detail-back" onclick="backToToolsCards()">返回工具列表</button>
+                <div class="media-gen-layout">
+                    <div class="media-gen-panel">
+                        <h3>视频生成</h3>
+                        ${noNodeHint}
+                        <div class="media-gen-form-group"><label>Client</label>
+                            <select class="media-gen-form-control" onchange="onVideoGenClientChange(this.value)">${clientOptions}</select></div>
+                        <div class="media-gen-form-group"><label>视频生成节点</label>
+                            <select class="media-gen-form-control" onchange="onVideoGenEndpointChange(this.value)" ${endpoints.length ? '' : 'disabled'}>${endpointOptions || '<option>无可用节点</option>'}</select></div>
+                        <div class="media-gen-form-group"><label>模型</label>
+                            <select class="media-gen-form-control" onchange="videoGenState.model=this.value" ${models.length ? '' : 'disabled'}>${modelOptions || '<option value="">使用节点默认模型</option>'}</select></div>
+                        <div class="media-gen-form-group"><label>提示词</label>
+                            <textarea id="video-gen-prompt" class="media-gen-form-control media-gen-textarea" placeholder="描述视频内容、镜头运动和风格" oninput="videoGenState.prompt=this.value">${escapeHtml(videoGenState.prompt)}</textarea></div>
+                        <div class="media-gen-tags">
+                            ${['产品展示','自然风光','城市航拍','人物动态','抽象动画','故事片段'].map(tag => '<button type="button" class="media-gen-tag" onclick="applyVideoPromptSuggestion(\'' + tag + '\')">' + tag + '</button>').join('')}
+                        </div>
+                        <div class="media-gen-tip"><strong>分镜模板：</strong>镜头1/镜头2/镜头3，每个镜头含景别/动作/运镜，加上光影色调与画质约束。例：镜头1：近景，咖啡杯被端起，缓慢推近；镜头2：中景，窗边晨光，固定机位；镜头3：特写，蒸汽升起，微距。色调：温暖晨光。约束：无字幕、无水印。</div>
+                        <div class="media-gen-form-group"><label>画面比例</label>
+                            <select class="media-gen-form-control" onchange="videoGenState.aspectRatio=this.value">
+                                ${['16:9','9:16','1:1','4:3','3:4'].map(ratio => '<option value="' + ratio + '" ' + (ratio === videoGenState.aspectRatio ? 'selected' : '') + '>' + ratio + '</option>').join('')}
+                            </select></div>
+                        <div class="media-gen-form-group"><label>时长（秒）</label>
+                            <input type="number" class="media-gen-form-control" min="3" max="15" value="${videoGenState.duration}" onchange="videoGenState.duration=Number(this.value)"></div>
+                        <div class="media-gen-form-group"><label>参考图片路径（逗号或换行分隔，可选）</label>
+                            <textarea class="media-gen-form-control" rows="3" placeholder="C:\\images\\first_frame.png" oninput="videoGenState.imagePaths=this.value">${escapeHtml(videoGenState.imagePaths)}</textarea></div>
+                        <div class="media-gen-notice">参考图路径会按 <code>image_paths</code> 提交给本地网关读取。浏览器不会直接读取任意本地路径；请确认路径对运行网关的本机账户可访问。</div>
+                        ${videoGenState.referenceNotice ? '<div class="media-gen-notice">' + escapeHtml(videoGenState.referenceNotice) + '</div>' : ''}
+                        <button class="btn btn-primary" onclick="runVideoGeneration()" ${videoGenState.loading || !endpoints.length ? 'disabled' : ''}>${videoGenState.loading ? '提交中...' : '生成视频'}</button>
+                    </div>
+                    <div class="media-gen-panel"><h3>结果</h3>${resultHtml}<h3 style="margin-top:18px;">本地历史</h3>${historyHtml}</div>
+                </div>`;
+            if (!videoGenState.historyLoading && !videoGenState.historyLoaded) loadMediaHistory('video');
+        };
+
+        window.onVideoGenClientChange = function(client) {
+            videoGenState.client = client;
+            videoGenState.endpointId = '';
+            videoGenState.model = '';
+            videoGenState.result = null;
+            videoGenState.error = '';
+            videoGenState.taskId = null;
+            videoGenState.pollStatus = '';
+            videoGenState.pollProgress = null;
+            videoGenState.history = [];
+            videoGenState.historyLoaded = false;
+            renderVideoGenDetail();
+        };
+
+        window.onVideoGenEndpointChange = function(endpointId) {
+            videoGenState.endpointId = endpointId;
+            const endpoint = getMediaEndpoints(videoGenState.client, 'video_generation').find(ep => ep.id === endpointId);
+            videoGenState.model = endpoint?.models?.[0] || '';
+            videoGenState.result = null;
+            videoGenState.error = '';
+            renderVideoGenDetail();
+        };
+
+        window.applyVideoPromptSuggestion = function(tag) {
+            const suggestions = {
+                '产品展示': '镜头1：中景，产品放置于简洁台面，缓慢环绕运镜；镜头2：近景，材质与细节特写，推近；镜头3：全景，产品与场景关系，拉远。色调：明亮自然光。约束：无字幕、无水印。',
+                '自然风光': '镜头1：广角，山峦全景，无人机前推；镜头2：中景，溪流特写，固定机位；镜头3：延时，云层流动，固定机位。色调：清晨冷色调转暖色。约束：无字幕、无水印。',
+                '城市航拍': '镜头1：高空俯拍，城市夜景，无人机前推；镜头2：中低空，街道车流，侧向移动；镜头3：特写，霓虹灯牌，缓慢推近。色调：赛博朋克霓虹。约束：无字幕、无水印。',
+                '人物动态': '镜头1：中景，人物行走，跟拍运镜；镜头2：近景，表情变化，固定机位；镜头3：全景，人物与环境互动，缓慢拉远。色调：电影感暖色调。约束：无字幕、无水印。',
+                '抽象动画': '镜头1：粒子聚合，推近运镜；镜头2：色彩流动，固定机位；镜头3：几何变换，旋转运镜。色调：高饱和度。约束：无字幕、无水印。',
+                '故事片段': '镜头1：近景，角色开门，推近；镜头2：中景，室内场景，固定机位；镜头3：特写，关键道具，微距。色调：悬疑低对比度。约束：无字幕、无水印。'
+            };
+            videoGenState.prompt = suggestions[tag] || videoGenState.prompt;
+            renderVideoGenDetail();
+        };
+
+        function renderVideoGenResult() {
+            if (videoGenState.loading) return '<div class="media-gen-tip">正在提交视频生成任务...</div>';
+            if (videoGenState.error) return '<div class="media-gen-error">' + escapeHtml(videoGenState.error) + '</div>';
+            if (videoGenState.taskId && videoGenState.pollStatus !== 'succeeded') {
+                const progress = videoGenState.pollProgress != null ? videoGenState.pollProgress + '%' : '';
+                const bar = videoGenState.pollProgress != null
+                    ? '<div class="media-gen-progress-bar"><div class="media-gen-progress-fill" style="width:' + videoGenState.pollProgress + '%"></div></div>'
+                    : '<div class="media-gen-tip">任务处理中...</div>';
+                return '<div class="media-gen-tip">任务 ID: ' + escapeHtml(videoGenState.taskId) + (videoGenState.pollStatus ? ' · ' + escapeHtml(videoGenState.pollStatus) : '') + (progress ? ' · ' + progress : '') + '</div>' + bar;
+            }
+            if (!videoGenState.result) return '<div class="media-gen-tip">提交任务后，结果会在此显示视频播放器和可复制路径。</div>';
+            const path = videoGenState.result.file_path || videoGenState.result.filePath || '';
+            const historyId = videoGenState.result.history_id || videoGenState.result.historyId || '';
+            const url = mediaHistoryPreviewUrl(historyId);
+            return (path ? '<video class="media-gen-preview" controls src="' + escapeHtml(url) + '" onerror="this.insertAdjacentHTML(\'afterend\', \'<div class=&quot;media-gen-notice&quot;>本地文件无法由当前浏览器预览，但文件已保存，可复制路径后打开。</div>\')"></video>' : '') +
+                '<div class="media-gen-path">' + escapeHtml(path || '服务未返回 file_path') + '</div>' +
+                '<div class="media-gen-actions">' + (path ? '<button class="btn" onclick="copyMediaPath(' + escapeHtml(JSON.stringify(path)) + ')">复制路径</button>' : '') +
+                (historyId ? '<span class="media-gen-tip" style="margin:0;">历史 ID: ' + escapeHtml(historyId) + '</span>' : '') + '</div>';
+        }
+
+        window.runVideoGeneration = async function() {
+            const prompt = videoGenState.prompt.trim();
+            if (!prompt) { videoGenState.error = '请输入提示词'; renderVideoGenDetail(); return; }
+            if (!videoGenState.endpointId) { videoGenState.error = '请选择视频生成节点'; renderVideoGenDetail(); return; }
+            const imagePaths = parseImagePaths(videoGenState.imagePaths);
+            videoGenState.loading = true;
+            videoGenState.error = '';
+            videoGenState.result = null;
+            videoGenState.taskId = null;
+            videoGenState.pollStatus = '';
+            videoGenState.pollProgress = null;
+            videoGenState.referenceNotice = imagePaths.length ? '已提交 ' + imagePaths.length + ' 个参考图路径给本地网关读取。' : '';
+            renderVideoGenDetail();
+            try {
+                const res = await fetch('/v1/media/video', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json', 'X-Gateway-Client': videoGenState.client },
+                    body: JSON.stringify({ endpoint_id: videoGenState.endpointId, model: videoGenState.model || undefined, prompt, aspectRatio: videoGenState.aspectRatio, duration: videoGenState.duration, image_paths: imagePaths })
+                });
+                const json = await res.json();
+                if (!res.ok) throw new Error(json?.error?.message || '提交失败 (' + res.status + ')');
+                const taskId = json.task_id || json.taskId;
+                if (!taskId) throw new Error('服务返回成功但缺少 task_id');
+                videoGenState.taskId = taskId;
+                videoGenState.pollStatus = json.status || 'processing';
+                videoGenState.loading = false;
+                renderVideoGenDetail();
+                pollVideoTask(taskId);
+            } catch (err) {
+                videoGenState.error = err.message || String(err);
+            } finally {
+                videoGenState.loading = false;
+                if (toolsView === 'video-gen') renderVideoGenDetail();
+            }
+        };
+
+        async function pollVideoTask(taskId) {
+            if (toolsView !== 'video-gen') return;
+            if (videoGenState.taskId !== taskId) return;
+            try {
+                const res = await fetch('/v1/media/tasks/' + encodeURIComponent(taskId), {
+                    headers: { 'X-Gateway-Client': videoGenState.client }
+                });
+                const json = await res.json();
+                if (!res.ok) throw new Error(json?.error?.message || '轮询失败 (' + res.status + ')');
+                videoGenState.pollStatus = json.status || 'processing';
+                videoGenState.pollProgress = json.progress ?? null;
+                if (json.status === 'succeeded') {
+                    if (json.file_path || json.filePath) {
+                        videoGenState.result = json;
+                    }
+                    await loadMediaHistory('video');
+                    renderVideoGenDetail();
+                    return;
+                }
+                if (json.status === 'failed') {
+                    videoGenState.error = json.error || '视频生成失败';
+                    renderVideoGenDetail();
+                    return;
+                }
+                renderVideoGenDetail();
+            } catch (err) {
+                videoGenState.error = err.message || String(err);
+                renderVideoGenDetail();
+                return;
+            }
+            if (toolsView === 'video-gen' && videoGenState.taskId === taskId) {
+                setTimeout(() => pollVideoTask(taskId), 4000);
+            }
+        }
+
         registerMediaHistoryTool('image', 'image-gen', imageGenState, () => renderImageGenDetail());
+        registerMediaHistoryTool('video', 'video-gen', videoGenState, () => renderVideoGenDetail());
 
         window.renderToolsDetail = function() {
             if (toolsView === 'classification-metrics') {

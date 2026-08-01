@@ -509,3 +509,18 @@ test("endpoint type list includes antigravity google subscription label", async 
   assert.match(html, /\['anthropic',\s*'openai-responses',\s*'openai-chat',\s*'grok',\s*'antigravity'\]/);
   assert.match(html, /Google v1internal gRPC/);
 });
+
+test("config panel includes video generation mini-tool card and detail", async () => {
+  const html = await readFile(path.join(ROOT, "desktop", "config-panel.html"), "utf8");
+  assert.match(html, /videoGenState/);
+  assert.match(html, /renderVideoGenDetail/);
+  assert.match(html, /openTool\('video-gen'\)/);
+  assert.match(html, /runVideoGeneration/);
+  assert.match(html, /pollVideoTask/);
+  assert.match(html, /\/v1\/media\/video/);
+  assert.match(html, /\/v1\/media\/tasks\//);
+  assert.match(html, /registerMediaHistoryTool\('video'/);
+  assert.match(html, /media-gen-progress-bar/);
+  assert.match(html, /applyVideoPromptSuggestion/);
+  assert.match(html, /镜头1/);
+});
