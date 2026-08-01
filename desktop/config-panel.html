@@ -2119,30 +2119,37 @@
         }
         .tools-detail-back:hover { color: var(--text-primary); }
 
-        .media-gen-layout { display: grid; grid-template-columns: minmax(0, 1.1fr) minmax(300px, .9fr); gap: 16px; }
-        @media (max-width: 880px) { .media-gen-layout { grid-template-columns: 1fr; } }
-        .media-gen-panel { background: var(--surface); border: 1px solid var(--border-color); border-radius: var(--radius-lg); padding: 16px; }
-        .media-gen-panel h3 { margin: 0 0 12px; font-size: 14px; }
-        .media-gen-form-group { margin-bottom: 12px; }
-        .media-gen-form-group label { display: block; margin-bottom: 6px; font-size: 12px; color: var(--text-secondary); }
-        .media-gen-form-control { width: 100%; padding: 8px 10px; border: 1px solid var(--border-color); border-radius: var(--radius-md); background: var(--input-bg); color: var(--text-primary); font: inherit; }
-        .media-gen-textarea { min-height: 132px; resize: vertical; line-height: 1.5; }
-        .media-gen-tags { display: flex; flex-wrap: wrap; gap: 6px; margin: -2px 0 12px; }
-        .media-gen-tag { border: 1px solid var(--border-color); background: var(--input-bg); color: var(--text-secondary); border-radius: 999px; padding: 5px 9px; font-size: 12px; cursor: pointer; }
-        .media-gen-tag:hover { color: var(--text-primary); border-color: var(--text-secondary); }
-        .media-gen-tip, .media-gen-notice { margin: 10px 0; padding: 9px 10px; border-radius: var(--radius-md); font-size: 12px; line-height: 1.5; color: var(--text-secondary); background: var(--input-bg); }
-        .media-gen-notice { border: 1px dashed var(--border-color); }
-        .media-gen-error { margin: 10px 0; padding: 9px 10px; color: var(--danger); background: var(--danger-bg); border-radius: var(--radius-md); font-size: 12px; }
-        .media-gen-preview { display: block; width: 100%; max-height: 360px; object-fit: contain; border-radius: var(--radius-md); background: var(--input-bg); border: 1px solid var(--border-color); }
-        .media-gen-progress-bar { width: 100%; height: 8px; background: var(--input-bg); border-radius: 4px; overflow: hidden; margin-top: 8px; }
-        .media-gen-progress-fill { height: 100%; background: var(--accent, #4f46e5); border-radius: 4px; transition: width 0.4s ease; }
-        .media-gen-path { margin-top: 8px; font-family: var(--font-mono); font-size: 11px; color: var(--text-secondary); word-break: break-all; }
-        .media-gen-actions { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 10px; }
-        .media-gen-history { display: grid; gap: 8px; }
-        .media-gen-history-item { display: grid; grid-template-columns: 62px minmax(0, 1fr) auto; gap: 9px; align-items: start; padding: 8px; border: 1px solid var(--border-color); border-radius: var(--radius-md); background: var(--input-bg); }
-        .media-gen-history-thumb { width: 62px; height: 48px; object-fit: cover; border-radius: 4px; background: var(--surface); }
-        .media-gen-history-prompt { font-size: 12px; color: var(--text-primary); line-height: 1.4; word-break: break-word; }
+        .media-gen-layout { display: grid; grid-template-columns: minmax(0, 1.1fr) minmax(320px, .9fr); gap: 24px; align-items: start; }
+        @media (max-width: 960px) { .media-gen-layout { grid-template-columns: 1fr; } }
+        .media-gen-panel { background: var(--surface); border: 1px solid var(--border-color); border-radius: var(--radius-xl); padding: 24px; }
+        .media-gen-panel h3 { margin: 0 0 20px; font-size: 15px; font-weight: 600; letter-spacing: -0.01em; }
+        .media-gen-form-group { margin-bottom: 16px; }
+        .media-gen-form-group label { display: block; margin-bottom: 8px; font-size: 12px; font-weight: 500; color: var(--text-secondary); letter-spacing: 0.01em; }
+        .media-gen-form-control { width: 100%; padding: 10px 12px; border: 1px solid var(--border-color); border-radius: var(--radius-md); background: var(--input-bg); color: var(--text-primary); font: inherit; font-size: 13px; transition: border-color var(--transition-fast), background var(--transition-fast); }
+        .media-gen-form-control:focus { outline: none; border-color: var(--text-secondary); background: var(--surface-hover); }
+        .media-gen-textarea { min-height: 120px; resize: vertical; line-height: 1.6; }
+        .media-gen-tags { display: flex; flex-wrap: wrap; gap: 8px; margin: 4px 0 16px; }
+        .media-gen-tag { border: 1px solid var(--border-color); background: var(--input-bg); color: var(--text-secondary); border-radius: 999px; padding: 6px 12px; font-size: 12px; font-weight: 500; cursor: pointer; transition: all var(--transition-fast); }
+        .media-gen-tag:hover { color: var(--text-primary); border-color: var(--text-secondary); background: var(--surface-hover); transform: translateY(-1px); }
+        .media-gen-tag:active { transform: translateY(0); }
+        .media-gen-tip { margin: 12px 0; padding: 12px 14px; border-radius: var(--radius-md); font-size: 12px; line-height: 1.6; color: var(--text-secondary); background: var(--input-bg); border-left: 3px solid var(--border-color); }
+        .media-gen-notice { margin: 12px 0; padding: 12px 14px; border-radius: var(--radius-md); font-size: 12px; line-height: 1.6; color: var(--text-secondary); background: var(--input-bg); border: 1px dashed var(--border-color); }
+        .media-gen-error { margin: 12px 0; padding: 12px 14px; color: var(--danger); background: var(--danger-bg); border-radius: var(--radius-md); font-size: 13px; line-height: 1.5; }
+        .media-gen-preview { display: block; width: 100%; max-height: 380px; object-fit: contain; border-radius: var(--radius-lg); background: var(--input-bg); border: 1px solid var(--border-color); }
+        .media-gen-progress-bar { width: 100%; height: 6px; background: var(--input-bg); border-radius: 999px; overflow: hidden; margin-top: 12px; border: 1px solid var(--border-color); }
+        .media-gen-progress-fill { height: 100%; background: var(--success); border-radius: 999px; transition: width 0.4s ease; }
+        .media-gen-path { margin-top: 10px; font-family: var(--font-mono); font-size: 11px; color: var(--text-secondary); word-break: break-all; padding: 8px 10px; background: var(--input-bg); border-radius: var(--radius-sm); border: 1px solid var(--border-color); }
+        .media-gen-actions { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 12px; }
+        .media-gen-history { display: grid; gap: 10px; }
+        .media-gen-history-item { display: grid; grid-template-columns: 72px minmax(0, 1fr) auto; gap: 12px; align-items: center; padding: 10px 12px; border: 1px solid var(--border-color); border-radius: var(--radius-md); background: var(--input-bg); transition: border-color var(--transition-fast); }
+        .media-gen-history-item:hover { border-color: var(--text-secondary); }
+        .media-gen-history-thumb { width: 72px; height: 54px; object-fit: cover; border-radius: var(--radius-sm); background: var(--surface); }
+        .media-gen-history-prompt { font-size: 12px; color: var(--text-primary); line-height: 1.4; word-break: break-word; font-weight: 500; }
         .media-gen-history-meta { margin-top: 4px; font-size: 11px; color: var(--text-secondary); word-break: break-all; }
+        .media-model-hints { display: flex; flex-wrap: wrap; gap: 8px; }
+        .media-model-hint { border: 1px solid var(--border-color); background: var(--input-bg); color: var(--text-secondary); border-radius: var(--radius-sm); padding: 5px 10px; font-size: 11px; font-family: var(--font-mono); cursor: pointer; transition: all var(--transition-fast); }
+        .media-model-hint:hover { color: var(--text-primary); border-color: var(--text-secondary); background: var(--surface-hover); }
+        .media-model-hint-empty { font-size: 12px; color: var(--text-secondary); }
 
         .subauth-layout {
             display: grid;
@@ -3646,6 +3653,31 @@ experimental_bearer_token = "dummy"</pre>
             { value: 'antigravity', label: 'Antigravity（Google 订阅）', baseUrl: 'https://daily-cloudcode-pa.googleapis.com', subscription: true },
             { value: 'huoshan-agentplan', label: '火山 AgentPlan', baseUrl: 'https://ark.cn-beijing.volces.com/api/v3', subscription: false },
         ];
+        const MEDIA_PRESET_MODELS = {
+            'grok-subscription': {
+                image_generation: ['grok-imagine-image-quality'],
+                video_generation: ['grok-imagine-video-1.5-preview'],
+                audio_tts: []
+            },
+            'codex-subscription': {
+                image_generation: ['gpt-image-2'],
+                video_generation: [],
+                audio_tts: []
+            },
+            'antigravity': {
+                image_generation: ['gemini-3.1-flash-image'],
+                video_generation: [],
+                audio_tts: []
+            },
+            'huoshan-agentplan': {
+                image_generation: ['doubao-seedream-5-0-lite-260128'],
+                video_generation: ['doubao-seedance-2-0-260128', 'doubao-seedance-2-0-fast-260128', 'doubao-seedance-2-0-mini-260615'],
+                audio_tts: ['doubao-seed-tts-2.0']
+            }
+        };
+        function mediaPresetModels(provider, purpose) {
+            return MEDIA_PRESET_MODELS[provider]?.[purpose] || [];
+        }
 
         function mediaPurposeDefinition(purpose) {
             return MEDIA_ENDPOINT_PURPOSES.find(item => item.purpose === purpose);
@@ -5557,6 +5589,20 @@ experimental_bearer_token = "dummy"</pre>
                             <div class="form-group full">
                                 <label>接口地址 (Base URL)</label>
                                 <input class="mono" type="text" value="${escapeHtml(mediaProviderBaseUrl(ep))}" ${isMediaSubscription ? 'readonly' : ''} onchange="updateEndpoint('${client}', ${index}, 'base_url', this.value)">
+                            </div>
+                            <div class="form-group full">
+                                <label>可用模型（点击填入）</label>
+                                <div class="media-model-hints">
+                                    ${mediaPresetModels(mediaProvider.value, ep.purpose).length
+                                        ? mediaPresetModels(mediaProvider.value, ep.purpose).map(function(m) {
+                                            return '<button type="button" class="media-model-hint" onclick="setMediaModel(\'' + client + '\',' + index + ',\'' + escapeHtml(m) + '\')">' + escapeHtml(m) + '</button>';
+                                          }).join('')
+                                        : '<span class="media-model-hint-empty">该提供商暂无预设模型，请手动填写</span>'}
+                                </div>
+                            </div>
+                            <div class="form-group full">
+                                <label>模型列表（每行一个）</label>
+                                <textarea class="mono" rows="3" placeholder="每行一个模型名" onchange="updateMediaModels('${client}', ${index}, this.value)">${(ep.models || []).join('\n')}</textarea>
                             </div>
                             ` : `
                             <div class="form-group">
@@ -7907,17 +7953,18 @@ ${(() => {
         window.addMediaEndpoint = function(client, purpose) {
             const mediaPurpose = mediaPurposeDefinition(purpose);
             if (!mediaPurpose) return;
+            const defaultProvider = 'grok-subscription';
             config.clients[client].endpoints = config.clients[client].endpoints || [];
             config.clients[client].endpoints.unshift({
                 id: `ep_${crypto.randomUUID()}`,
                 name: mediaPurpose.title,
                 purpose,
-                provider: 'grok-subscription',
-                base_url: mediaProviderDefinition('grok-subscription').baseUrl,
+                provider: defaultProvider,
+                base_url: mediaProviderDefinition(defaultProvider).baseUrl,
                 api_key: '',
                 enabled: true,
                 is_default: false,
-                models: [],
+                models: mediaPresetModels(defaultProvider, purpose),
                 model_mapping: {}
             });
             selectedEndpoint = { client, index: 0 };
@@ -7930,8 +7977,23 @@ ${(() => {
             if (!endpoint || !isMediaEndpoint(endpoint)) return;
             endpoint.provider = nextProvider.value;
             endpoint.base_url = nextProvider.baseUrl;
+            endpoint.models = mediaPresetModels(nextProvider.value, endpoint.purpose);
             render();
         }
+
+        window.updateMediaModels = function(client, index, text) {
+            const endpoint = config.clients[client]?.endpoints?.[index];
+            if (!endpoint) return;
+            endpoint.models = text.split('\n').map(function(s) { return s.trim(); }).filter(Boolean);
+        };
+
+        window.setMediaModel = function(client, index, newModel) {
+            const endpoint = config.clients[client]?.endpoints?.[index];
+            if (!endpoint) return;
+            if (!endpoint.models) endpoint.models = [];
+            if (!endpoint.models.includes(newModel)) endpoint.models.push(newModel);
+            render();
+        };
 
         window.setAsDefaultEmbedding = async function(client, index) {
             const endpoint = config.clients[client].endpoints[index];
