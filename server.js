@@ -69,6 +69,9 @@ import {
   copyClientEndpoints,
 } from "./lib/config/gateway-config-store.mjs";
 import { syncClaudeCodeSettings } from "./lib/config/claude-code-settings.mjs";
+import { createModelDiscoveryService } from "./lib/models/discovery-service.mjs";
+import { createDefaultStrategies } from "./lib/models/strategies/index.mjs";
+import { mergeClaudeOfficialModels, BUILTIN_CLAUDE_OFFICIAL_MODELS } from "./lib/config/claude-official-models.mjs";
 import { SkillInstaller } from "./lib/session-sync/skill-installer.mjs";
 import { SessionWatcherDaemon } from "./lib/session-sync/watcher-daemon.mjs";
 import { WebSocketServer } from "ws";
@@ -852,7 +855,7 @@ async function route(req, res) {
       const result = saveGatewayState({
         configPath: GATEWAY_CONFIG_FILE,
         secretsPath: GATEWAY_SECRETS_FILE,
-        config: { server: newConfig.server, clients: newConfig.clients },
+        config: { server: newConfig.server, clients: newConfig.clients, tools: newConfig.tools },
         officialCodexIds: OFFICIAL_CODEX_MODEL_IDS,
       });
       GATEWAY_CONFIG = result.config;
@@ -1691,7 +1694,89 @@ function collectGroupedModelsFromConfig(config) {
     return;
   }
 
-  if (reqPath === "/v1/config/secret" && req.method === "GET") {
+  
+  if (req.method === "GET" && /^\/v1\/config\/endpoints\/[^/]+\/models$/.test(reqPath)) {
+    if (!checkLocalAuth(req, res)) return;
+    try {
+      const endpointId = decodeURIComponent(reqPath.split("/")[4] || "").trim();
+      const clientName = String(url.searchParams.get("client") || req.headers["x-gateway-config-client"] || "").trim();
+      const refresh = ["1", "true", "yes"].includes(String(url.searchParams.get("refresh") || "").toLowerCase());
+      let resolvedClient = clientName;
+      let endpoint = null;
+      for (const [name, client] of Object.entries(GATEWAY_CONFIG.clients || {})) {
+        const found = (client.endpoints || []).find((item) => item.id === endpointId);
+        if (found) {
+          endpoint = found;
+          if (!resolvedClient) resolvedClient = name;
+          if (!clientName || clientName === name) break;
+        }
+      }
+      if (!endpoint) {
+        sendJson(res, 404, { error: { type: "endpoint_not_found", message: "Endpoint not found." } });
+        return;
+      }
+      if (clientName && resolvedClient !== clientName) {
+        // If client filter provided and mismatches ownership, still allow when id unique.
+        resolvedClient = clientName;
+      }
+      if (!modelDiscoveryService) {
+        modelDiscoveryService = createModelDiscoveryService({
+          strategies: createDefaultStrategies(),
+          fetchImpl: (url, init = {}) => fetchWithOptionalProxy(url, {
+            method: init.method || "GET",
+            headers: init.headers || {},
+            body: init.body || null,
+            signal: init.signal || null,
+          }),
+          resolveApiKey: (ep) => getConfiguredProviderApiKey(ep),
+        });
+      }
+      const result = await modelDiscoveryService.discoverEndpointModels({
+        client: resolvedClient,
+        endpoint,
+        refresh,
+        context: {
+          loadCodexModels: async () => {
+            const payload = await codexModelDiscoveryFresh("codex");
+            return payload;
+          },
+          loadGrokModels: async () => {
+            try {
+              const catalog = loadGrokModelCatalog();
+              return [...catalog.entries()].map(([id, info]) => ({
+                id,
+                name: info?.display_name || id,
+              }));
+            } catch {
+              return ["grok-4.5", "grok-4", "grok-3"];
+            }
+          },
+          loadAntigravityModels: async () => {
+            // Prefer endpoint-configured models first; otherwise provide a stable built-in starter set.
+            if (Array.isArray(endpoint.models) && endpoint.models.length) return endpoint.models;
+            return [
+              "gemini-2.5-pro",
+              "gemini-2.5-flash",
+              "claude-sonnet-4-5",
+              "claude-opus-4-7",
+            ];
+          },
+        },
+      });
+      sendJson(res, 200, result);
+    } catch (error) {
+      const status = Number(error?.status) || 500;
+      sendJson(res, status, {
+        error: {
+          type: error?.code || "discovery_failed",
+          message: error?.message || String(error),
+        },
+      });
+    }
+    return;
+  }
+
+if (reqPath === "/v1/config/secret" && req.method === "GET") {
     if (!checkLocalAuth(req, res)) return;
     if (req.headers["x-gateway-secret-intent"] !== "reveal") {
       sendPrivateJson(res, 403, {
@@ -5467,6 +5552,8 @@ function resolveCapabilityForProtocol(model, protocol, client = null) {
 }
 
 const CODEX_MODELS_LIVE_ENABLED = !isTruthy(process.env.CODEX_MODELS_LIVE_DISABLED);
+let modelDiscoveryService = null;
+
 const CODEX_MODELS_TTL_MS = intEnv("CODEX_MODELS_TTL_MS", 300_000);
 const CODEX_MODELS_LIVE_TIMEOUT_MS = intEnv("CODEX_MODELS_LIVE_TIMEOUT_MS", 2_500);
 

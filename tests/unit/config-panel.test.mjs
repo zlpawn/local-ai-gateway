@@ -560,3 +560,18 @@ test("media mini-tools show full built-in client display names", async () => {
   assert.match(firstDocument, /desktop:\s*'Claude Desktop'/);
   assert.match(firstDocument, /label:\s*clientDisplayName\(client\)/);
 });
+
+
+test("chat model discovery suggestions and Claude catalog mini-tool are wired", async () => {
+  const html = await readFile(path.join(ROOT, "desktop", "config-panel.html"), "utf8");
+  const firstDocument = html.slice(0, html.indexOf("</html>") + "</html>".length);
+  assert.match(firstDocument, /fetchEndpointModels/);
+  assert.match(firstDocument, /refreshEndpointModels/);
+  assert.match(firstDocument, /\/v1\/config\/endpoints\//);
+  assert.match(firstDocument, /model-discovery-list/);
+  assert.match(firstDocument, /map-target-list/);
+  assert.match(firstDocument, /mergeClaudeOfficialModelsLocal/);
+  assert.match(firstDocument, /openTool\('claude-model-catalog'\)/);
+  assert.match(firstDocument, /renderClaudeModelCatalogDetail/);
+  assert.doesNotMatch(firstDocument, /endpoint\.models\s*=\s*json\.models/);
+});
