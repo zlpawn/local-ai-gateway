@@ -1968,6 +1968,9 @@ async function routeMediaRequest(req, res, context, reqPath) {
         endpoint: selection.endpoint,
       });
       sendJson(res, 200, { ...mediaResultResponse(result), ...persisted });
+    } catch (error) {
+      recordMediaFailure({ type: "image", error, body, endpoint: selection.endpoint });
+      throw error;
     } finally {
       requestAbort.dispose();
     }
@@ -1986,6 +1989,9 @@ async function routeMediaRequest(req, res, context, reqPath) {
       const result = await selection.provider.createVideoTask(body, mediaProviderContext(req, selection.endpoint, requestAbort.signal));
       MEDIA_VIDEO_TASKS.set(result.taskId, { endpoint: selection.endpoint, body });
       sendJson(res, 200, { task_id: result.taskId, taskId: result.taskId, status: "processing" });
+    } catch (error) {
+      recordMediaFailure({ type: "video", error, body, endpoint: selection.endpoint });
+      throw error;
     } finally {
       requestAbort.dispose();
     }
@@ -2012,9 +2018,16 @@ async function routeMediaRequest(req, res, context, reqPath) {
         MEDIA_VIDEO_TASKS.delete(taskId);
         sendJson(res, 200, { status: "succeeded", task_id: taskId, taskId, ...persisted });
       } else {
-        if (result.status === "failed") MEDIA_VIDEO_TASKS.delete(taskId);
+        if (result.status === "failed") {
+          recordMediaFailure({ type: "video", error: result.error || "Video generation failed", body: task.body, endpoint: task.endpoint, taskId });
+          MEDIA_VIDEO_TASKS.delete(taskId);
+        }
         sendJson(res, 200, { status: result.status || "processing", task_id: taskId, taskId, progress: result.progress ?? null, error: result.error || null });
       }
+    } catch (error) {
+      recordMediaFailure({ type: "video", error, body: task.body, endpoint: task.endpoint, taskId });
+      MEDIA_VIDEO_TASKS.delete(taskId);
+      throw error;
     } finally {
       requestAbort.dispose();
     }
@@ -2033,6 +2046,9 @@ async function routeMediaRequest(req, res, context, reqPath) {
       const result = await selection.provider.synthesizeSpeech(body, mediaProviderContext(req, selection.endpoint, requestAbort.signal));
       const persisted = await persistMediaResult({ type: "tts", result, body, endpoint: selection.endpoint });
       sendJson(res, 200, { ...mediaResultResponse(result), ...persisted });
+    } catch (error) {
+      recordMediaFailure({ type: "tts", error, body, endpoint: selection.endpoint });
+      throw error;
     } finally {
       requestAbort.dispose();
     }
@@ -2098,7 +2114,7 @@ function resolveMediaApiKey(req, endpoint) {
       }
     }
     case "codex-subscription":
-      return getOfficialCodexAuth(req)?.accessToken || "";
+      return getOfficialCodexAuth(null)?.accessToken || "";
     case "antigravity":
       return loadAntigravitySecrets().access_token || "";
     case "huoshan-agentplan":
@@ -2151,6 +2167,23 @@ async function persistMediaResult({ type, result, body, endpoint, taskId = null 
     task_id: taskId,
   });
   return { file_path: filePath, filePath, history_id: entry.id, historyId: entry.id };
+}
+
+function recordMediaFailure({ type, error, body, endpoint, taskId = null }) {
+  try {
+    addHistoryEntry(mediaDataDir(), {
+      media_type: type,
+      endpoint_name: endpoint.name || endpoint.id,
+      provider: endpoint.provider,
+      model: body.model || endpoint.models?.[0] || "",
+      prompt: body.prompt || body.text || "",
+      status: "failed",
+      error: error instanceof Error ? error.message : String(error),
+      task_id: taskId,
+    });
+  } catch {
+    // Preserve the original provider or storage error for the client.
+  }
 }
 
 function mediaProviderPrefix(provider) {
