@@ -5590,20 +5590,6 @@ experimental_bearer_token = "dummy"</pre>
                                 <label>接口地址 (Base URL)</label>
                                 <input class="mono" type="text" value="${escapeHtml(mediaProviderBaseUrl(ep))}" ${isMediaSubscription ? 'readonly' : ''} onchange="updateEndpoint('${client}', ${index}, 'base_url', this.value)">
                             </div>
-                            <div class="form-group full">
-                                <label>可用模型（点击填入）</label>
-                                <div class="media-model-hints">
-                                    ${mediaPresetModels(mediaProvider.value, ep.purpose).length
-                                        ? mediaPresetModels(mediaProvider.value, ep.purpose).map(function(m) {
-                                            return '<button type="button" class="media-model-hint" onclick="setMediaModel(\'' + client + '\',' + index + ',\'' + escapeHtml(m) + '\')">' + escapeHtml(m) + '</button>';
-                                          }).join('')
-                                        : '<span class="media-model-hint-empty">该提供商暂无预设模型，请手动填写</span>'}
-                                </div>
-                            </div>
-                            <div class="form-group full">
-                                <label>模型列表（每行一个）</label>
-                                <textarea class="mono" rows="3" placeholder="每行一个模型名" onchange="updateMediaModels('${client}', ${index}, this.value)">${(ep.models || []).join('\n')}</textarea>
-                            </div>
                             ` : `
                             <div class="form-group">
                                 <label>类型</label>
@@ -5811,7 +5797,7 @@ ${(() => {
                                     `).join('')}
                                 </div>
                                 ` : ''}
-                                <input type="text" id="input-models-${client}-${index}" class="mono" placeholder="添加新模型并按回车 (例如: glm-5.2)..." onkeydown="handleTagInput(event, '${client}', ${index}, 'models')">
+                                <input type="text" id="input-models-${client}-${index}" class="mono" placeholder="添加新模型并按回车 (例如: glm-5.2)..." list="media-model-suggestions-${client}-${index}" onkeydown="handleTagInput(event, '${client}', ${index}, 'models')">${isMedia ? `<datalist id="media-model-suggestions-${client}-${index}">${mediaPresetModels(mediaProvider.value, ep.purpose).map(function(m) { return '<option value="' + escapeHtml(m) + '">'; }).join('')}</datalist>` : ''}
                             </div>
                             <div class="form-group full">
                                 <label>模型映射关系 (输入 原模型 → 映射模型，按回车添加)</label>
