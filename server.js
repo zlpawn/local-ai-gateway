@@ -42,6 +42,7 @@ import {
   streamGrpcResponses as streamAntigravityResponses,
   getClientCredentials as getAntigravityCreds,
   getStoredToken as getAntigravityStoredToken,
+  loadSecrets as loadAntigravitySecrets,
   saveSecrets as saveAntigravitySecrets,
   computeSessionFingerprint as computeAntigravitySessionFp,
 } from "./lib/antigravity/index.mjs";
@@ -93,6 +94,17 @@ import {
   runGatewayWebSearchResponsesLoop,
   withoutStreamFlag,
 } from "./lib/web-search/index.mjs";
+import {
+  addHistoryEntry,
+  deleteHistoryEntry,
+  downloadMediaFile,
+  ensureOutputDir,
+  generateSemanticFilename,
+  getMediaProvider,
+  listHistory,
+  loadHistory,
+  selectMediaEndpointForRequest,
+} from "./lib/media/index.mjs";
 
 const PROJECT_ROOT = path.dirname(fileURLToPath(import.meta.url));
 
@@ -205,6 +217,7 @@ let CODEX_CUSTOM_MODELS = CODEX_CATALOG.models.filter(
 // Declared before writeCodexModelCatalog runs at startup to avoid TDZ.
 let _codexModelsDiscoveryCache = null;
 const VISION_DESCRIPTION_CACHE = new Map();
+const MEDIA_VIDEO_TASKS = new Map();
 
 // --- Antigravity project cache (avoids loadCodeAssist on every request) ---
 let _antigravityProject = null;
@@ -789,6 +802,12 @@ async function route(req, res) {
     } else {
       sendJson(res, 404, { error: { message: "config-panel.html not found" }});
     }
+    return;
+  }
+
+  if (reqPath.startsWith("/v1/media/")) {
+    if (!checkLocalAuth(req, res)) return;
+    await routeMediaRequest(req, res, context, reqPath);
     return;
   }
 
@@ -1909,6 +1928,238 @@ function collectGroupedModelsFromConfig(config) {
       message: `${req.method} ${url.pathname} is not implemented`,
     },
   });
+}
+
+async function routeMediaRequest(req, res, context, reqPath) {
+  if (reqPath === "/v1/media/history" && req.method === "GET") {
+    sendJson(res, 200, { entries: listHistory(mediaDataDir(), context.url.searchParams.get("media_type") || "") });
+    return;
+  }
+
+  const historyId = reqPath.match(/^\/v1\/media\/history\/([^/]+)$/)?.[1];
+  if (historyId && req.method === "DELETE") {
+    const entry = loadHistory(mediaDataDir()).entries.find((item) => item.id === historyId);
+    if (!entry) {
+      sendJson(res, 404, { error: { type: "media_history_not_found", message: "Media history entry not found." } });
+      return;
+    }
+    if (entry.file_path && fs.existsSync(entry.file_path)) {
+      try { fs.unlinkSync(entry.file_path); } catch { /* history deletion still succeeds */ }
+    }
+    deleteHistoryEntry(mediaDataDir(), historyId);
+    sendJson(res, 200, { success: true, id: historyId });
+    return;
+  }
+
+  if (reqPath === "/v1/media/image" && req.method === "POST") {
+    const body = await readMediaRequestBody(req);
+    const selection = resolveMediaSelection(context, body, "image_generation");
+    if (!selection) return sendMediaEndpointNotFound(res, context, body.endpoint_id, "image_generation");
+    if (typeof selection.provider.generateImage !== "function") {
+      return sendMediaCapabilityUnavailable(res, selection.endpoint, "image generation");
+    }
+    const requestAbort = bindRequestAbort(req, res);
+    try {
+      const result = await selection.provider.generateImage(body, mediaProviderContext(req, selection.endpoint, requestAbort.signal));
+      const persisted = await persistMediaResult({
+        type: "image",
+        result,
+        body,
+        endpoint: selection.endpoint,
+      });
+      sendJson(res, 200, { ...mediaResultResponse(result), ...persisted });
+    } finally {
+      requestAbort.dispose();
+    }
+    return;
+  }
+
+  if (reqPath === "/v1/media/video" && req.method === "POST") {
+    const body = await readMediaRequestBody(req);
+    const selection = resolveMediaSelection(context, body, "video_generation");
+    if (!selection) return sendMediaEndpointNotFound(res, context, body.endpoint_id, "video_generation");
+    if (typeof selection.provider.createVideoTask !== "function") {
+      return sendMediaCapabilityUnavailable(res, selection.endpoint, "video generation");
+    }
+    const requestAbort = bindRequestAbort(req, res);
+    try {
+      const result = await selection.provider.createVideoTask(body, mediaProviderContext(req, selection.endpoint, requestAbort.signal));
+      MEDIA_VIDEO_TASKS.set(result.taskId, { endpoint: selection.endpoint, body });
+      sendJson(res, 200, { task_id: result.taskId, taskId: result.taskId, status: "processing" });
+    } finally {
+      requestAbort.dispose();
+    }
+    return;
+  }
+
+  const encodedTaskId = reqPath.match(/^\/v1\/media\/tasks\/([^/]+)$/)?.[1];
+  const taskId = encodedTaskId ? decodeURIComponent(encodedTaskId) : "";
+  if (taskId && req.method === "GET") {
+    const task = MEDIA_VIDEO_TASKS.get(taskId);
+    if (!task) {
+      sendJson(res, 404, { error: { type: "media_task_not_found", message: "Media video task not found." } });
+      return;
+    }
+    const provider = getMediaProvider(task.endpoint.provider);
+    if (!provider || typeof provider.pollVideoTask !== "function") {
+      return sendMediaCapabilityUnavailable(res, task.endpoint, "video task polling");
+    }
+    const requestAbort = bindRequestAbort(req, res);
+    try {
+      const result = await provider.pollVideoTask(taskId, mediaProviderContext(req, task.endpoint, requestAbort.signal));
+      if (result.status === "succeeded") {
+        const persisted = await persistMediaResult({ type: "video", result, body: task.body, endpoint: task.endpoint, taskId });
+        MEDIA_VIDEO_TASKS.delete(taskId);
+        sendJson(res, 200, { status: "succeeded", task_id: taskId, taskId, ...persisted });
+      } else {
+        if (result.status === "failed") MEDIA_VIDEO_TASKS.delete(taskId);
+        sendJson(res, 200, { status: result.status || "processing", task_id: taskId, taskId, progress: result.progress ?? null, error: result.error || null });
+      }
+    } finally {
+      requestAbort.dispose();
+    }
+    return;
+  }
+
+  if (reqPath === "/v1/media/tts" && req.method === "POST") {
+    const body = await readMediaRequestBody(req);
+    const selection = resolveMediaSelection(context, body, "audio_tts");
+    if (!selection) return sendMediaEndpointNotFound(res, context, body.endpoint_id, "audio_tts");
+    if (typeof selection.provider.synthesizeSpeech !== "function") {
+      return sendMediaCapabilityUnavailable(res, selection.endpoint, "speech synthesis");
+    }
+    const requestAbort = bindRequestAbort(req, res);
+    try {
+      const result = await selection.provider.synthesizeSpeech(body, mediaProviderContext(req, selection.endpoint, requestAbort.signal));
+      const persisted = await persistMediaResult({ type: "tts", result, body, endpoint: selection.endpoint });
+      sendJson(res, 200, { ...mediaResultResponse(result), ...persisted });
+    } finally {
+      requestAbort.dispose();
+    }
+    return;
+  }
+
+  sendJson(res, 404, { error: { type: "not_found", message: `${req.method} ${context.url.pathname} is not implemented` } });
+}
+
+async function readMediaRequestBody(req) {
+  try {
+    return JSON.parse(await readText(req) || "{}");
+  } catch {
+    throw httpError(400, "Invalid JSON request body.");
+  }
+}
+
+function resolveMediaSelection(context, body, purpose) {
+  const endpoints = GATEWAY_CONFIG.clients?.[context.client]?.endpoints || [];
+  const endpoint = selectMediaEndpointForRequest(endpoints, purpose, body.endpoint_id);
+  const provider = endpoint ? getMediaProvider(endpoint.provider) : null;
+  return endpoint && provider ? { endpoint, provider } : null;
+}
+
+function sendMediaEndpointNotFound(res, context, endpointId, purpose) {
+  const suffix = endpointId ? ` '${endpointId}'` : "";
+  sendJson(res, 404, {
+    error: {
+      type: "media_endpoint_not_found",
+      message: `No ${purpose} endpoint${suffix} is configured for client '${context.client}'.`,
+    },
+  });
+}
+
+function sendMediaCapabilityUnavailable(res, endpoint, capability) {
+  sendJson(res, 400, {
+    error: {
+      type: "media_capability_unavailable",
+      message: `Provider '${endpoint.provider}' does not support ${capability}.`,
+    },
+  });
+}
+
+function mediaProviderContext(req, endpoint, signal) {
+  return {
+    endpoint,
+    signal,
+    getApiKey: (targetEndpoint) => resolveMediaApiKey(req, targetEndpoint || endpoint),
+  };
+}
+
+function resolveMediaApiKey(req, endpoint) {
+  switch (endpoint?.provider) {
+    case "grok-subscription": {
+      const authPath = process.env.GROK_AUTH_PATH || path.join(os.homedir(), ".grok", "auth.json");
+      if (!fs.existsSync(authPath)) return "";
+      try {
+        const parsed = JSON.parse(fs.readFileSync(authPath, "utf8"));
+        const first = parsed[Object.keys(parsed)[0]] || {};
+        return first.key || first.access_token || first.token || "";
+      } catch {
+        return "";
+      }
+    }
+    case "codex-subscription":
+      return getOfficialCodexAuth(req)?.accessToken || "";
+    case "antigravity":
+      return loadAntigravitySecrets().access_token || "";
+    case "huoshan-agentplan":
+      return getEndpointApiKey(endpoint, GATEWAY_SECRETS, process.env, allGatewayEndpoints());
+    default:
+      return "";
+  }
+}
+
+function allGatewayEndpoints() {
+  return Object.values(GATEWAY_CONFIG.clients || {}).flatMap((client) => client?.endpoints || []);
+}
+
+function mediaDataDir() {
+  return path.dirname(GATEWAY_CONFIG_FILE);
+}
+
+function mediaResultResponse(result) {
+  return {
+    b64_json: result.b64Json || undefined,
+    b64_audio: result.b64Audio || undefined,
+    revised_prompt: result.revisedPrompt || undefined,
+    format: result.format || undefined,
+  };
+}
+
+async function persistMediaResult({ type, result, body, endpoint, taskId = null }) {
+  const source = result.url || result.videoUrl || "";
+  const extension = normalizeMediaExtension(
+    type === "image" ? (body.output_format || "png") : type === "video" ? "mp4" : (result.format || body.encoding || "mp3"),
+  );
+  const filename = generateSemanticFilename(body.prompt || body.text || "media", extension, mediaProviderPrefix(endpoint.provider));
+  const filePath = path.join(ensureOutputDir(type === "tts" ? "audio" : type), filename);
+  let buffer = null;
+  if (result.binary) buffer = Buffer.from(result.binary);
+  else if (result.b64Json) buffer = Buffer.from(result.b64Json, "base64");
+  else if (result.b64Audio) buffer = Buffer.from(result.b64Audio, "base64");
+  if (buffer) fs.writeFileSync(filePath, buffer);
+  else if (source) await downloadMediaFile(source, filePath);
+  else throw new Error(`Media ${type} result did not contain downloadable content.`);
+  const entry = addHistoryEntry(mediaDataDir(), {
+    media_type: type,
+    endpoint_name: endpoint.name || endpoint.id,
+    provider: endpoint.provider,
+    model: body.model || endpoint.models?.[0] || "",
+    prompt: body.prompt || body.text || "",
+    file_path: filePath,
+    file_size: fs.statSync(filePath).size,
+    status: "completed",
+    task_id: taskId,
+  });
+  return { file_path: filePath, filePath, history_id: entry.id, historyId: entry.id };
+}
+
+function mediaProviderPrefix(provider) {
+  return String(provider || "media").replace(/-subscription$|-agentplan$/g, "").replace(/[^a-z0-9]+/gi, "_");
+}
+
+function normalizeMediaExtension(value) {
+  const extension = String(value || "").trim().toLowerCase().replace(/^\.+/, "");
+  return /^[a-z0-9]{1,10}$/.test(extension) ? extension : "bin";
 }
 
 async function forwardAnthropicMessages(body, clientReq, clientRes, context) {
