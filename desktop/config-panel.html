@@ -3597,6 +3597,21 @@ experimental_bearer_token = "dummy"</pre>
             historyLoaded: false,
             referenceNotice: ''
         };
+        const ttsGenState = {
+            client: 'codex',
+            endpointId: '',
+            model: '',
+            text: '',
+            voice: 'zh_female_qingxin',
+            encoding: 'mp3',
+            speedRatio: 1.0,
+            result: null,
+            loading: false,
+            error: '',
+            history: [],
+            historyLoading: false,
+            historyLoaded: false
+        };
         const MEDIA_HISTORY_PATHS = {
             image: '/v1/media/history?media_type=image',
             video: '/v1/media/history?media_type=video',
@@ -6035,6 +6050,13 @@ ${(() => {
                     <div class="tools-card-name">视频生成</div>
                     <div class="tools-card-desc">使用已配置的视频生成节点，编写分镜提示词，提交异步任务并轮询结果，查看本地生成历史。</div>
                 </div>
+                <div class="tools-card" id="tts-gen" onclick="openTool('tts-gen')">
+                    <div class="tools-card-icon">
+                        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M11 5 6 9H2v6h4l5 4z"></path><path d="M15.5 8.5a5 5 0 0 1 0 7"></path><path d="M19 5a10 10 0 0 1 0 14"></path></svg>
+                    </div>
+                    <div class="tools-card-name">TTS 语音合成</div>
+                    <div class="tools-card-desc">使用已配置的 TTS 节点，选择音色、调节语速，将文本转为语音并查看本地生成历史。</div>
+                </div>
                 <div class="tools-card" onclick="openTool('embedding')">
                     <div class="tools-card-icon">
                         <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z"></path></svg>
@@ -6070,6 +6092,7 @@ ${(() => {
             toolsView = toolId;
             if (toolId === 'image-gen') renderImageGenDetail();
             else if (toolId === 'video-gen') renderVideoGenDetail();
+            else if (toolId === 'tts-gen') renderTtsGenDetail();
             else if (toolId === 'classification-metrics') renderClassificationMetricsDetail();
             else if (toolId === 'antigravity-subscribe') renderAntigravitySubscribeDetail();
             else if (toolId === 'codex-subscribe') renderCodexSubscribeDetail();
@@ -7360,7 +7383,134 @@ ${(() => {
         }
 
         registerMediaHistoryTool('image', 'image-gen', imageGenState, () => renderImageGenDetail());
+
+        window.renderTtsGenDetail = function() {
+            const cards = document.getElementById('tools-cards');
+            const detail = document.getElementById('tools-detail');
+            if (!cards || !detail) return;
+            cards.style.display = 'none';
+            toolsView = 'tts-gen';
+
+            const endpoints = getMediaEndpoints(ttsGenState.client, 'audio_tts');
+            const selectedEndpoint = endpoints.find(ep => ep.id === ttsGenState.endpointId) || endpoints[0] || null;
+            if (selectedEndpoint && ttsGenState.endpointId !== selectedEndpoint.id) {
+                ttsGenState.endpointId = selectedEndpoint.id;
+                ttsGenState.model = selectedEndpoint.models?.[0] || '';
+            }
+            const models = selectedEndpoint?.models || [];
+            if (models.length && !models.includes(ttsGenState.model)) ttsGenState.model = models[0];
+            const clients = Object.keys(config.clients || {});
+            const clientOptions = clients.map(client => '<option value="' + escapeHtml(client) + '" ' + (client === ttsGenState.client ? 'selected' : '') + '>' + escapeHtml(client) + '</option>').join('');
+            const endpointOptions = endpoints.map(ep => '<option value="' + escapeHtml(ep.id) + '" ' + (ep.id === ttsGenState.endpointId ? 'selected' : '') + '>' + escapeHtml(ep.name || ep.id) + (ep.provider ? ' · ' + escapeHtml(ep.provider) : '') + '</option>').join('');
+            const modelOptions = models.map(model => '<option value="' + escapeHtml(model) + '" ' + (model === ttsGenState.model ? 'selected' : '') + '>' + escapeHtml(model) + '</option>').join('');
+            const noNodeHint = endpoints.length === 0 ? '<div class="media-gen-error">该 client 没有已启用的 TTS 节点。请到代理节点添加 purpose=audio_tts 的节点。</div>' : '';
+            const resultHtml = renderTtsGenResult();
+            const historyHtml = ttsGenState.historyLoading ? '<div class="media-gen-tip">正在加载历史...</div>' : renderMediaHistoryHtml(ttsGenState.history, 'tts');
+
+            const voices = [
+                { value: 'zh_female_qingxin', label: '清新女声 (zh_female_qingxin)' },
+                { value: 'zh_male_wennuanshizhong', label: '温暖男声 (zh_male_wennuanshizhong)' },
+                { value: 'zh_female_wanwanxiaohe', label: '湾湾小何 (zh_female_wanwanxiaohe)' },
+                { value: 'zh_female_shaoergushi', label: '少儿故事 (zh_female_shaoergushi)' },
+                { value: 'zh_male_leidi', label: '雷迪 (zh_male_leidi)' },
+                { value: 'en_male_rm_emo', label: '英文情感男声 (en_male_rm_emo)' },
+                { value: 'en_female_rm_emo', label: '英文情感女声 (en_female_rm_emo)' }
+            ];
+            const voiceOptions = voices.map(v => '<option value="' + escapeHtml(v.value) + '" ' + (v.value === ttsGenState.voice ? 'selected' : '') + '>' + escapeHtml(v.label) + '</option>').join('');
+            const encodings = ['mp3', 'wav', 'ogg_opus', 'pcm'];
+            const encodingOptions = encodings.map(enc => '<option value="' + enc + '" ' + (enc === ttsGenState.encoding ? 'selected' : '') + '>' + enc + '</option>').join('');
+
+            detail.innerHTML = `
+                <button class="tools-detail-back" onclick="backToToolsCards()">返回工具列表</button>
+                <div class="media-gen-layout">
+                    <div class="media-gen-panel">
+                        <h3>TTS 语音合成</h3>
+                        ${noNodeHint}
+                        <div class="media-gen-form-group"><label>Client</label>
+                            <select class="media-gen-form-control" onchange="onTtsGenClientChange(this.value)">${clientOptions}</select></div>
+                        <div class="media-gen-form-group"><label>TTS 节点</label>
+                            <select class="media-gen-form-control" onchange="onTtsGenEndpointChange(this.value)" ${endpoints.length ? '' : 'disabled'}>${endpointOptions || '<option>无可用节点</option>'}</select></div>
+                        <div class="media-gen-form-group"><label>模型</label>
+                            <select class="media-gen-form-control" onchange="ttsGenState.model=this.value" ${models.length ? '' : 'disabled'}>${modelOptions || '<option value="">使用节点默认模型</option>'}</select></div>
+                        <div class="media-gen-form-group"><label>待合成文本</label>
+                            <textarea id="tts-gen-text" class="media-gen-form-control media-gen-textarea" rows="5" placeholder="输入要转为语音的文本" oninput="ttsGenState.text=this.value">${escapeHtml(ttsGenState.text)}</textarea></div>
+                        <div class="media-gen-form-group"><label>音色</label>
+                            <select class="media-gen-form-control" onchange="ttsGenState.voice=this.value">${voiceOptions}</select></div>
+                        <div class="media-gen-form-group"><label>音频格式</label>
+                            <select class="media-gen-form-control" onchange="ttsGenState.encoding=this.value">${encodingOptions}</select></div>
+                        <div class="media-gen-form-group"><label>语速倍率（0.5 - 2.0）</label>
+                            <input type="range" class="media-gen-form-control" min="0.5" max="2.0" step="0.1" value="${ttsGenState.speedRatio}" onchange="ttsGenState.speedRatio=Number(this.value)" style="width:100%;">
+                            <span class="media-gen-tip" id="tts-speed-value">${ttsGenState.speedRatio}x</span></div>
+                        <div class="media-gen-tip"><strong>音色说明：</strong>zh_female_qingxin 适合通用播报；zh_male_wennuanshizhong 适合叙事；zh_female_wanwanxiaohe 适合活泼内容；en_male_rm_emo / en_female_rm_emo 适合英文情感朗读。</div>
+                        <button class="btn btn-primary" onclick="runTtsGeneration()" ${ttsGenState.loading || !endpoints.length ? 'disabled' : ''}>${ttsGenState.loading ? '合成中...' : '合成语音'}</button>
+                    </div>
+                    <div class="media-gen-panel"><h3>结果</h3>${resultHtml}<h3 style="margin-top:18px;">本地历史</h3>${historyHtml}</div>
+                </div>`;
+            if (!ttsGenState.historyLoading && !ttsGenState.historyLoaded) loadMediaHistory('tts');
+        };
+
+        window.onTtsGenClientChange = function(client) {
+            ttsGenState.client = client;
+            ttsGenState.endpointId = '';
+            ttsGenState.model = '';
+            ttsGenState.result = null;
+            ttsGenState.error = '';
+            ttsGenState.history = [];
+            ttsGenState.historyLoaded = false;
+            renderTtsGenDetail();
+        };
+
+        window.onTtsGenEndpointChange = function(endpointId) {
+            ttsGenState.endpointId = endpointId;
+            const endpoint = getMediaEndpoints(ttsGenState.client, 'audio_tts').find(ep => ep.id === endpointId);
+            ttsGenState.model = endpoint?.models?.[0] || '';
+            ttsGenState.result = null;
+            ttsGenState.error = '';
+            renderTtsGenDetail();
+        };
+
+        function renderTtsGenResult() {
+            if (ttsGenState.loading) return '<div class="media-gen-tip">正在请求语音合成服务...</div>';
+            if (ttsGenState.error) return '<div class="media-gen-error">' + escapeHtml(ttsGenState.error) + '</div>';
+            if (!ttsGenState.result) return '<div class="media-gen-tip">合成完成后会显示音频播放器和可复制路径。</div>';
+            const path = ttsGenState.result.file_path || ttsGenState.result.filePath || '';
+            const historyId = ttsGenState.result.history_id || ttsGenState.result.historyId || '';
+            const url = mediaHistoryPreviewUrl(historyId);
+            return (path ? '<audio class="media-gen-preview" controls src="' + escapeHtml(url) + '"></audio>' : '') +
+                '<div class="media-gen-path">' + escapeHtml(path || '服务未返回 file_path') + '</div>' +
+                '<div class="media-gen-actions">' + (path ? '<button class="btn" onclick="copyMediaPath(' + escapeHtml(JSON.stringify(path)) + ')">复制路径</button>' : '') +
+                (historyId ? '<span class="media-gen-tip" style="margin:0;">历史 ID: ' + escapeHtml(historyId) + '</span>' : '') + '</div>';
+        }
+
+        window.runTtsGeneration = async function() {
+            const text = ttsGenState.text.trim();
+            if (!text) { ttsGenState.error = '请输入待合成文本'; renderTtsGenDetail(); return; }
+            if (!ttsGenState.endpointId) { ttsGenState.error = '请选择 TTS 节点'; renderTtsGenDetail(); return; }
+            ttsGenState.loading = true;
+            ttsGenState.error = '';
+            ttsGenState.result = null;
+            renderTtsGenDetail();
+            try {
+                const res = await fetch('/v1/media/tts', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json', 'X-Gateway-Client': ttsGenState.client },
+                    body: JSON.stringify({ endpoint_id: ttsGenState.endpointId, model: ttsGenState.model || undefined, text, voice: ttsGenState.voice, encoding: ttsGenState.encoding, speedRatio: ttsGenState.speedRatio })
+                });
+                const json = await res.json();
+                if (!res.ok) throw new Error(json?.error?.message || '合成失败 (' + res.status + ')');
+                if (!json.file_path && !json.filePath) throw new Error('服务返回成功但缺少 file_path');
+                ttsGenState.result = json;
+                await loadMediaHistory('tts');
+            } catch (err) {
+                ttsGenState.error = err.message || String(err);
+            } finally {
+                ttsGenState.loading = false;
+                if (toolsView === 'tts-gen') renderTtsGenDetail();
+            }
+        };
+
         registerMediaHistoryTool('video', 'video-gen', videoGenState, () => renderVideoGenDetail());
+        registerMediaHistoryTool('tts', 'tts-gen', ttsGenState, () => renderTtsGenDetail());
 
         window.renderToolsDetail = function() {
             if (toolsView === 'classification-metrics') {

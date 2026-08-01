@@ -524,3 +524,15 @@ test("config panel includes video generation mini-tool card and detail", async (
   assert.match(html, /applyVideoPromptSuggestion/);
   assert.match(html, /镜头1/);
 });
+
+test("config panel includes TTS mini-tool card and detail", async () => {
+  const html = await readFile(path.join(ROOT, "desktop", "config-panel.html"), "utf8");
+  assert.match(html, /ttsGenState/);
+  assert.match(html, /renderTtsGenDetail/);
+  assert.match(html, /openTool\('tts-gen'\)/);
+  assert.match(html, /runTtsGeneration/);
+  assert.match(html, /\/v1\/media\/tts/);
+  assert.match(html, /registerMediaHistoryTool\('tts'/);
+  assert.match(html, /zh_female_qingxin/);
+  assert.match(html, /speedRatio/);
+});
