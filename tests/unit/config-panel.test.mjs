@@ -356,6 +356,32 @@ test("tools cards list renders text embedding card", async () => {
   assert.match(html, /tools-card/);
 });
 
+test("image generation mini-tool sends media request and renders local history", async () => {
+  const html = await readFile(path.join(ROOT, "desktop", "config-panel.html"), "utf8");
+  const firstDocument = html.slice(0, html.indexOf("</html>") + "</html>".length);
+  assert.match(firstDocument, /id="image-gen"/);
+  assert.match(firstDocument, /openTool\('image-gen'\)/);
+  assert.match(firstDocument, /const imageGenState\s*=\s*\{/);
+  assert.match(firstDocument, /function getMediaEndpoints\(client, purpose\)/);
+  assert.match(firstDocument, /window\.renderImageGenDetail\s*=\s*function/);
+  assert.match(firstDocument, /window\.runImageGeneration\s*=\s*async function/);
+  assert.match(firstDocument, /\/v1\/media\/image/);
+  assert.match(firstDocument, /\/v1\/media\/history\?media_type=image/);
+  assert.match(firstDocument, /DELETE.*\/v1\/media\/history\//s);
+  assert.match(firstDocument, /image_paths/);
+  assert.match(firstDocument, /file_path/);
+  assert.match(firstDocument, /history_id/);
+  assert.match(firstDocument, /historyLoaded/);
+  assert.match(firstDocument, /主体\/风格\/构图\/光影\/约束/);
+});
+
+test("image generation mini-tool keeps executable DOM action arguments safe", async () => {
+  const html = await readFile(path.join(ROOT, "desktop", "config-panel.html"), "utf8");
+  const firstDocument = html.slice(0, html.indexOf("</html>") + "</html>".length);
+  assert.match(firstDocument, /JSON\.stringify\(entry\.id\)/);
+  assert.match(firstDocument, /JSON\.stringify\(path\)/);
+});
+
 test("tools cards list renders classification metrics lab card", async () => {
   const html = await readFile(path.join(ROOT, "desktop", "config-panel.html"), "utf8");
   assert.match(html, /分类评估实验室/);

@@ -2119,6 +2119,29 @@
         }
         .tools-detail-back:hover { color: var(--text-primary); }
 
+        .media-gen-layout { display: grid; grid-template-columns: minmax(0, 1.1fr) minmax(300px, .9fr); gap: 16px; }
+        @media (max-width: 880px) { .media-gen-layout { grid-template-columns: 1fr; } }
+        .media-gen-panel { background: var(--surface); border: 1px solid var(--border-color); border-radius: var(--radius-lg); padding: 16px; }
+        .media-gen-panel h3 { margin: 0 0 12px; font-size: 14px; }
+        .media-gen-form-group { margin-bottom: 12px; }
+        .media-gen-form-group label { display: block; margin-bottom: 6px; font-size: 12px; color: var(--text-secondary); }
+        .media-gen-form-control { width: 100%; padding: 8px 10px; border: 1px solid var(--border-color); border-radius: var(--radius-md); background: var(--input-bg); color: var(--text-primary); font: inherit; }
+        .media-gen-textarea { min-height: 132px; resize: vertical; line-height: 1.5; }
+        .media-gen-tags { display: flex; flex-wrap: wrap; gap: 6px; margin: -2px 0 12px; }
+        .media-gen-tag { border: 1px solid var(--border-color); background: var(--input-bg); color: var(--text-secondary); border-radius: 999px; padding: 5px 9px; font-size: 12px; cursor: pointer; }
+        .media-gen-tag:hover { color: var(--text-primary); border-color: var(--text-secondary); }
+        .media-gen-tip, .media-gen-notice { margin: 10px 0; padding: 9px 10px; border-radius: var(--radius-md); font-size: 12px; line-height: 1.5; color: var(--text-secondary); background: var(--input-bg); }
+        .media-gen-notice { border: 1px dashed var(--border-color); }
+        .media-gen-error { margin: 10px 0; padding: 9px 10px; color: var(--danger); background: var(--danger-bg); border-radius: var(--radius-md); font-size: 12px; }
+        .media-gen-preview { display: block; width: 100%; max-height: 360px; object-fit: contain; border-radius: var(--radius-md); background: var(--input-bg); border: 1px solid var(--border-color); }
+        .media-gen-path { margin-top: 8px; font-family: var(--font-mono); font-size: 11px; color: var(--text-secondary); word-break: break-all; }
+        .media-gen-actions { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 10px; }
+        .media-gen-history { display: grid; gap: 8px; }
+        .media-gen-history-item { display: grid; grid-template-columns: 62px minmax(0, 1fr) auto; gap: 9px; align-items: start; padding: 8px; border: 1px solid var(--border-color); border-radius: var(--radius-md); background: var(--input-bg); }
+        .media-gen-history-thumb { width: 62px; height: 48px; object-fit: cover; border-radius: 4px; background: var(--surface); }
+        .media-gen-history-prompt { font-size: 12px; color: var(--text-primary); line-height: 1.4; word-break: break-word; }
+        .media-gen-history-meta { margin-top: 4px; font-size: 11px; color: var(--text-secondary); word-break: break-all; }
+
         .subauth-layout {
             display: grid;
             grid-template-columns: minmax(0, 1.15fr) minmax(0, 0.85fr);
@@ -3536,6 +3559,27 @@ experimental_bearer_token = "dummy"</pre>
             result: null,
             loading: false,
             error: ''
+        };
+        // Media-type state stays isolated so video/TTS can share only the generic helpers below.
+        const imageGenState = {
+            client: 'codex',
+            endpointId: '',
+            model: '',
+            prompt: '',
+            aspectRatio: 'auto',
+            imagePaths: '',
+            result: null,
+            loading: false,
+            error: '',
+            history: [],
+            historyLoading: false,
+            historyLoaded: false,
+            referenceNotice: ''
+        };
+        const MEDIA_HISTORY_PATHS = {
+            image: '/v1/media/history?media_type=image',
+            video: '/v1/media/history?media_type=video',
+            tts: '/v1/media/history?media_type=tts'
         };
         let lastLoadedSyncTargets = { antigravity: true, claude: true, codex: true };
 
@@ -5951,6 +5995,13 @@ ${(() => {
             detail.innerHTML = '';
             cards.style.display = '';
             cards.innerHTML = `
+                <div class="tools-card" id="image-gen" onclick="openTool('image-gen')">
+                    <div class="tools-card-icon">
+                        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="18" height="18" rx="2"></rect><circle cx="8.5" cy="8.5" r="1.5"></circle><path d="m21 15-5-5L5 21"></path></svg>
+                    </div>
+                    <div class="tools-card-name">图片生成</div>
+                    <div class="tools-card-desc">使用已配置的图片生成节点，编写提示词、选择画面比例，并查看本地生成历史。</div>
+                </div>
                 <div class="tools-card" onclick="openTool('embedding')">
                     <div class="tools-card-icon">
                         <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z"></path></svg>
@@ -5984,7 +6035,8 @@ ${(() => {
 
         window.openTool = function(toolId) {
             toolsView = toolId;
-            if (toolId === 'classification-metrics') renderClassificationMetricsDetail();
+            if (toolId === 'image-gen') renderImageGenDetail();
+            else if (toolId === 'classification-metrics') renderClassificationMetricsDetail();
             else if (toolId === 'antigravity-subscribe') renderAntigravitySubscribeDetail();
             else if (toolId === 'codex-subscribe') renderCodexSubscribeDetail();
             else renderToolsDetail();
@@ -6872,12 +6924,218 @@ ${(() => {
             `;
         };
 
+        // Shared by image/video/TTS mini-tools. Capability type is selected by endpoint purpose, never protocol type.
+        function getMediaEndpoints(client, purpose) {
+            return (config.clients[client]?.endpoints || []).filter(
+                ep => ep.purpose === purpose && ep.enabled !== false
+            );
+        }
+
+        function mediaHistoryPreviewUrl(filePath) {
+            // The gateway deliberately has no static arbitrary-file route. file:// is the desktop shell's local preview contract.
+            const normalized = String(filePath || '').replaceAll('\\', '/');
+            return normalized ? 'file:///' + encodeURI(normalized.replace(/^\/+/, '')) : '';
+        }
+
+        function parseImagePaths(value) {
+            return String(value || '').split(/[\n,]/).map(item => item.trim()).filter(Boolean);
+        }
+
         function getEmbeddingEndpoints(client) {
             const eps = (config.clients[client]?.endpoints || []).filter(
                 ep => ep.purpose === 'embedding' && ep.enabled !== false
             );
             return eps;
         }
+
+        function renderMediaHistoryHtml(entries, mediaType) {
+            if (!entries.length) return '<div class="media-gen-tip">暂无本地生成历史。</div>';
+            return '<div class="media-gen-history">' + entries.map(entry => {
+                const path = String(entry.file_path || '');
+                const previewUrl = mediaHistoryPreviewUrl(path);
+                const prompt = entry.prompt || '未记录提示词';
+                const timestamp = entry.timestamp ? new Date(entry.timestamp).toLocaleString('zh-CN', { hour12: false }) : '';
+                const preview = path
+                    ? '<img class="media-gen-history-thumb" src="' + escapeHtml(previewUrl) + '" alt="历史生成图片" onerror="this.style.visibility=\'hidden\'">'
+                    : '<div class="media-gen-history-thumb"></div>';
+                return '<div class="media-gen-history-item">' + preview +
+                    '<div><div class="media-gen-history-prompt">' + escapeHtml(prompt) + '</div>' +
+                    '<div class="media-gen-history-meta">' + escapeHtml(timestamp + (entry.model ? ' · ' + entry.model : '') + (path ? ' · ' + path : '')) + '</div></div>' +
+                    '<button class="btn" style="padding:4px 8px;font-size:11px;" onclick="deleteMediaHistoryEntry(' + escapeHtml(JSON.stringify(mediaType)) + ', ' + escapeHtml(JSON.stringify(entry.id)) + ')">删除</button>' +
+                    '</div>';
+            }).join('') + '</div>';
+        }
+
+        async function loadMediaHistory(state, mediaType) {
+            state.historyLoading = true;
+            if (mediaType === 'image' && toolsView === 'image-gen') renderImageGenDetail();
+            try {
+                const res = await fetch(MEDIA_HISTORY_PATHS[mediaType] || ('/v1/media/history?media_type=' + encodeURIComponent(mediaType)), {
+                    headers: { 'X-Gateway-Client': state.client }
+                });
+                const json = await res.json();
+                if (!res.ok) throw new Error(json?.error?.message || '加载历史失败 (' + res.status + ')');
+                state.history = Array.isArray(json.entries) ? json.entries : [];
+                state.historyLoaded = true;
+            } catch (err) {
+                state.history = [];
+                state.historyLoaded = true;
+                state.error = state.error || (err.message || String(err));
+            } finally {
+                state.historyLoading = false;
+                if (mediaType === 'image' && toolsView === 'image-gen') renderImageGenDetail();
+            }
+        }
+
+        window.renderImageGenDetail = function() {
+            const cards = document.getElementById('tools-cards');
+            const detail = document.getElementById('tools-detail');
+            if (!cards || !detail) return;
+            cards.style.display = 'none';
+            toolsView = 'image-gen';
+
+            const endpoints = getMediaEndpoints(imageGenState.client, 'image_generation');
+            const selectedEndpoint = endpoints.find(ep => ep.id === imageGenState.endpointId) || endpoints[0] || null;
+            if (selectedEndpoint && imageGenState.endpointId !== selectedEndpoint.id) {
+                imageGenState.endpointId = selectedEndpoint.id;
+                imageGenState.model = selectedEndpoint.models?.[0] || '';
+            }
+            const models = selectedEndpoint?.models || [];
+            if (models.length && !models.includes(imageGenState.model)) imageGenState.model = models[0];
+            const clients = Object.keys(config.clients || {});
+            const clientOptions = clients.map(client => '<option value="' + escapeHtml(client) + '" ' + (client === imageGenState.client ? 'selected' : '') + '>' + escapeHtml(client) + '</option>').join('');
+            const endpointOptions = endpoints.map(ep => '<option value="' + escapeHtml(ep.id) + '" ' + (ep.id === imageGenState.endpointId ? 'selected' : '') + '>' + escapeHtml(ep.name || ep.id) + (ep.provider ? ' · ' + escapeHtml(ep.provider) : '') + '</option>').join('');
+            const modelOptions = models.map(model => '<option value="' + escapeHtml(model) + '" ' + (model === imageGenState.model ? 'selected' : '') + '>' + escapeHtml(model) + '</option>').join('');
+            const noNodeHint = endpoints.length === 0 ? '<div class="media-gen-error">该 client 没有已启用的图片生成节点。请到代理节点添加 purpose=image_generation 的节点。</div>' : '';
+            const resultHtml = renderImageGenResult();
+            const historyHtml = imageGenState.historyLoading ? '<div class="media-gen-tip">正在加载历史...</div>' : renderMediaHistoryHtml(imageGenState.history, 'image');
+
+            detail.innerHTML = `
+                <button class="tools-detail-back" onclick="backToToolsCards()">返回工具列表</button>
+                <div class="media-gen-layout">
+                    <div class="media-gen-panel">
+                        <h3>图片生成</h3>
+                        ${noNodeHint}
+                        <div class="media-gen-form-group"><label>Client</label>
+                            <select class="media-gen-form-control" onchange="onImageGenClientChange(this.value)">${clientOptions}</select></div>
+                        <div class="media-gen-form-group"><label>图片生成节点</label>
+                            <select class="media-gen-form-control" onchange="onImageGenEndpointChange(this.value)" ${endpoints.length ? '' : 'disabled'}>${endpointOptions || '<option>无可用节点</option>'}</select></div>
+                        <div class="media-gen-form-group"><label>模型</label>
+                            <select class="media-gen-form-control" onchange="imageGenState.model=this.value" ${models.length ? '' : 'disabled'}>${modelOptions || '<option value="">使用节点默认模型</option>'}</select></div>
+                        <div class="media-gen-form-group"><label>提示词</label>
+                            <textarea id="image-gen-prompt" class="media-gen-form-control media-gen-textarea" placeholder="描述主体、风格、构图和你不希望出现的元素" oninput="imageGenState.prompt=this.value">${escapeHtml(imageGenState.prompt)}</textarea></div>
+                        <div class="media-gen-tags">
+                            ${['产品海报','人物肖像','概念场景','品牌插画','图标贴纸','建筑空间','美食摄影','信息图'].map(tag => '<button type="button" class="media-gen-tag" onclick="applyImagePromptSuggestion(\'' + tag + '\')">' + tag + '</button>').join('')}
+                        </div>
+                        <div class="media-gen-tip"><strong>提示模板：</strong>主体/风格/构图/光影/约束。例：主体：玻璃杯中的柠檬气泡水；风格：高级商业摄影；构图：居中近景；光影：柔和侧逆光；约束：无文字、无水印。</div>
+                        <div class="media-gen-form-group"><label>画面比例</label>
+                            <select class="media-gen-form-control" onchange="imageGenState.aspectRatio=this.value">
+                                ${['1:1','16:9','9:16','3:2','2:3','auto'].map(ratio => '<option value="' + ratio + '" ' + (ratio === imageGenState.aspectRatio ? 'selected' : '') + '>' + ratio + '</option>').join('')}
+                            </select></div>
+                        <div class="media-gen-form-group"><label>参考图片路径（逗号或换行分隔）</label>
+                            <textarea class="media-gen-form-control" rows="3" placeholder="C:\\images\\reference.png" oninput="imageGenState.imagePaths=this.value">${escapeHtml(imageGenState.imagePaths)}</textarea></div>
+                        <div class="media-gen-notice">参考图路径会按 <code>image_paths</code> 提交给本地网关读取。浏览器不会直接读取任意本地路径；请确认路径对运行网关的本机账户可访问。</div>
+                        ${imageGenState.referenceNotice ? '<div class="media-gen-notice">' + escapeHtml(imageGenState.referenceNotice) + '</div>' : ''}
+                        <button class="btn btn-primary" onclick="runImageGeneration()" ${imageGenState.loading || !endpoints.length ? 'disabled' : ''}>${imageGenState.loading ? '生成中...' : '生成图片'}</button>
+                    </div>
+                    <div class="media-gen-panel"><h3>结果</h3>${resultHtml}<h3 style="margin-top:18px;">本地历史</h3>${historyHtml}</div>
+                </div>`;
+            if (!imageGenState.historyLoading && !imageGenState.historyLoaded) loadMediaHistory(imageGenState, 'image');
+        };
+
+        window.onImageGenClientChange = function(client) {
+            imageGenState.client = client;
+            imageGenState.endpointId = '';
+            imageGenState.model = '';
+            imageGenState.result = null;
+            imageGenState.error = '';
+            imageGenState.history = [];
+            imageGenState.historyLoaded = false;
+            renderImageGenDetail();
+        };
+
+        window.onImageGenEndpointChange = function(endpointId) {
+            imageGenState.endpointId = endpointId;
+            const endpoint = getMediaEndpoints(imageGenState.client, 'image_generation').find(ep => ep.id === endpointId);
+            imageGenState.model = endpoint?.models?.[0] || '';
+            imageGenState.result = null;
+            imageGenState.error = '';
+            renderImageGenDetail();
+        };
+
+        window.applyImagePromptSuggestion = function(tag) {
+            const suggestions = {
+                '产品海报': '主体：一款极简科技产品；风格：高级广告海报；构图：留白充足的中心构图；光影：轮廓光；约束：无文字、无水印。',
+                '人物肖像': '主体：自然神态的人物半身肖像；风格：编辑风时尚摄影；构图：眼平视角；光影：柔和窗光；约束：真实皮肤质感、无文字。',
+                '概念场景': '主体：未来感概念场景；风格：电影级概念艺术；构图：广角远景；光影：戏剧化体积光；约束：画面叙事清晰。',
+                '品牌插画': '主体：品牌故事中的核心角色；风格：统一扁平插画；构图：清晰视觉层级；光影：简洁色块；约束：预留文案空间、无文字。',
+                '图标贴纸': '主体：可爱图标贴纸组；风格：干净矢量插画；构图：单个主体居中；光影：轻微投影；约束：白色背景、无文字。',
+                '建筑空间': '主体：现代建筑室内空间；风格：建筑摄影；构图：对称广角；光影：清晨自然光；约束：材质真实、无人。',
+                '美食摄影': '主体：精致餐盘与食物细节；风格：杂志美食摄影；构图：45 度近景；光影：温暖侧光；约束：无文字、食材新鲜。',
+                '信息图': '主体：易懂的视觉化信息图；风格：现代编辑设计；构图：模块化网格；光影：平面色彩；约束：不生成可读文字，以图形符号表达。'
+            };
+            imageGenState.prompt = suggestions[tag] || imageGenState.prompt;
+            renderImageGenDetail();
+        };
+
+        function renderImageGenResult() {
+            if (imageGenState.loading) return '<div class="media-gen-tip">正在请求生成服务，请保持此页面打开。</div>';
+            if (imageGenState.error) return '<div class="media-gen-error">' + escapeHtml(imageGenState.error) + '</div>';
+            if (!imageGenState.result) return '<div class="media-gen-tip">生成完成后会显示本地文件预览和可复制路径。</div>';
+            const path = imageGenState.result.file_path || imageGenState.result.filePath || '';
+            const url = mediaHistoryPreviewUrl(path);
+            return (path ? '<img class="media-gen-preview" src="' + escapeHtml(url) + '" alt="生成的图片" onerror="this.insertAdjacentHTML(\'afterend\', \'<div class=&quot;media-gen-notice&quot;>本地文件无法由当前浏览器预览，但文件已保存，可复制路径后打开。</div>\')">' : '') +
+                '<div class="media-gen-path">' + escapeHtml(path || '服务未返回 file_path') + '</div>' +
+                '<div class="media-gen-actions">' + (path ? '<button class="btn" onclick="copyMediaPath(' + escapeHtml(JSON.stringify(path)) + ')">复制路径</button>' : '') +
+                (imageGenState.result.history_id || imageGenState.result.historyId ? '<span class="media-gen-tip" style="margin:0;">历史 ID: ' + escapeHtml(imageGenState.result.history_id || imageGenState.result.historyId) + '</span>' : '') + '</div>';
+        }
+
+        window.runImageGeneration = async function() {
+            const prompt = imageGenState.prompt.trim();
+            if (!prompt) { imageGenState.error = '请输入提示词'; renderImageGenDetail(); return; }
+            if (!imageGenState.endpointId) { imageGenState.error = '请选择图片生成节点'; renderImageGenDetail(); return; }
+            const imagePaths = parseImagePaths(imageGenState.imagePaths);
+            imageGenState.loading = true;
+            imageGenState.error = '';
+            imageGenState.result = null;
+            imageGenState.referenceNotice = imagePaths.length ? '已提交 ' + imagePaths.length + ' 个参考图路径给本地网关读取。' : '';
+            renderImageGenDetail();
+            try {
+                const res = await fetch('/v1/media/image', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json', 'X-Gateway-Client': imageGenState.client },
+                    body: JSON.stringify({ endpoint_id: imageGenState.endpointId, model: imageGenState.model || undefined, prompt, aspectRatio: imageGenState.aspectRatio, image_paths: imagePaths })
+                });
+                const json = await res.json();
+                if (!res.ok) throw new Error(json?.error?.message || '生成失败 (' + res.status + ')');
+                if (!json.file_path && !json.filePath) throw new Error('服务返回成功但缺少 file_path');
+                imageGenState.result = json;
+                await loadMediaHistory(imageGenState, 'image');
+            } catch (err) {
+                imageGenState.error = err.message || String(err);
+            } finally {
+                imageGenState.loading = false;
+                if (toolsView === 'image-gen') renderImageGenDetail();
+            }
+        };
+
+        window.copyMediaPath = function(filePath) {
+            navigator.clipboard.writeText(filePath).then(() => showToast('已复制文件路径', 'success'), () => showToast('复制失败', 'danger'));
+        };
+
+        window.deleteMediaHistoryEntry = async function(mediaType, historyId) {
+            try {
+                const res = await fetch('/v1/media/history/' + encodeURIComponent(historyId), {
+                    method: 'DELETE', headers: { 'X-Gateway-Client': imageGenState.client }
+                });
+                const json = await res.json();
+                if (!res.ok) throw new Error(json?.error?.message || '删除失败 (' + res.status + ')');
+                if (mediaType === 'image') {
+                    imageGenState.history = imageGenState.history.filter(entry => entry.id !== historyId);
+                    if (toolsView === 'image-gen') renderImageGenDetail();
+                }
+            } catch (err) { showToast('删除历史失败: ' + (err.message || err), 'danger'); }
+        };
 
         window.renderToolsDetail = function() {
             if (toolsView === 'classification-metrics') {
