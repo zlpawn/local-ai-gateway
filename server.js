@@ -2977,10 +2977,10 @@ async function forwardResolvedCodexResponse({
   signal,
 }) {
   const requestedModel = body.model;
-  // Prefer an explicitly configured node (including codex-subscription) over the
-  // implicit official chatgpt-codex route. This lets Desktop reuse local subscription
-  // models through gateway endpoints instead of always short-circuiting official IDs.
-  let route = resolveConfiguredModel(
+  // Prefer an explicitly configured node only when it precisely claims the model.
+  // Do not let the default endpoint (e.g. huoshan-codingplan) swallow official
+  // gpt-* models via fallback matching.
+  let route = resolveConfiguredModelPrecise(
     requestedModel,
     ["anthropic", "openai-chat", "openai-responses", "grok", "antigravity", "codex-subscription", "chatgpt-codex"],
     context.client,
@@ -2999,7 +2999,15 @@ async function forwardResolvedCodexResponse({
     await proxyOfficialCodexResponse(body, clientReq, clientRes, context, signal);
     return;
   }
-  // Keep variable name for the rest of the function.
+  // Non-official models may still use the normal configured-model resolver,
+  // including default-endpoint fallback.
+  if (!route) {
+    route = resolveConfiguredModel(
+      requestedModel,
+      ["anthropic", "openai-chat", "openai-responses", "grok", "antigravity", "codex-subscription", "chatgpt-codex"],
+      context.client,
+    );
+  }
   const resolvedModel = route?.upstream_model || resolveModel(requestedModel);
   body = await maybePreprocessImages(body, route, clientReq, context);
   body = promoteAdditionalTools(body);
@@ -6060,6 +6068,60 @@ function hasConfiguredApiKey(ep) {
     return Boolean(process.env[envVar]);
   }
   return true;
+}
+
+function resolveConfiguredModelPrecise(requestedModel, allowedTypes = [], client = null) {
+  // Precise match only: model list / mapping / endpoint name.
+  // Never fall back to the client's default endpoint. Official models must keep
+  // their implicit official route unless a node explicitly claims them.
+  if (!requestedModel) return null;
+  const text = String(requestedModel);
+  const allowed = new Set(allowedTypes);
+  const clientsToCheck = client ? [client] : ["code", "desktop", "claude", "codex"];
+
+  for (const c of clientsToCheck) {
+    if (c === "code") {
+      const internalRoute = CLAUDE_CODE_MODEL_ROUTES.routes.get(text);
+      if (
+        internalRoute &&
+        (allowed.size === 0 || allowed.has(internalRoute.endpoint.type)) &&
+        hasConfiguredApiKey(internalRoute.endpoint)
+      ) {
+        return {
+          model: {
+            id: text,
+            display_name: internalRoute.display_name,
+            upstream_model: internalRoute.upstream_model,
+            aliases: [],
+          },
+          provider: endpointProvider(internalRoute.endpoint),
+          endpoint: internalRoute.endpoint,
+          upstream_model: internalRoute.upstream_model,
+        };
+      }
+    }
+
+    const endpoints = (GATEWAY_CONFIG.clients?.[c]?.endpoints || []).filter((ep) =>
+      !isCapabilityEndpoint(ep) && hasConfiguredApiKey(ep)
+    );
+
+    for (const ep of endpoints) {
+      if (allowed.size !== 0 && !allowed.has(ep.type)) continue;
+      let targetModel = text;
+      if (ep.model_mapping && ep.model_mapping[text]) {
+        targetModel = ep.model_mapping[text];
+      }
+      if (ep.models?.includes(targetModel) || ep.name === text || ep.model_mapping?.[text]) {
+        return {
+          model: { id: text, display_name: text, upstream_model: targetModel, aliases: [] },
+          provider: endpointProvider(ep),
+          endpoint: ep,
+          upstream_model: targetModel,
+        };
+      }
+    }
+  }
+  return null;
 }
 
 function resolveConfiguredModel(requestedModel, allowedTypes = [], client = null) {
