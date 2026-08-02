@@ -72,6 +72,7 @@ import {
 import { syncClaudeCodeSettings } from "./lib/config/claude-code-settings.mjs";
 import { createModelDiscoveryService } from "./lib/models/discovery-service.mjs";
 import { createTokenTracker } from "./lib/analytics/token-tracker.mjs";
+import { buildProxyUrl, getEffectiveProxyUrl, resolveOutboundProxyAgent } from "./lib/config/proxy-resolver.mjs";
 import { createDefaultStrategies } from "./lib/models/strategies/index.mjs";
 import { mergeClaudeOfficialModels, BUILTIN_CLAUDE_OFFICIAL_MODELS } from "./lib/config/claude-official-models.mjs";
 import { SkillInstaller } from "./lib/session-sync/skill-installer.mjs";
@@ -1502,6 +1503,73 @@ function collectGroupedModelsFromConfig(config) {
   }
 
   // --- CLI discovery + install history (parallel to skills) ---
+  if (reqPath === "/v1/config/proxy" && req.method === "GET") {
+    if (!checkLocalAuth(req, res)) return;
+    const globalProxy = GATEWAY_CONFIG.server?.proxy || {
+      enabled: true,
+      protocol: "http",
+      host: "127.0.0.1",
+      port: 7897,
+      username: "",
+      password: "",
+    };
+    sendJson(res, 200, globalProxy);
+    return;
+  }
+
+  if (reqPath === "/v1/config/proxy" && req.method === "POST") {
+    if (!checkLocalAuth(req, res)) return;
+    try {
+      const body = await parseJsonBody(req);
+      GATEWAY_CONFIG.server = GATEWAY_CONFIG.server || {};
+      GATEWAY_CONFIG.server.proxy = {
+        enabled: Boolean(body.enabled),
+        protocol: String(body.protocol || "http").toLowerCase(),
+        host: String(body.host || "127.0.0.1").trim(),
+        port: Number(body.port) || 7897,
+        username: String(body.username || ""),
+        password: String(body.password || ""),
+      };
+      saveGatewayConfig(GATEWAY_CONFIG);
+      sendJson(res, 200, { success: true, proxy: GATEWAY_CONFIG.server.proxy });
+    } catch (error) {
+      sendJson(res, 500, { error: { type: "save_proxy_failed", message: error.message } });
+    }
+    return;
+  }
+
+  if (reqPath === "/v1/config/proxy/test" && req.method === "POST") {
+    if (!checkLocalAuth(req, res)) return;
+    try {
+      const body = await parseJsonBody(req).catch(() => ({}));
+      const testConfig = body.proxy || GATEWAY_CONFIG.server?.proxy || { enabled: true, protocol: "http", host: "127.0.0.1", port: 7897 };
+      const proxyUrl = buildProxyUrl(testConfig);
+      if (!proxyUrl) {
+        sendJson(res, 200, { success: false, error: "代理未启用或配置无效" });
+        return;
+      }
+      const start = Date.now();
+      const agent = new HttpsProxyAgent(proxyUrl);
+      const testTarget = String(body.target_url || "https://api.openai.com");
+      
+      const response = await fetchWithOptionalProxy(testTarget, {
+        method: "GET",
+        signal: AbortSignal.timeout(5000),
+        agent,
+      }).catch((e) => ({ ok: false, status: 0, error: e }));
+
+      const latency_ms = Date.now() - start;
+      if (response && (response.ok || response.status > 0)) {
+        sendJson(res, 200, { success: true, latency_ms, status: response.status, target: testTarget });
+      } else {
+        sendJson(res, 200, { success: false, latency_ms, error: response?.error?.message || "连通性测试超时或连接失败" });
+      }
+    } catch (error) {
+      sendJson(res, 200, { success: false, error: error.message });
+    }
+    return;
+  }
+
   if (reqPath === "/v1/analytics/token-usage" && req.method === "GET") {
     if (!checkLocalAuth(req, res)) return;
     try {
