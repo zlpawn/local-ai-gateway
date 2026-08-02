@@ -8,7 +8,6 @@ import { createHash, randomUUID } from "node:crypto";
 import { URL, fileURLToPath } from "node:url";
 import https from "node:https";
 import { Readable } from "node:stream";
-import { HttpsProxyAgent } from "https-proxy-agent";
 import { responsesRequestToChat } from "./lib/codex/chat-request-adapter.mjs";
 import { sanitizeResponsesInput, sanitizeGrokResponsesInput } from "./lib/codex/grok-input-sanitizer.mjs";
 import { extractCompactionSummary } from "./lib/codex/compaction-helper.mjs";
@@ -72,7 +71,13 @@ import {
 import { syncClaudeCodeSettings } from "./lib/config/claude-code-settings.mjs";
 import { createModelDiscoveryService } from "./lib/models/discovery-service.mjs";
 import { createTokenTracker } from "./lib/analytics/token-tracker.mjs";
-import { buildProxyUrl, getEffectiveProxyUrl, resolveOutboundProxyAgent } from "./lib/config/proxy-resolver.mjs";
+import { createResponseUsageCapture } from "./lib/analytics/response-usage-capture.mjs";
+import {
+  buildProxyUrl,
+  createProxyAgent,
+  defaultProxyConfig,
+  getEffectiveProxyUrl,
+} from "./lib/config/proxy-resolver.mjs";
 import { createDefaultStrategies } from "./lib/models/strategies/index.mjs";
 import { mergeClaudeOfficialModels, BUILTIN_CLAUDE_OFFICIAL_MODELS } from "./lib/config/claude-official-models.mjs";
 import { SkillInstaller } from "./lib/session-sync/skill-installer.mjs";
@@ -100,6 +105,7 @@ import {
   runGatewayWebSearchResponsesLoop,
   withoutStreamFlag,
 } from "./lib/web-search/index.mjs";
+import { shouldRetryUpstreamResponse } from "./lib/upstream-retry.mjs";
 import {
   addHistoryEntry,
   deleteHistoryEntry,
@@ -125,7 +131,6 @@ const UPSTREAM_RETRY_COUNT = intEnv("UPSTREAM_RETRY_COUNT", 2);
 const UPSTREAM_RETRY_BACKOFF_MS = intEnv("UPSTREAM_RETRY_BACKOFF_MS", 500);
 // HTTP statuses that indicate a transient upstream overload worth retrying
 // (e.g. Bedrock 503 "Channel Exception", rate limits, overloaded).
-const TRANSIENT_OVERLOAD_STATUSES = new Set([429, 503, 529]);
 function sleep(ms) {
   return new Promise((resolve) => setTimeout(resolve, ms));
 }
@@ -265,6 +270,7 @@ if (CODEX_WRITE_MODEL_CATALOG) {
 }
 
 const server = http.createServer(async (req, res) => {
+  attachResponseUsageCapture(req, res);
   try {
     await route(req, res);
   } catch (error) {
@@ -284,6 +290,51 @@ const server = http.createServer(async (req, res) => {
     }
   }
 });
+
+function attachResponseUsageCapture(req, res) {
+  const capture = createResponseUsageCapture();
+  const originalWrite = res.write.bind(res);
+  const originalEnd = res.end.bind(res);
+  let recorded = false;
+
+  res.write = function(chunk, ...args) {
+    if (req.gatewayUsageContext && chunk != null) capture.push(chunk);
+    return originalWrite(chunk, ...args);
+  };
+  res.end = function(chunk, ...args) {
+    if (req.gatewayUsageContext && chunk != null) capture.push(chunk);
+    return originalEnd(chunk, ...args);
+  };
+  res.once("finish", () => {
+    if (recorded || !req.gatewayUsageContext || res.statusCode < 200 || res.statusCode >= 300) return;
+    recorded = true;
+    const usage = capture.finish();
+    if (!usage) return;
+    recordRequestTokenUsage({
+      ...req.gatewayUsageContext,
+      usage,
+    });
+  });
+}
+
+function markRequestTokenUsage(req, {
+  context,
+  route = null,
+  endpoint = null,
+  purpose = "chat",
+  model = "",
+} = {}) {
+  const resolvedEndpoint = endpoint || route?.endpoint || route?.config || null;
+  req.gatewayUsageContext = {
+    client: context?.client || "unknown",
+    endpoint: resolvedEndpoint || {
+      id: route?.provider?.id || "ep_unknown",
+      name: route?.provider?.name || route?.provider?.id || "unknown",
+    },
+    purpose: resolvedEndpoint?.purpose || purpose,
+    model,
+  };
+}
 
 // Pin Claude Desktop (3p) to this gateway as soon as the process starts,
 // even if the listen port is already occupied.
@@ -732,6 +783,12 @@ async function forwardOpenAIEmbeddings(body, req, res, context) {
   if (apiKey) {
     upstreamHeaders["Authorization"] = "Bearer " + apiKey;
   }
+  markRequestTokenUsage(req, {
+    context,
+    endpoint: embeddingEndpoint,
+    purpose: "embedding",
+    model: modelInput || upstreamModel,
+  });
 
   logInfo("embeddings_forward", {
     request_id: context.requestId,
@@ -743,11 +800,11 @@ async function forwardOpenAIEmbeddings(body, req, res, context) {
   });
 
   try {
-    const upstreamRes = await fetch(upstreamUrl, {
+    const upstreamRes = await fetchConfiguredUrl(upstreamUrl, {
       method: "POST",
       headers: upstreamHeaders,
       body: JSON.stringify(upstreamBody),
-    });
+    }, embeddingEndpoint);
 
     const responseText = await upstreamRes.text();
     res.writeHead(upstreamRes.status, {
@@ -1505,14 +1562,7 @@ function collectGroupedModelsFromConfig(config) {
   // --- CLI discovery + install history (parallel to skills) ---
   if (reqPath === "/v1/config/proxy" && req.method === "GET") {
     if (!checkLocalAuth(req, res)) return;
-    const globalProxy = GATEWAY_CONFIG.server?.proxy || {
-      enabled: true,
-      protocol: "http",
-      host: "127.0.0.1",
-      port: 7897,
-      username: "",
-      password: "",
-    };
+    const globalProxy = GATEWAY_CONFIG.server?.proxy || defaultProxyConfig();
     sendJson(res, 200, globalProxy);
     return;
   }
@@ -1521,8 +1571,7 @@ function collectGroupedModelsFromConfig(config) {
     if (!checkLocalAuth(req, res)) return;
     try {
       const body = await readJson(req);
-      GATEWAY_CONFIG.server = GATEWAY_CONFIG.server || {};
-      GATEWAY_CONFIG.server.proxy = {
+      const proxy = {
         enabled: Boolean(body.enabled),
         protocol: String(body.protocol || "http").toLowerCase(),
         host: String(body.host || "127.0.0.1").trim(),
@@ -1530,10 +1579,22 @@ function collectGroupedModelsFromConfig(config) {
         username: String(body.username || ""),
         password: String(body.password || ""),
       };
-      saveGatewayConfig(GATEWAY_CONFIG);
-      sendJson(res, 200, { success: true, proxy: GATEWAY_CONFIG.server.proxy });
+      buildProxyUrl(proxy);
+      const nextConfig = structuredClone(GATEWAY_CONFIG);
+      nextConfig.server = nextConfig.server || {};
+      nextConfig.server.proxy = proxy;
+      const result = saveGatewayState({
+        configPath: GATEWAY_CONFIG_FILE,
+        secretsPath: GATEWAY_SECRETS_FILE,
+        config: nextConfig,
+        officialCodexIds: OFFICIAL_CODEX_MODEL_IDS,
+      });
+      GATEWAY_CONFIG = result.config;
+      GATEWAY_SECRETS = result.secrets;
+      reloadGatewayConfig({ reloadFiles: false });
+      sendJson(res, 200, { success: true, proxy });
     } catch (error) {
-      sendJson(res, 500, { error: { type: "save_proxy_failed", message: error.message } });
+      sendJson(res, 400, { error: { type: "save_proxy_failed", message: error.message } });
     }
     return;
   }
@@ -1542,20 +1603,19 @@ function collectGroupedModelsFromConfig(config) {
     if (!checkLocalAuth(req, res)) return;
     try {
       const body = await readJson(req).catch(() => ({}));
-      const testConfig = body.proxy || GATEWAY_CONFIG.server?.proxy || { enabled: true, protocol: "http", host: "127.0.0.1", port: 7897 };
+      const testConfig = body.proxy || GATEWAY_CONFIG.server?.proxy || defaultProxyConfig();
       const proxyUrl = buildProxyUrl(testConfig);
       if (!proxyUrl) {
         sendJson(res, 200, { success: false, error: "代理未启用或配置无效" });
         return;
       }
       const start = Date.now();
-      const agent = new HttpsProxyAgent(proxyUrl);
       const testTarget = String(body.target_url || "https://api.openai.com");
       
       const response = await fetchWithOptionalProxy(testTarget, {
         method: "GET",
         signal: AbortSignal.timeout(5000),
-        agent,
+        proxyUrl,
       }).catch((e) => ({ ok: false, status: 0, error: e }));
 
       const latency_ms = Date.now() - start;
@@ -2669,6 +2729,12 @@ async function forwardAnthropicMessages(body, clientReq, clientRes, context) {
 async function forwardAnthropicMessagesResolved(body, clientReq, clientRes, context, signal) {
   const requestedModel = body.model;
   const route = resolveAnthropicRoute(requestedModel, context.client);
+  markRequestTokenUsage(clientReq, {
+    context,
+    route,
+    endpoint: route?.endpoint,
+    model: requestedModel,
+  });
   body = await maybePreprocessImages(body, route, clientReq, context);
 
   // Official Anthropic / Grok keep their own tool semantics; only inject for
@@ -3037,6 +3103,11 @@ async function forwardOpenAIChatCompletionsResolved(body, clientReq, clientRes, 
 
   const route = resolveConfiguredModel(requestedModel, ["anthropic", "openai-chat", "openai-responses", "grok", "codex-subscription", "chatgpt-codex"], context.client);
   const resolvedModel = route?.upstream_model || resolveModel(requestedModel);
+  markRequestTokenUsage(clientReq, {
+    context,
+    route,
+    model: requestedModel || resolvedModel,
+  });
   body = await maybePreprocessImages(body, route, clientReq, context);
 
   const canUseGatewaySearch = Boolean(route?.provider)
@@ -3132,7 +3203,6 @@ async function forwardOpenAIChatCompletionsResolved(body, clientReq, clientRes, 
         },
       });
       if (!loop.completion) return;
-      recordRequestTokenUsage({ client: context.client, endpoint: context.endpoint, purpose: context.endpoint?.purpose || "chat", model: requestedModel, usage: completion?.usage || {} });
       logInfo("openai_chat_response", {
         request_id: context.requestId,
         client: context.client,
@@ -3558,10 +3628,7 @@ async function proxyAntigravityResponse(body, clientRes, context, requestedModel
 
   // Resolve proxy: endpoint config takes precedence, then env vars.
   // Mirrors the Grok provider pattern (server.js grokProxyAgentFor).
-  const endpointProxy = route?.provider?.proxy;
-  const envProxy = process.env.HTTPS_PROXY || process.env.HTTP_PROXY ||
-    process.env.https_proxy || process.env.http_proxy || "";
-  const proxyUrl = endpointProxy || envProxy || null;
+  const proxyUrl = configuredOutboundProxyUrl(route?.provider || {}) || null;
   // Proxy-aware fetch for the REST loadCodeAssist call.
   const proxyFetch = proxyUrl
     ? (url, opts) => fetchWithOptionalProxy(url, { ...opts, proxyUrl })
@@ -3752,6 +3819,11 @@ async function forwardResolvedCodexResponse({
     );
   }
   const resolvedModel = route?.upstream_model || resolveModel(requestedModel);
+  markRequestTokenUsage(clientReq, {
+    context,
+    route,
+    model: requestedModel || resolvedModel,
+  });
   body = await maybePreprocessImages(body, route, clientReq, context);
   body = promoteAdditionalTools(body);
 
@@ -4570,12 +4642,12 @@ async function fetchConfiguredAnthropic(provider, body, clientReq) {
           : {}),
       };
       const bodyStr = JSON.stringify(body);
-      const doFetch = (key) => fetch(url, {
+      const doFetch = (key) => fetchConfiguredUrl(url, {
         method: "POST",
         headers: providerHeaders(provider, key, baseHeaders),
         body: bodyStr,
         signal: controller.signal,
-      });
+      }, provider);
 
       let key = upstreamApiKey;
       let res = await doFetch(key);
@@ -4609,7 +4681,7 @@ async function fetchConfiguredAnthropic(provider, body, clientReq) {
 
       // Retry transient upstream overload (e.g. Bedrock 503 "Channel Exception")
       // before surfacing the error to the client.
-      for (let attempt = 0; attempt < UPSTREAM_RETRY_COUNT && TRANSIENT_OVERLOAD_STATUSES.has(res.status); attempt++) {
+      for (let attempt = 0; attempt < UPSTREAM_RETRY_COUNT && await shouldRetryUpstreamResponse(res); attempt++) {
         logInfo("upstream_retry", { provider: provider.id, status: res.status, attempt: attempt + 1 });
         await sleep(UPSTREAM_RETRY_BACKOFF_MS * (attempt + 1));
         res = await doFetch(key);
@@ -4682,12 +4754,12 @@ async function fetchConfiguredOpenAI(
     try {
       const bodyStr = JSON.stringify(body);
       const fetchSignal = signal || controller.signal;
-      const doFetch = (key) => fetch(url, {
+      const doFetch = (key) => fetchConfiguredUrl(url, {
         method: "POST",
         headers: providerHeaders(provider, key),
         body: bodyStr,
         signal: fetchSignal,
-      });
+      }, provider);
 
       let key = upstreamApiKey;
       let res = await doFetch(key);
@@ -4704,7 +4776,7 @@ async function fetchConfiguredOpenAI(
 
       // Retry transient upstream overload (e.g. Bedrock 503 "Channel Exception")
       // before surfacing the error to the client.
-      for (let attempt = 0; attempt < UPSTREAM_RETRY_COUNT && TRANSIENT_OVERLOAD_STATUSES.has(res.status); attempt++) {
+      for (let attempt = 0; attempt < UPSTREAM_RETRY_COUNT && await shouldRetryUpstreamResponse(res); attempt++) {
         logInfo("upstream_retry", { provider: provider.id, status: res.status, attempt: attempt + 1 });
         await sleep(UPSTREAM_RETRY_BACKOFF_MS * (attempt + 1));
         res = await doFetch(key);
@@ -4893,9 +4965,22 @@ function grokHeaders(provider, model, authInfo) {
 function grokProxyAgentFor(proxyUrl) {
   if (!proxyUrl) return undefined;
   if (!_grokProxyAgents.has(proxyUrl)) {
-    _grokProxyAgents.set(proxyUrl, new HttpsProxyAgent(proxyUrl));
+    _grokProxyAgents.set(proxyUrl, createProxyAgent(proxyUrl));
   }
   return _grokProxyAgents.get(proxyUrl);
+}
+
+function configuredOutboundProxyUrl(provider = {}) {
+  return getEffectiveProxyUrl(provider, GATEWAY_CONFIG.server?.proxy || defaultProxyConfig());
+}
+
+function isLoopbackUrl(value) {
+  try {
+    const hostname = new URL(value).hostname.toLowerCase();
+    return hostname === "localhost" || hostname === "127.0.0.1" || hostname === "::1";
+  } catch {
+    return false;
+  }
 }
 
 // Official chatgpt.com / api.openai.com are blocked without the local Clash
@@ -4907,13 +4992,13 @@ function officialCodexProxyUrl() {
   return (
     process.env.OFFICIAL_CODEX_PROXY
     || process.env.GROK_PROXY
+    || buildProxyUrl(GATEWAY_CONFIG.server?.proxy || {})
     || process.env.HTTPS_PROXY
     || process.env.HTTP_PROXY
     || process.env.ALL_PROXY
     || process.env.https_proxy
     || process.env.http_proxy
     || process.env.all_proxy
-    || "http://127.0.0.1:7897"
   );
 }
 
@@ -4972,6 +5057,13 @@ async function fetchWithOptionalProxy(url, {
     }
     req.end();
   });
+}
+
+function fetchConfiguredUrl(url, init = {}, provider = {}) {
+  if (isLoopbackUrl(url)) return fetch(url, init);
+  const proxyUrl = configuredOutboundProxyUrl(provider);
+  if (!proxyUrl) return fetch(url, init);
+  return fetchWithOptionalProxy(url, { ...init, proxyUrl });
 }
 
 // Per-provider concurrency guard so many client tabs cannot fan out parallel
@@ -5084,7 +5176,7 @@ async function fetchGrok(provider, endpointPath, body, signal) {
   }
   const url = `${baseUrl}${endpointPath}`;
   const transport = new URL(url).protocol === "http:" ? http : https;
-  const proxyUrl = provider?.proxy === "" ? "" : provider?.proxy ?? GROK_DEFAULT_PROXY;
+  const proxyUrl = configuredOutboundProxyUrl(provider);
   const agent = grokProxyAgentFor(proxyUrl);
   await grokAcquire(provider, signal);
   let timedOut = false;
@@ -5887,7 +5979,12 @@ function resolveCapabilityForProtocol(model, protocol, client = null) {
 
 const CODEX_MODELS_LIVE_ENABLED = !isTruthy(process.env.CODEX_MODELS_LIVE_DISABLED);
 let modelDiscoveryService = null;
-const globalTokenTracker = createTokenTracker({ dbPath: path.join(PROJECT_ROOT, "gateway.db") });
+const globalTokenTracker = createTokenTracker({
+  dbPath: resolveProjectPath(
+    process.env.GATEWAY_ANALYTICS_DB_FILE
+      || path.join(path.dirname(GATEWAY_CONFIG_FILE), "gateway.db"),
+  ),
+});
 
 const CODEX_MODELS_TTL_MS = intEnv("CODEX_MODELS_TTL_MS", 300_000);
 const CODEX_MODELS_LIVE_TIMEOUT_MS = intEnv("CODEX_MODELS_LIVE_TIMEOUT_MS", 2_500);
@@ -7168,7 +7265,11 @@ async function describeImagesWithFallback(images, fallback, clientReq) {
 
   if (!upstream?.ok) {
     const message = upstream ? await upstream.text() : "Unsupported vision fallback provider type";
-    throw httpError(upstream?.status || 502, `Vision fallback failed: ${message}`);
+    throw httpError(
+      upstream?.status || 502,
+      `视觉兜底节点“${fallback.endpoint.name || fallback.endpoint.id}”`
+      + `（${fallback.model}）请求失败：${message}`,
+    );
   }
   if (!description.trim()) throw httpError(502, "Vision fallback returned no image description.");
   const combinedDescription = cachedPrefix
@@ -7199,6 +7300,8 @@ function endpointProvider(endpoint) {
     auth: endpoint.auth || "bearer",
     auth_path: endpoint.auth_path,
     proxy: endpoint.proxy,
+    proxy_mode: endpoint.proxy_mode,
+    proxy_url: endpoint.proxy_url,
     max_concurrency: endpoint.max_concurrency,
     client_version: endpoint.client_version,
     agent_id_path: endpoint.agent_id_path,

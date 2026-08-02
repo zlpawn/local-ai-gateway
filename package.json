@@ -79,6 +79,7 @@
     "@xterm/xterm": "^6.0.0",
     "https-proxy-agent": "^7.0.6",
     "node-pty": "^1.1.0",
+    "socks-proxy-agent": "^8.0.5",
     "ws": "^8.21.1"
   },
   "allowScripts": {

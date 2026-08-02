@@ -3436,9 +3436,6 @@ experimental_bearer_token = "dummy"</pre>
                         <h2>网络代理 (System Proxy)</h2>
                         <div class="subtitle">配置全局科学上网代理（访问 Grok, OpenAI, Anthropic, Gemini 等国外模型）</div>
                     </div>
-                    <button class="btn btn-secondary" onclick="testProxyConnection()">
-                        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="margin-right: 6px;"><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"></path><polyline points="22 4 12 14.01 9 11.01"></polyline></svg>测试连通性
-                    </button>
                 </div>
 
                 <div class="card" style="margin-bottom: 20px;">
@@ -4652,6 +4649,213 @@ experimental_bearer_token = "dummy"</pre>
                 popover.innerHTML = createAddNodeOptionsHTML(popover.dataset.client);
             });
         }
+
+        function currentProxyFormValue() {
+            return {
+                enabled: Boolean(document.getElementById('proxy-enabled')?.checked),
+                protocol: document.getElementById('proxy-protocol')?.value || 'http',
+                host: document.getElementById('proxy-host')?.value.trim() || '127.0.0.1',
+                port: Number(document.getElementById('proxy-port')?.value) || 7897,
+                username: document.getElementById('proxy-username')?.value || '',
+                password: document.getElementById('proxy-password')?.value || '',
+            };
+        }
+
+        window.loadProxyConfig = async function() {
+            try {
+                const res = await fetch('/v1/config/proxy');
+                const proxy = await res.json();
+                if (!res.ok) throw new Error(proxy?.error?.message || `加载失败 (${res.status})`);
+                document.getElementById('proxy-enabled').checked = proxy.enabled !== false;
+                document.getElementById('proxy-protocol').value = proxy.protocol || 'http';
+                document.getElementById('proxy-host').value = proxy.host || '127.0.0.1';
+                document.getElementById('proxy-port').value = Number(proxy.port) || 7897;
+                document.getElementById('proxy-username').value = proxy.username || '';
+                document.getElementById('proxy-password').value = proxy.password || '';
+                config.server ||= {};
+                config.server.proxy = proxy;
+                renderProxyEndpointsList();
+            } catch (error) {
+                showToast(`加载代理配置失败：${error.message || error}`, 'error');
+            }
+        };
+
+        window.saveProxyConfig = async function(event) {
+            event?.preventDefault();
+            const submit = event?.submitter || document.querySelector('#proxy-config-form button[type="submit"]');
+            const original = submit?.textContent || '';
+            if (submit) {
+                submit.disabled = true;
+                submit.textContent = '保存中...';
+            }
+            try {
+                const res = await fetch('/v1/config/proxy', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(currentProxyFormValue()),
+                });
+                const data = await res.json().catch(() => ({}));
+                if (!res.ok || data.success === false) {
+                    throw new Error(data?.error?.message || data?.error || `保存失败 (${res.status})`);
+                }
+                config.server ||= {};
+                config.server.proxy = data.proxy;
+                renderProxyEndpointsList();
+                showToast('代理配置已保存并即时生效', 'success');
+            } catch (error) {
+                showToast(`保存代理配置失败：${error.message || error}`, 'error');
+            } finally {
+                if (submit) {
+                    submit.disabled = false;
+                    submit.textContent = original;
+                }
+            }
+        };
+
+        window.testProxyConnection = async function() {
+            const resultCard = document.getElementById('proxy-test-result');
+            const content = document.getElementById('proxy-test-content');
+            if (resultCard) resultCard.style.display = 'block';
+            if (content) content.innerHTML = '<span style="color:var(--text-secondary)">正在通过当前表单代理测试 https://api.openai.com ...</span>';
+            try {
+                const res = await fetch('/v1/config/proxy/test', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        proxy: currentProxyFormValue(),
+                        target_url: 'https://api.openai.com',
+                    }),
+                });
+                const data = await res.json().catch(() => ({}));
+                if (!res.ok || !data.success) {
+                    throw new Error(data?.error?.message || data?.error || '代理连接失败');
+                }
+                if (content) {
+                    content.innerHTML = `<span style="color:#10b981;font-weight:600">连接成功</span>
+                        <span style="margin-left:12px;color:var(--text-secondary)">HTTP ${Number(data.status) || 0} · ${Number(data.latency_ms) || 0} ms</span>`;
+                }
+            } catch (error) {
+                if (content) content.innerHTML = `<span style="color:#ef4444;font-weight:600">连接失败：</span>${escapeHtml(error.message || String(error))}`;
+            }
+        };
+
+        window.renderProxyEndpointsList = function() {
+            const container = document.getElementById('proxy-endpoints-list');
+            if (!container) return;
+            const globalProxy = config.server?.proxy || currentProxyFormValue();
+            const rows = Object.entries(config.clients || {}).flatMap(([client, body]) =>
+                (body?.endpoints || []).map(endpoint => {
+                    const mode = String(endpoint.proxy_mode || 'global');
+                    const legacyProxy = typeof endpoint.proxy === 'string' ? endpoint.proxy : '';
+                    let label = globalProxy.enabled === false ? '直连（全局代理已关闭）' : `全局代理 · ${String(globalProxy.protocol || 'http').toUpperCase()}://${globalProxy.host || '127.0.0.1'}:${globalProxy.port || 7897}`;
+                    if (mode === 'disabled' || endpoint.proxy === '') label = '节点直连';
+                    else if (mode === 'custom' && endpoint.proxy_url) label = `节点自定义 · ${endpoint.proxy_url}`;
+                    else if (legacyProxy) label = `节点自定义 · ${legacyProxy}`;
+                    return `<tr>
+                        <td style="padding:9px 10px;border-bottom:1px solid var(--border-color)">${escapeHtml(client)}</td>
+                        <td style="padding:9px 10px;border-bottom:1px solid var(--border-color)">${escapeHtml(endpoint.name || endpoint.id || '未命名节点')}</td>
+                        <td style="padding:9px 10px;border-bottom:1px solid var(--border-color);font-family:var(--font-mono);font-size:12px">${escapeHtml(label)}</td>
+                    </tr>`;
+                }),
+            );
+            container.innerHTML = rows.length
+                ? `<div style="overflow:auto"><table style="width:100%;border-collapse:collapse;font-size:13px">
+                    <thead><tr><th style="text-align:left;padding:8px 10px">客户端</th><th style="text-align:left;padding:8px 10px">节点</th><th style="text-align:left;padding:8px 10px">生效方式</th></tr></thead>
+                    <tbody>${rows.join('')}</tbody>
+                  </table></div>`
+                : '<div style="color:var(--text-secondary);font-size:13px">暂无节点</div>';
+        };
+
+        function formatUsageNumber(value) {
+            return new Intl.NumberFormat('zh-CN').format(Number(value) || 0);
+        }
+
+        function renderAnalyticsChart(points) {
+            const container = document.getElementById('analytics-chart-container');
+            if (!container) return;
+            if (!Array.isArray(points) || points.length === 0) {
+                container.innerHTML = '<div style="color:var(--text-secondary);font-size:13px">暂无 Token 数据</div>';
+                return;
+            }
+            const width = 960;
+            const height = 240;
+            const padding = { left: 54, right: 18, top: 18, bottom: 42 };
+            const chartWidth = width - padding.left - padding.right;
+            const chartHeight = height - padding.top - padding.bottom;
+            const maxValue = Math.max(1, ...points.map(point => Number(point.total_tokens) || 0));
+            const step = chartWidth / Math.max(1, points.length);
+            const barWidth = Math.max(3, Math.min(28, step * 0.64));
+            const bars = points.map((point, index) => {
+                const value = Number(point.total_tokens) || 0;
+                const barHeight = value / maxValue * chartHeight;
+                const x = padding.left + index * step + (step - barWidth) / 2;
+                const y = padding.top + chartHeight - barHeight;
+                return `<rect x="${x.toFixed(1)}" y="${y.toFixed(1)}" width="${barWidth.toFixed(1)}" height="${barHeight.toFixed(1)}" rx="3" fill="#3b82f6">
+                    <title>${escapeHtml(point.time_key)} · ${formatUsageNumber(value)} Token</title>
+                </rect>`;
+            }).join('');
+            const labelEvery = Math.max(1, Math.ceil(points.length / 8));
+            const labels = points.map((point, index) => {
+                if (index % labelEvery !== 0 && index !== points.length - 1) return '';
+                const x = padding.left + index * step + step / 2;
+                const label = String(point.time_key || '').replace(/^\d{4}-/, '');
+                return `<text x="${x.toFixed(1)}" y="${height - 14}" text-anchor="middle" fill="currentColor" opacity=".62" font-size="10">${escapeHtml(label)}</text>`;
+            }).join('');
+            container.innerHTML = `<svg viewBox="0 0 ${width} ${height}" role="img" aria-label="Token 消耗趋势图" style="width:100%;height:auto;min-height:220px">
+                <line x1="${padding.left}" y1="${padding.top + chartHeight}" x2="${width - padding.right}" y2="${padding.top + chartHeight}" stroke="currentColor" opacity=".16"/>
+                <text x="8" y="${padding.top + 10}" fill="currentColor" opacity=".62" font-size="11">${formatUsageNumber(maxValue)}</text>
+                ${bars}${labels}
+            </svg>`;
+        }
+
+        function renderAnalyticsBreakdown(rows) {
+            const container = document.getElementById('analytics-breakdown-container');
+            if (!container) return;
+            if (!Array.isArray(rows) || rows.length === 0) {
+                container.innerHTML = '<div style="color:var(--text-secondary);font-size:13px">暂无数据</div>';
+                return;
+            }
+            const labels = {
+                chat: '聊天',
+                embedding: '向量',
+                image_generation: '图像生成',
+                video_generation: '视频生成',
+                audio_tts: '语音',
+                tts: '语音',
+            };
+            container.innerHTML = `<div style="overflow:auto"><table style="width:100%;border-collapse:collapse;font-size:13px">
+                <thead><tr><th style="text-align:left;padding:8px 10px">节点类型</th><th style="text-align:right;padding:8px 10px">请求数</th><th style="text-align:right;padding:8px 10px">Token</th></tr></thead>
+                <tbody>${rows.map(row => `<tr>
+                    <td style="padding:9px 10px;border-top:1px solid var(--border-color)">${escapeHtml(labels[row.purpose] || row.purpose || '其他')}</td>
+                    <td style="padding:9px 10px;border-top:1px solid var(--border-color);text-align:right">${formatUsageNumber(row.requests)}</td>
+                    <td style="padding:9px 10px;border-top:1px solid var(--border-color);text-align:right">${formatUsageNumber(row.total_tokens)}</td>
+                </tr>`).join('')}</tbody>
+            </table></div>`;
+        }
+
+        window.loadAnalyticsData = async function() {
+            const params = new URLSearchParams({
+                granularity: document.getElementById('analytics-granularity')?.value || 'hour',
+                range: document.getElementById('analytics-range')?.value || '24h',
+                purpose: document.getElementById('analytics-purpose')?.value || 'all',
+            });
+            try {
+                const res = await fetch(`/v1/analytics/token-usage?${params.toString()}`);
+                const data = await res.json().catch(() => ({}));
+                if (!res.ok) throw new Error(data?.error?.message || `加载失败 (${res.status})`);
+                const summary = data.summary || {};
+                document.getElementById('stat-total-tokens').textContent = formatUsageNumber(summary.total_tokens);
+                document.getElementById('stat-prompt-tokens').textContent = formatUsageNumber(summary.prompt_tokens);
+                document.getElementById('stat-completion-tokens').textContent = formatUsageNumber(summary.completion_tokens);
+                document.getElementById('stat-total-requests').textContent = formatUsageNumber(summary.total_requests);
+                renderAnalyticsChart(data.timeline || []);
+                renderAnalyticsBreakdown(data.purpose_breakdown || []);
+            } catch (error) {
+                renderAnalyticsChart([]);
+                renderAnalyticsBreakdown([]);
+                showToast(`加载用量统计失败：${error.message || error}`, 'error');
+            }
+        };
 
         async function loadDefaultTemplate() {
             if (!confirm('这会覆盖你当前的所有配置，确定要恢复默认模板吗？')) return;
@@ -6341,7 +6545,6 @@ experimental_bearer_token = "dummy"</pre>
                             </div>
                             ` : ''}
                             ${isWebSearch ? '' : `<div class="form-group full">
-                                <label>上游模型列表 (输入模型名称后按回车添加)</label>
                                 ${(ep.models && ep.models.length > 0) ? `
                                 <div class="tags-list">
                                     ${ep.models.map((m, i) => `
@@ -6407,7 +6610,10 @@ ${(() => {
                                     `).join('')}
                                 </div>
                                 ` : ''}
-                                ${!isCapabilityNode ? `<div class="model-field-head"><label style="margin:0">上游模型列表 (输入模型名称后按回车添加)</label><button type="button" class="btn btn-xs" onclick="refreshEndpointModels('${client}', '${ep.id || ''}')">刷新模型</button></div>` : `<label>上游模型列表 (输入模型名称后按回车添加)</label>`}
+                                <div class="model-field-head">
+                                    <label style="margin:0">上游模型列表 (输入模型名称后按回车添加)</label>
+                                    ${!isCapabilityNode ? `<button type="button" class="btn btn-xs" onclick="refreshEndpointModels('${client}', '${ep.id || ''}')">刷新模型</button>` : ''}
+                                </div>
                                 <div class="model-suggest-wrap" id="model-suggest-upstream-${client}-${ep.id || index}">
                                 <input type="text" id="input-models-${client}-${index}" class="mono" placeholder="添加新模型并按回车 (例如: glm-5.2)..." list="media-model-suggestions-${client}-${index}" onkeydown="handleTagInput(event, '${client}', ${index}, 'models')" onfocus="${!isCapabilityNode ? `openModelSuggest('${client}', '${ep.id || ''}', 'upstream')` : ''}" oninput="${!isCapabilityNode ? `renderDiscoverySuggestions('${client}', '${ep.id || ''}')` : ''}">${isMedia ? `<datalist id="media-model-suggestions-${client}-${index}">${mediaPresetModels(mediaProvider.value, ep.purpose).map(function(m) { return '<option value="' + escapeHtml(m) + '">'; }).join('')}</datalist>` : ''}
                                 ${!isCapabilityNode ? `<div class="model-suggest-popover" id="model-discovery-list-${client}-${ep.id || ''}"></div>` : ''}
@@ -9615,1824 +9821,6 @@ ${(() => {
             }
             if (e.key === 'Escape' && document.querySelector('.ui-select-dropdown.is-open')) {
                 closeUiSelects();
-                return;
-            }
-            if (e.key === 'Escape' && document.querySelector('.ctx-window-dropdown.is-open')) {
-                closeAllCtxWindowMenus();
-                closeAllCtxVisionMenus();
-                return;
-            }
-            if (e.key === 'Escape' && selectedEndpoint) {
-                // Don't hijack Esc while typing in inputs unless it's a pure cancel
-                const tag = (e.target && e.target.tagName) || '';
-                if (tag === 'INPUT' || tag === 'SELECT' || tag === 'TEXTAREA') return;
-                closeEndpointDetail();
-            }
-        });
-    </script>
-</body>
-</html>
-                '    <div class="subauth-actions">',
-                '      <button class="btn" onclick="loadAntigravityAuthStatus()" ' + (antigravityAuthState.busyAction === 'login-start' || antigravityAuthState.busyAction === 'discover' || antigravityAuthState.busyAction === 'save-client' ? 'disabled' : '') + '>刷新状态</button>',
-                '      <button class="btn btn-primary" onclick="discoverAntigravityClient()" ' + (antigravityAuthState.busyAction === 'login-start' || antigravityAuthState.busyAction === 'discover' || antigravityAuthState.busyAction === 'save-client' ? 'disabled' : '') + '>' + (antigravityAuthState.busyAction === 'discover' ? '提取中...' : '从本机提取') + '</button>',
-                '      <button class="btn" onclick="toggleAntigravityManualForm()" ' + (antigravityAuthState.busyAction === 'login-start' ? 'disabled' : '') + '>手动填写</button>',
-                '      <button class="btn btn-primary" onclick="loginAntigravitySubscription()" ' + (antigravityAuthState.busyAction === 'login-start' || antigravityAuthState.busyAction === 'login-wait' || !s?.client?.configured ? 'disabled' : '') + '>' + (antigravityAuthState.busyAction === 'login-start' ? '启动中...' : (antigravityAuthState.busyAction === 'login-wait' ? '等待授权中' : '一键登录')) + '</button>',
-                (antigravityAuthState.busyAction === 'login-wait' ? '      <button class="btn" onclick="cancelAntigravityLoginWait()">取消等待</button>' : ''),
-                '    </div>',
-                                antigravityAuthState.showManual ? (
-                  '<div class="subauth-form-row">' +
-                  '<input id="ag-client-id" class="subauth-input" placeholder="client_id（*.apps.googleuser.test）" value="' + escapeHtml(antigravityAuthState.clientId || '') + '" oninput="antigravityAuthState.clientId=this.value">' +
-                  '<input id="ag-client-secret" class="subauth-input" placeholder="client_secret（FAKESEC-...）" value="' + escapeHtml(antigravityAuthState.clientSecret || '') + '" oninput="antigravityAuthState.clientSecret=this.value">' +
-                  '<div class="subauth-actions" style="margin-top:0;"><button class="btn btn-primary" onclick="saveAntigravityClientCredentials()" ' + (busy ? 'disabled' : '') + '>' + (antigravityAuthState.busyAction === 'save-client' ? '保存中...' : '保存 client 凭据') + '</button></div>' +
-                  '</div>'
-                ) : '',
-                antigravityAuthState.error ? ('<div class="subauth-error">' + escapeHtml(antigravityAuthState.error) + '</div>') : '',
-                antigravityAuthState.message ? ('<div class="subauth-success">' + escapeHtml(antigravityAuthState.message) + '</div>') : '',
-                '    <div class="subauth-help">',
-                '      <div>Secrets 文件：<span class="subauth-path">' + escapeHtml(s?.secrets_path || 'antigravity.secrets.json') + '</span></div>',
-                '      <div style="margin-top:6px;">本机安装：' + escapeHtml(installHint) + '</div>',
-                '      <div style="margin-top:6px;">节点配置：' + escapeHtml(nodeHint) + '</div>',
-                (antigravityAuthState.authUrl ? ('      <div style="margin-top:10px;"><strong>完整授权链接</strong><div class="subauth-path" style="margin-top:4px;user-select:all;">' + escapeHtml(antigravityAuthState.authUrl) + '</div><div class="subauth-muted" style="margin-top:4px;">必须整段复制。若默认账号不对，打开后点“使用其他账号”。</div><button class="btn" style="margin-top:8px;" onclick="navigator.clipboard.writeText(antigravityAuthState.authUrl||&quot;&quot;)">复制完整链接</button><button class="btn" style="margin-top:8px;margin-left:8px;" onclick="if(antigravityAuthState.authUrl){window.open(antigravityAuthState.authUrl,&quot;_blank&quot;,&quot;noopener,noreferrer&quot;)}">重新打开链接</button></div>') : ''),
-                '    </div>',
-                '  </div>',
-                '  <div class="subauth-panel">',
-                '    <h3>接下来做什么</h3>',
-                '    <ol class="subauth-steps">' + nextSteps + '</ol>',
-                '    <div class="subauth-help">',
-                '      <div><strong>真实上游协议</strong></div>',
-                '      <div class="subauth-muted" style="margin-top:6px;">' + escapeHtml(s?.protocol_note || 'Antigravity 节点真实上游是 Google v1internal gRPC，不是 Anthropic Messages。') + '</div>',
-                '      <div style="margin-top:12px;"><strong>等价 CLI</strong></div>',
-                '      <div class="subauth-muted" style="margin-top:6px;">',
-                '        <div><code>' + escapeHtml(s?.cli?.discover || 'shrimp upstream google-oauth discover') + '</code></div>',
-                '        <div><code>' + escapeHtml(s?.cli?.login || 'shrimp upstream google-oauth login') + '</code></div>',
-                '        <div><code>' + escapeHtml(s?.cli?.status || 'shrimp upstream google-oauth status') + '</code></div>',
-                '      </div>',
-                '    </div>',
-                '  </div>',
-                '</div>'
-            ].join('');
-        };
-
-        window.toggleAntigravityManualForm = function() {
-            antigravityAuthState.showManual = !antigravityAuthState.showManual;
-            antigravityAuthState.error = '';
-            antigravityAuthState.message = '';
-            renderAntigravitySubscribeDetail(false);
-        };
-
-        window.discoverAntigravityClient = async function() {
-            antigravityAuthState.busyAction = 'discover';
-            antigravityAuthState.error = '';
-            antigravityAuthState.message = '';
-            renderAntigravitySubscribeDetail(false);
-            try {
-                const res = await fetch('/v1/subscription-auth/antigravity/discover', {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ save: true }),
-                });
-                const json = await res.json();
-                if (!res.ok || json.success === false) {
-                    throw new Error(json?.error?.message || json?.message || '提取失败');
-                }
-                antigravityAuthState.status = json.status || antigravityAuthState.status;
-                antigravityAuthState.message = json.message || '已提取并保存 client 凭据';
-                if (json.client_id) antigravityAuthState.clientId = json.client_id;
-            } catch (err) {
-                antigravityAuthState.error = err.message || String(err);
-                antigravityAuthState.showManual = true;
-            } finally {
-                antigravityAuthState.busyAction = '';
-                renderAntigravitySubscribeDetail(false);
-            }
-        };
-
-        window.saveAntigravityClientCredentials = async function() {
-            antigravityAuthState.busyAction = 'save-client';
-            antigravityAuthState.error = '';
-            antigravityAuthState.message = '';
-            renderAntigravitySubscribeDetail(false);
-            try {
-                const res = await fetch('/v1/subscription-auth/antigravity/save-client', {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({
-                        client_id: antigravityAuthState.clientId,
-                        client_secret: antigravityAuthState.clientSecret,
-                    }),
-                });
-                const json = await res.json();
-                if (!res.ok || json.success === false) {
-                    throw new Error(json?.error?.message || '保存失败');
-                }
-                antigravityAuthState.status = json.state || json;
-                antigravityAuthState.message = 'client 凭据已保存';
-                antigravityAuthState.clientSecret = '';
-                antigravityAuthState.showManual = false;
-            } catch (err) {
-                antigravityAuthState.error = err.message || String(err);
-            } finally {
-                antigravityAuthState.busyAction = '';
-                renderAntigravitySubscribeDetail(false);
-            }
-        };
-
-        window.loginAntigravitySubscription = async function() {
-            // Cancel any previous poll loop first.
-            if (antigravityAuthState.loginPollTimer) {
-                clearTimeout(antigravityAuthState.loginPollTimer);
-                antigravityAuthState.loginPollTimer = null;
-            }
-
-            antigravityAuthState.busyAction = 'login-start';
-            antigravityAuthState.error = '';
-            antigravityAuthState.message = '正在启动登录...';
-            antigravityAuthState.authUrl = '';
-            antigravityAuthState.sessionId = '';
-            antigravityAuthState.loginStartedAt = Date.now();
-            renderAntigravitySubscribeDetail(false);
-
-            try {
-                const res = await fetch('/v1/subscription-auth/antigravity/login', {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ force: true }),
-                });
-                const json = await res.json();
-                if (!res.ok || json.success === false) {
-                    throw new Error(json?.error?.message || '启动登录失败');
-                }
-
-                const authUrl = json.auth_url || '';
-                antigravityAuthState.authUrl = authUrl;
-                antigravityAuthState.sessionId = json.session_id || '';
-                antigravityAuthState.message = json.message || '请在浏览器完成授权';
-                antigravityAuthState.busyAction = 'login-wait';
-
-                // Open from the browser page itself so Windows never truncates the URL.
-                if (authUrl) {
-                    try { window.open(authUrl, '_blank', 'noopener,noreferrer'); } catch {}
-                }
-                renderAntigravitySubscribeDetail(false);
-
-                if (!json.session_id) {
-                    throw new Error('登录会话未返回 session_id');
-                }
-
-                const sessionId = json.session_id;
-                const deadline = Date.now() + 5 * 60 * 1000;
-
-                const pollOnce = async () => {
-                    if (antigravityAuthState.sessionId !== sessionId) return; // cancelled/replaced
-                    if (Date.now() > deadline) {
-                        antigravityAuthState.busyAction = '';
-                        antigravityAuthState.error = '登录超时：请确认浏览器完成授权后重试';
-                        antigravityAuthState.loginPollTimer = null;
-                        renderAntigravitySubscribeDetail(false);
-                        return;
-                    }
-                    try {
-                        const pollRes = await fetch('/v1/subscription-auth/antigravity/login-session', {
-                            method: 'POST',
-                            headers: { 'Content-Type': 'application/json' },
-                            body: JSON.stringify({ session_id: sessionId }),
-                        });
-                        const poll = await pollRes.json();
-                        if (antigravityAuthState.sessionId !== sessionId) return;
-                        if (!pollRes.ok && poll?.error?.type === 'login_session_not_found') {
-                            throw new Error(poll.error.message || '登录会话已失效');
-                        }
-                        if (poll.phase === 'done') {
-                            antigravityAuthState.status = poll.status || antigravityAuthState.status;
-                            antigravityAuthState.message = '登录成功：' + (poll.account_id || antigravityAuthState.status?.token?.account_id || '');
-                            antigravityAuthState.error = '';
-                            antigravityAuthState.busyAction = '';
-                            antigravityAuthState.loginPollTimer = null;
-                            renderAntigravitySubscribeDetail(false);
-                            return;
-                        }
-                        if (poll.phase === 'error') {
-                            throw new Error(poll.error?.message || '登录失败');
-                        }
-                        antigravityAuthState.message = '等待 Google 授权中... 可点“取消等待”继续使用其他功能。若账号不对，复制完整链接并选择正确账号。';
-                        antigravityAuthState.busyAction = 'login-wait';
-                        renderAntigravitySubscribeDetail(false);
-                        antigravityAuthState.loginPollTimer = setTimeout(pollOnce, 1500);
-                    } catch (err) {
-                        if (antigravityAuthState.sessionId !== sessionId) return;
-                        antigravityAuthState.error = err.message || String(err);
-                        antigravityAuthState.busyAction = '';
-                        antigravityAuthState.loginPollTimer = null;
-                        renderAntigravitySubscribeDetail(false);
-                    }
-                };
-                antigravityAuthState.loginPollTimer = setTimeout(pollOnce, 1200);
-            } catch (err) {
-                antigravityAuthState.error = err.message || String(err);
-                antigravityAuthState.busyAction = '';
-                antigravityAuthState.loginPollTimer = null;
-                renderAntigravitySubscribeDetail(false);
-            }
-        };
-
-        window.cancelAntigravityLoginWait = function() {
-            if (antigravityAuthState.loginPollTimer) {
-                clearTimeout(antigravityAuthState.loginPollTimer);
-                antigravityAuthState.loginPollTimer = null;
-            }
-            antigravityAuthState.sessionId = '';
-            antigravityAuthState.busyAction = '';
-            antigravityAuthState.message = '已取消等待。若浏览器稍后完成授权，可点“刷新状态”查看结果。';
-            renderAntigravitySubscribeDetail(false);
-        };;
-
-
-        function metricsToCount(value) {
-            const n = Number(value);
-            if (!Number.isFinite(n) || n < 0) return null;
-            return Math.floor(n);
-        }
-
-        function metricsRatio(numerator, denominator) {
-            if (denominator === 0) return { value: null, unavailable: true };
-            return { value: numerator / denominator, unavailable: false };
-        }
-
-        function guidedFromCounts(counts) {
-            const tp = metricsToCount(counts.tp) ?? 0;
-            const fp = metricsToCount(counts.fp) ?? 0;
-            const fn = metricsToCount(counts.fn) ?? 0;
-            const tn = metricsToCount(counts.tn) ?? 0;
-            const selected = tp + fp;
-            const total = tp + fp + fn + tn;
-            return {
-                total,
-                selected,
-                selectedWrong: fp,
-                missedActual: fn,
-            };
-        }
-
-        function syncGuidedFromCounts() {
-            metricsState.guided = guidedFromCounts({
-                tp: metricsState.tp,
-                fp: metricsState.fp,
-                fn: metricsState.fn,
-                tn: metricsState.tn,
-            });
-        }
-
-        function applyGuidedToCounts() {
-            const total = metricsToCount(metricsState.guided.total);
-            const selected = metricsToCount(metricsState.guided.selected);
-            const selectedWrong = metricsToCount(metricsState.guided.selectedWrong);
-            const missedActual = metricsToCount(metricsState.guided.missedActual);
-            if ([total, selected, selectedWrong, missedActual].some((v) => v == null)) {
-                return { error: '业务填写项都必须是大于等于 0 的整数。' };
-            }
-            if (selected > total) {
-                return { error: '“判成目标”的数量不能超过总样本数。' };
-            }
-            if (selectedWrong > selected) {
-                return { error: '“判成目标里的错误数”不能超过“判成目标”的数量。' };
-            }
-            const notSelected = total - selected;
-            if (missedActual > notSelected) {
-                return { error: '“漏掉的真实目标”不能超过“没判成目标”的数量。' };
-            }
-            const tp = selected - selectedWrong;
-            const fp = selectedWrong;
-            const fn = missedActual;
-            const tn = notSelected - missedActual;
-            metricsState.tp = tp;
-            metricsState.fp = fp;
-            metricsState.fn = fn;
-            metricsState.tn = tn;
-            return {
-                guided: {
-                    total,
-                    selected,
-                    notSelected,
-                    selectedCorrect: tp,
-                    selectedWrong,
-                    missedActual,
-                },
-                counts: { tp, fp, fn, tn },
-            };
-        }
-
-        function computeMetricsFromState() {
-            let guidedMeta = null;
-            if (metricsState.inputMode === 'guided') {
-                const guidedResult = applyGuidedToCounts();
-                if (guidedResult.error) return guidedResult;
-                guidedMeta = guidedResult.guided;
-            }
-            const tp = metricsToCount(metricsState.tp);
-            const fp = metricsToCount(metricsState.fp);
-            const fn = metricsToCount(metricsState.fn);
-            const tn = metricsToCount(metricsState.tn);
-            if ([tp, fp, fn, tn].some((v) => v == null)) {
-                return { error: 'TP / FP / FN / TN 都必须是大于等于 0 的整数。' };
-            }
-            const total = tp + fp + fn + tn;
-            const actualPos = tp + fn;
-            const actualNeg = fp + tn;
-            const predictedPos = tp + fp;
-            const accuracy = metricsRatio(tp + tn, total);
-            const precision = metricsRatio(tp, predictedPos);
-            const recall = metricsRatio(tp, actualPos);
-            const f1 = (precision.value == null || recall.value == null)
-                ? { value: null, unavailable: true }
-                : metricsRatio(2 * precision.value * recall.value, precision.value + recall.value);
-            if (!guidedMeta) {
-                guidedMeta = {
-                    total,
-                    selected: predictedPos,
-                    notSelected: total - predictedPos,
-                    selectedCorrect: tp,
-                    selectedWrong: fp,
-                    missedActual: fn,
-                };
-            }
-            return {
-                counts: { tp, fp, fn, tn },
-                guided: guidedMeta,
-                totals: {
-                    total,
-                    actualPos,
-                    actualNeg,
-                    predictedPos,
-                },
-                metrics: { accuracy, precision, recall, f1 },
-            };
-        }
-
-        function formatMetricPercent(metric) {
-            if (!metric || metric.value == null) return 'N/A';
-            return (metric.value * 100).toFixed(1) + '%';
-        }
-
-        function buildMetricsStory(result) {
-            if (result.error) return [result.error];
-            const { counts, totals, metrics } = result;
-            const lines = [];
-            lines.push('一共 ' + totals.total + ' 条样本：实际正例 ' + totals.actualPos + '，实际负例 ' + totals.actualNeg + '。');
-            lines.push('模型报出 ' + totals.predictedPos + ' 个正例：其中 TP ' + counts.tp + ' 个真对，FP ' + counts.fp + ' 个误报。');
-            lines.push('真实正例里抓回 ' + counts.tp + ' 个，漏掉 ' + counts.fn + ' 个（FN）。');
-            if (metrics.precision.value == null) lines.push('精准率无法计算：模型没有预测出任何正例。');
-            else lines.push('精准率 ' + formatMetricPercent(metrics.precision) + '：你报出来的正例里，大约 ' + formatMetricPercent(metrics.precision) + ' 是真的。');
-            if (metrics.recall.value == null) lines.push('召回率无法计算：数据里没有真实正例。');
-            else lines.push('召回率 ' + formatMetricPercent(metrics.recall) + '：真实正例里，大约 ' + formatMetricPercent(metrics.recall) + ' 被找回来了。');
-            if (metrics.accuracy.value != null) {
-                lines.push('准确率 ' + formatMetricPercent(metrics.accuracy) + '：所有判断里，对了 ' + formatMetricPercent(metrics.accuracy) + '。');
-            }
-            if (
-                totals.total > 0
-                && totals.actualPos > 0
-                && totals.actualPos / totals.total <= 0.1
-                && metrics.accuracy.value != null
-                && metrics.accuracy.value >= 0.9
-                && (metrics.recall.value == null || metrics.recall.value < 0.5)
-            ) {
-                lines.push('注意：正例很少时，准确率容易虚高。即使漏掉大量正例，准确率也可能看起来不错。');
-            } else if (metrics.precision.value != null && metrics.recall.value != null) {
-                if (metrics.precision.value - metrics.recall.value >= 0.15) {
-                    lines.push('当前更偏“报得准，但抓得不全”：误报少，漏报更多。');
-                } else if (metrics.recall.value - metrics.precision.value >= 0.15) {
-                    lines.push('当前更偏“抓得全，但水分更大”：漏报少，误报更多。');
-                } else {
-                    lines.push('当前精准率和召回率比较接近，没有明显偏向某一侧。');
-                }
-            }
-            return lines;
-        }
-
-        function metricsMetricCardHtml(label, metric, hint, tone = '') {
-            const toneClass = tone ? (' ' + tone) : '';
-            return '<div class="metrics-metric-card' + toneClass + '">'
-                + '<div class="label">' + label + '</div>'
-                + '<div class="value">' + escapeHtml(formatMetricPercent(metric)) + '</div>'
-                + '<div class="hint">' + hint + '</div>'
-                + '</div>';
-        }
-
-        function buildMetricsBridgeHtml(result) {
-            if (result.error) {
-                return '<div class="metrics-status-slot" id="metrics-status-slot"><div class="metrics-hint-error">' + escapeHtml(result.error) + '</div></div>';
-            }
-            return '<div class="metrics-status-slot" id="metrics-status-slot">'
-                + '<div class="metrics-bridge" id="metrics-bridge">'
-                + '<h4>系统已翻译成专家口径</h4>'
-                + '<div class="metrics-bridge-grid">'
-                + '<div class="metrics-bridge-item tp"><strong id="metrics-bridge-tp">TP 真正例 = ' + escapeHtml(String(result.counts?.tp ?? 0)) + '</strong><span>判成目标，而且判对了</span></div>'
-                + '<div class="metrics-bridge-item fp"><strong id="metrics-bridge-fp">FP 假正例 = ' + escapeHtml(String(result.counts?.fp ?? 0)) + '</strong><span>判成目标，但其实错了（误报）</span></div>'
-                + '<div class="metrics-bridge-item fn"><strong id="metrics-bridge-fn">FN 假负例 = ' + escapeHtml(String(result.counts?.fn ?? 0)) + '</strong><span>没判成目标，但其实是目标（漏报）</span></div>'
-                + '<div class="metrics-bridge-item tn"><strong id="metrics-bridge-tn">TN 真负例 = ' + escapeHtml(String(result.counts?.tn ?? 0)) + '</strong><span>没判成目标，而且本来也不是</span></div>'
-                + '</div>'
-                + '<p class="metrics-bridge-note" id="metrics-bridge-note">没判成目标 = ' + escapeHtml(String(result.guided?.notSelected ?? 0)) + '；判对的目标 = ' + escapeHtml(String(result.guided?.selectedCorrect ?? 0)) + '。切换到“直接填 TP/FP/FN/TN”时会沿用这组数。</p>'
-                + '</div></div>';
-        }
-
-        function buildMetricsInputBodyHtml(result) {
-            if (metricsState.inputMode === 'guided') {
-                return '<p>先按业务场景填写，系统会自动翻译成 TP / FP / FN / TN，帮你慢慢对齐专家口径。</p>'
-                    + '<div class="metrics-grid-inputs">'
-                    + '<div class="metrics-input-card guided-total"><label>一共有多少样本</label><input type="number" min="0" step="1" data-metrics-field="total" value="' + escapeHtml(String(metricsState.guided.total)) + '" oninput="onMetricsGuidedInput(\'total\', this.value)" /></div>'
-                    + '<div class="metrics-input-card guided-selected"><label>其中有多少被判成目标</label><input type="number" min="0" step="1" data-metrics-field="selected" value="' + escapeHtml(String(metricsState.guided.selected)) + '" oninput="onMetricsGuidedInput(\'selected\', this.value)" /></div>'
-                    + '<div class="metrics-input-card guided-wrong"><label>判成目标里，有多少其实是错的</label><input type="number" min="0" step="1" data-metrics-field="selectedWrong" value="' + escapeHtml(String(metricsState.guided.selectedWrong)) + '" oninput="onMetricsGuidedInput(\'selectedWrong\', this.value)" /></div>'
-                    + '<div class="metrics-input-card guided-missed"><label>没判成目标里，有多少其实本该是目标</label><input type="number" min="0" step="1" data-metrics-field="missedActual" value="' + escapeHtml(String(metricsState.guided.missedActual)) + '" oninput="onMetricsGuidedInput(\'missedActual\', this.value)" /></div>'
-                    + '</div>'
-                    + buildMetricsBridgeHtml(result);
-            }
-            return '<p>直接填写 TP / FP / FN / TN。也可先点上方示例，再改成你的数。</p>'
-                + '<div class="metrics-grid-inputs">'
-                + '<div class="metrics-input-card tp"><label>TP 真正例</label><input type="number" min="0" step="1" data-metrics-field="tp" value="' + escapeHtml(String(metricsState.tp)) + '" oninput="onMetricsCountInput(\'tp\', this.value)" /></div>'
-                + '<div class="metrics-input-card fp"><label>FP 假正例（误报）</label><input type="number" min="0" step="1" data-metrics-field="fp" value="' + escapeHtml(String(metricsState.fp)) + '" oninput="onMetricsCountInput(\'fp\', this.value)" /></div>'
-                + '<div class="metrics-input-card fn"><label>FN 假负例（漏报）</label><input type="number" min="0" step="1" data-metrics-field="fn" value="' + escapeHtml(String(metricsState.fn)) + '" oninput="onMetricsCountInput(\'fn\', this.value)" /></div>'
-                + '<div class="metrics-input-card tn"><label>TN 真负例</label><input type="number" min="0" step="1" data-metrics-field="tn" value="' + escapeHtml(String(metricsState.tn)) + '" oninput="onMetricsCountInput(\'tn\', this.value)" /></div>'
-                + '</div>';
-        }
-
-        function buildMetricsResultBodyHtml(result) {
-            if (result.error) {
-                return '<div class="embed-error">' + escapeHtml(result.error) + '</div>';
-            }
-            const story = buildMetricsStory(result);
-            return '<div class="metrics-metric-grid">'
-                + metricsMetricCardHtml('准确率 Accuracy', result.metrics.accuracy, '全部判断里对了多少', 'accuracy')
-                + metricsMetricCardHtml('精准率 Precision', result.metrics.precision, '报出的正例里有多少真对', 'precision')
-                + metricsMetricCardHtml('召回率 Recall', result.metrics.recall, '真实正例里抓回了多少', 'recall')
-                + metricsMetricCardHtml('F1', result.metrics.f1, '精准率与召回率的调和平均', 'f1')
-                + '</div>'
-                + '<div style="margin-top:14px;">'
-                + '<p style="margin-bottom:6px;"><strong style="color:var(--text-primary);">人话报告</strong></p>'
-                + '<ul class="metrics-list">'
-                + story.map((line) => '<li>' + escapeHtml(line) + '</li>').join('')
-                + '</ul>'
-                + '</div>';
-        }
-
-        function updateMetricsLiveView(options = {}) {
-            const rebuildInput = options.rebuildInput === true;
-            const result = computeMetricsFromState();
-            const countOrState = (key) => String(result.counts ? result.counts[key] : metricsState[key]);
-            ['tp', 'fp', 'fn', 'tn'].forEach((key) => {
-                const el = document.getElementById('metrics-count-' + key);
-                if (el) el.textContent = countOrState(key);
-            });
-
-            document.querySelectorAll('.metrics-pill[data-scenario-id]').forEach((btn) => {
-                const id = btn.getAttribute('data-scenario-id');
-                btn.classList.toggle('active', metricsState.scenario === id);
-            });
-            const summary = document.getElementById('metrics-scenario-summary');
-            const lesson = document.getElementById('metrics-scenario-lesson');
-            const scenario = metricsScenarios[metricsState.scenario] || metricsScenarios.spam;
-            if (summary) summary.textContent = scenario.summary;
-            if (lesson) lesson.innerHTML = '<strong style="color:var(--text-primary);">点题：</strong>' + escapeHtml(scenario.lesson);
-
-            document.querySelectorAll('.metrics-mode-btn[data-metrics-mode]').forEach((btn) => {
-                const mode = btn.getAttribute('data-metrics-mode');
-                btn.classList.toggle('active', mode === metricsState.inputMode);
-            });
-
-            const inputBody = document.getElementById('metrics-input-body');
-            if (inputBody && rebuildInput) {
-                inputBody.innerHTML = buildMetricsInputBodyHtml(result);
-            } else if (inputBody && metricsState.inputMode === 'guided') {
-                const statusHtml = buildMetricsBridgeHtml(result);
-                const statusSlot = document.getElementById('metrics-status-slot');
-                if (statusSlot) statusSlot.outerHTML = statusHtml;
-                else inputBody.insertAdjacentHTML('beforeend', statusHtml);
-                const statusNodes = inputBody.querySelectorAll('#metrics-status-slot');
-                statusNodes.forEach((node, idx) => { if (idx > 0) node.remove(); });
-            }
-
-            const resultBody = document.getElementById('metrics-result-body');
-            if (resultBody) resultBody.innerHTML = buildMetricsResultBodyHtml(result);
-            return result;
-        }
-
-        window.applyMetricsScenario = function(id) {
-            const scenario = metricsScenarios[id] || metricsScenarios.spam;
-            metricsState.scenario = scenario.id;
-            metricsState.tp = scenario.counts.tp;
-            metricsState.fp = scenario.counts.fp;
-            metricsState.fn = scenario.counts.fn;
-            metricsState.tn = scenario.counts.tn;
-            syncGuidedFromCounts();
-            if (document.getElementById('metrics-input-body')) {
-                updateMetricsLiveView({ rebuildInput: true });
-            } else {
-                renderClassificationMetricsDetail();
-            }
-        };
-
-        window.setMetricsInputMode = function(mode) {
-            metricsState.inputMode = mode === 'expert' ? 'expert' : 'guided';
-            if (metricsState.inputMode === 'guided') {
-                syncGuidedFromCounts();
-            } else {
-                applyGuidedToCounts();
-            }
-            if (document.getElementById('metrics-input-body')) {
-                updateMetricsLiveView({ rebuildInput: true });
-            } else {
-                renderClassificationMetricsDetail();
-            }
-        };
-
-        window.onMetricsCountInput = function(field, value) {
-            metricsState[field] = value;
-            metricsState.scenario = 'custom';
-            if (metricsState.inputMode === 'expert') {
-                syncGuidedFromCounts();
-            }
-            updateMetricsLiveView();
-        };
-
-        window.onMetricsGuidedInput = function(field, value) {
-            metricsState.guided[field] = value;
-            metricsState.scenario = 'custom';
-            updateMetricsLiveView();
-        };
-
-        window.resetMetricsExample = function() {
-            applyMetricsScenario(metricsState.scenario === 'custom' ? 'spam' : metricsState.scenario);
-        };
-
-        window.renderClassificationMetricsDetail = function() {
-            const cards = document.getElementById('tools-cards');
-            const detail = document.getElementById('tools-detail');
-            if (!cards || !detail) return;
-            cards.style.display = 'none';
-            const result = computeMetricsFromState();
-            const scenario = metricsScenarios[metricsState.scenario] || metricsScenarios.spam;
-            const countOrState = (key) => escapeHtml(String(result.counts ? result.counts[key] : metricsState[key]));
-            detail.innerHTML = `
-                <button class="tools-detail-back" onclick="backToToolsCards()">
-                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="15 18 9 12 15 6"></polyline></svg>
-                    返回工具列表
-                </button>
-
-                <div class="metrics-section-head">
-                    <h2>教学区</h2>
-                    <p>先建立概念，再看例子。</p>
-                </div>
-                <div class="metrics-teach">
-                    <div class="metrics-stack">
-                        <div class="metrics-panel">
-                            <h3>先认清四格</h3>
-                            <p>所有分类指标，都先从混淆矩阵这四格开始。先有“实际”，再有“预测”。下方数字会跟随当前示例/输入变化，方便对照。</p>
-                            <div class="metrics-matrix">
-                                <div></div>
-                                <div class="metrics-matrix-label">实际正例</div>
-                                <div class="metrics-matrix-label">实际负例</div>
-                                <div class="metrics-matrix-label">预测正例</div>
-                                <div class="metrics-cell tp"><strong>TP 真正例</strong><span>预测是，实际也是</span><div class="metrics-count" id="metrics-count-tp">${countOrState('tp')}</div></div>
-                                <div class="metrics-cell fp"><strong>FP 假正例</strong><span>预测是，实际不是（误报）</span><div class="metrics-count" id="metrics-count-fp">${countOrState('fp')}</div></div>
-                                <div class="metrics-matrix-label">预测负例</div>
-                                <div class="metrics-cell fn"><strong>FN 假负例</strong><span>预测不是，实际是（漏报）</span><div class="metrics-count" id="metrics-count-fn">${countOrState('fn')}</div></div>
-                                <div class="metrics-cell tn"><strong>TN 真负例</strong><span>预测不是，实际也不是</span><div class="metrics-count" id="metrics-count-tn">${countOrState('tn')}</div></div>
-                            </div>
-                        </div>
-
-                        <div class="metrics-panel">
-                            <h3>用例子看懂</h3>
-                            <p>点场景会加载一组教学数据，并同步到下方计算区。</p>
-                            <div class="metrics-pills">
-                                ${Object.values(metricsScenarios).map((item) => (
-                                    '<button class="metrics-pill ' + (metricsState.scenario === item.id ? 'active' : '') + '" data-scenario-id="' + item.id + '" onclick="applyMetricsScenario(\'' + item.id + '\')">' + escapeHtml(item.title) + '</button>'
-                                )).join('')}
-                            </div>
-                            <p id="metrics-scenario-summary" style="margin-top:12px;">${escapeHtml(scenario.summary)}</p>
-                            <p id="metrics-scenario-lesson" style="margin-top:8px;"><strong style="color:var(--text-primary);">点题：</strong>${escapeHtml(scenario.lesson)}</p>
-                        </div>
-                    </div>
-
-                    <div class="metrics-stack">
-                        <div class="metrics-panel">
-                            <h3>三个主指标分别回答什么</h3>
-                            <ul class="metrics-list">
-                                <li><strong style="color:var(--text-primary);">Accuracy 准确率</strong>：我整体靠不靠谱？</li>
-                                <li><strong style="color:var(--text-primary);">Precision 精准率</strong>：我报出来的结果水分大不大？</li>
-                                <li><strong style="color:var(--text-primary);">Recall 召回率</strong>：我漏了多少该抓的？</li>
-                            </ul>
-                            <div style="margin-top:12px;">
-                                <p>Accuracy = (TP + TN) / (TP + TN + FP + FN)</p>
-                                <p>Precision = TP / (TP + FP)</p>
-                                <p>Recall = TP / (TP + FN)</p>
-                            </div>
-                        </div>
-
-                        <div class="metrics-panel">
-                            <h3>易混概念</h3>
-                            <div class="metrics-compare">
-                                <div class="metrics-compare-item">
-                                    <strong>Accuracy vs Precision</strong>
-                                    <span>准确率看“整体对不对”；精准率只看“你报出来的正例里有多少是真的”。中文都常被叫准确率，但不是一回事。</span>
-                                </div>
-                                <div class="metrics-compare-item">
-                                    <strong>Precision vs Recall</strong>
-                                    <span>精准率怕误报，召回率怕漏报。一个问“报得准不准”，一个问“抓得全不全”。</span>
-                                </div>
-                                <div class="metrics-compare-item">
-                                    <strong>FP vs FN</strong>
-                                    <span>FP 是误报：不该抓却抓了。FN 是漏报：该抓却没抓。哪个更贵，取决于业务。</span>
-                                </div>
-                                <div class="metrics-compare-item">
-                                    <strong>Accuracy 为什么会骗人</strong>
-                                    <span>正例很少时，模型即使几乎全预测成负例，准确率也可能很高，但召回率可以是 0。</span>
-                                </div>
-                            </div>
-                        </div>
-                    </div>
-                </div>
-
-                <div class="metrics-calc-shell">
-                    <div class="metrics-section-head">
-                        <h2>计算区</h2>
-                        <p>改数字后立即重算，结果紧跟在右侧。</p>
-                    </div>
-                    <div class="metrics-calc-grid">
-                        <div class="metrics-panel">
-                            <h3>动手计算</h3>
-                            <div class="metrics-mode-switch">
-                                <button class="metrics-mode-btn ${metricsState.inputMode === 'guided' ? 'active' : ''}" data-metrics-mode="guided" onclick="setMetricsInputMode('guided')">业务引导填写</button>
-                                <button class="metrics-mode-btn ${metricsState.inputMode === 'expert' ? 'active' : ''}" data-metrics-mode="expert" onclick="setMetricsInputMode('expert')">直接填 TP/FP/FN/TN</button>
-                            </div>
-                            <div id="metrics-input-body">
-                            ${buildMetricsInputBodyHtml(result)}
-                            </div>
-                            <div class="metrics-actions">
-                                <button class="btn" onclick="resetMetricsExample()">恢复当前示例</button>
-                                <button class="btn" onclick="applyMetricsScenario('imbalance')">加载不平衡陷阱</button>
-                            </div>
-                        </div>
-
-                        <div class="metrics-panel">
-                            <h3>结果与人话解释</h3>
-                            <div id="metrics-result-body" class="metrics-result-body">
-                            ${buildMetricsResultBodyHtml(result)}
-                            </div>
-                        </div>
-                    </div>
-                </div>
-            `;
-        };
-
-        function getEmbeddingEndpoints(client) {
-            const eps = (config.clients[client]?.endpoints || []).filter(
-                ep => ep.purpose === 'embedding' && ep.enabled !== false
-            );
-            return eps;
-        }
-
-        window.renderToolsDetail = function() {
-            if (toolsView === 'classification-metrics') {
-                renderClassificationMetricsDetail();
-                return;
-            }
-            if (toolsView === 'antigravity-subscribe') {
-                renderAntigravitySubscribeDetail();
-                return;
-            if (toolsView === 'codex-subscribe') {
-                renderCodexSubscribeDetail();
-                return;
-            }
-            }
-            const cards = document.getElementById('tools-cards');
-            const detail = document.getElementById('tools-detail');
-            if (!cards || !detail) return;
-            cards.style.display = 'none';
-
-            const eps = getEmbeddingEndpoints(embedState.client);
-            const nodeOptions = eps.map(ep => {
-                const dim = ep.dimensions != null ? ep.dimensions + '维' : '默认';
-                const model = ep.embedding_model || (ep.models[0] || '未设置');
-                const sel = ep.id === embedState.endpointId ? 'selected' : '';
-                return '<option value="' + escapeHtml(ep.id) + '" ' + sel + '>' + escapeHtml(ep.name) + ' · ' + escapeHtml(model) + ' · ' + dim + '</option>';
-            }).join('');
-
-            const selectedNode = eps.find(ep => ep.id === embedState.endpointId) || eps[0] || null;
-            if (selectedNode && !embedState.endpointId) embedState.endpointId = selectedNode.id;
-            const models = selectedNode?.models || [];
-            const modelOptions = models.map(m => '<option value="' + escapeHtml(m) + '" ' + (m === embedState.model ? 'selected' : '') + '>' + escapeHtml(m) + '</option>').join('');
-            const nodeDims = selectedNode?.dimensions != null ? String(selectedNode.dimensions) : '默认';
-
-            const noNodeHint = eps.length === 0
-                ? '<div class="embed-error" style="margin-bottom:12px;">该 client 未配置向量节点,请到代理节点 tab 添加 purpose=embedding 的节点。</div>'
-                : '';
-
-            detail.innerHTML = `
-                <button class="tools-detail-back" onclick="backToToolsCards()">
-                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="15 18 9 12 15 6"></polyline></svg>
-                    返回工具列表
-                </button>
-                <div class="embed-layout">
-                    <div class="embed-panel">
-                        <h3>输入</h3>
-                        ${noNodeHint}
-                        <div class="embed-form-group">
-                            <label>Client</label>
-                            <select id="embed-client-select" class="embed-form-select" onchange="onEmbedClientChange(this.value)">
-                                <option value="codex" ${embedState.client==='codex'?'selected':''}>codex</option>
-                                <option value="code" ${embedState.client==='code'?'selected':''}>code</option>
-                                <option value="desktop" ${embedState.client==='desktop'?'selected':''}>desktop</option>
-                            </select>
-                        </div>
-                        <div class="embed-form-group">
-                            <label>向量节点</label>
-                            <select id="embed-node-select" class="embed-form-select" onchange="onEmbedNodeChange(this.value)" ${eps.length===0?'disabled':''}>
-                                ${nodeOptions || '<option value="">无可用节点</option>'}
-                            </select>
-                        </div>
-                        <div class="embed-form-group">
-                            <label>模型</label>
-                            <select id="embed-model-select" class="embed-form-select" onchange="embedState.model=this.value; renderToolsDetail();" ${models.length===0?'disabled':''}>
-                                ${modelOptions || '<option value="' + escapeHtml(selectedNode?.embedding_model||'') + '">' + escapeHtml(selectedNode?.embedding_model||'无') + '</option>'}
-                            </select>
-                        </div>
-                        <div class="embed-form-group">
-                            <label>维度</label>
-                            <div class="embed-dims-row">
-                                <span>节点维度: <strong class="embed-dims-value">${escapeHtml(nodeDims)}</strong></span>
-                                <button type="button" class="embed-dims-pill ${embedState.customDims?'active':''}" onclick="onEmbedCustomDimsToggle(!embedState.customDims)" title="覆盖节点默认维度">自定义</button>
-                                ${embedState.customDims ? '<input type="number" class="embed-dims-input" id="embed-dims-input" min="1" placeholder="如 1024" value="' + escapeHtml(String(embedState.dimensions)) + '" onchange="embedState.dimensions=this.value; renderToolsDetail();" />' : ''}
-                            </div>
-                        </div>
-                        <div class="embed-mode-switch">
-                            <button class="embed-mode-btn ${embedState.mode==='single'?'active':''}" id="embed-mode-single" onclick="setEmbedMode('single')">单段文本</button>
-                            <button class="embed-mode-btn ${embedState.mode==='similarity'?'active':''}" id="embed-mode-similarity" onclick="setEmbedMode('similarity')">两段文本(相似度)</button>
-                        </div>
-                        <div class="embed-form-group">
-                            <label>文本 A</label>
-                            <textarea id="embed-text-a" class="embed-textarea" placeholder="输入要向量化的文本" oninput="embedState.textA=this.value">${escapeHtml(embedState.textA)}</textarea>
-                        </div>
-                        ${embedState.mode === 'similarity' ? `
-                        <div class="embed-form-group">
-                            <label>文本 B</label>
-                            <textarea id="embed-text-b" class="embed-textarea" placeholder="输入第二段文本" oninput="embedState.textB=this.value">${escapeHtml(embedState.textB)}</textarea>
-                        </div>` : ''}
-                        <button class="btn btn-primary" id="embed-run-btn" onclick="runEmbedding()" ${embedState.loading?'disabled':''}>
-                            ${embedState.loading ? '计算中...' : '向量化'}
-                        </button>
-                    </div>
-                    <div class="embed-panel" id="embed-result-panel">
-                        ${renderEmbedResult()}
-                    </div>
-                </div>
-            `;
-        };
-
-        window.onEmbedClientChange = function(client) {
-            embedState.client = client;
-            embedState.endpointId = '';
-            embedState.model = '';
-            embedState.result = null;
-            embedState.error = '';
-            renderToolsDetail();
-        };
-
-        window.onEmbedNodeChange = function(endpointId) {
-            embedState.endpointId = endpointId;
-            const ep = getEmbeddingEndpoints(embedState.client).find(e => e.id === endpointId);
-            embedState.model = ep?.models?.[0] || ep?.embedding_model || '';
-            embedState.result = null;
-            embedState.error = '';
-            renderToolsDetail();
-        };
-
-        window.onEmbedCustomDimsToggle = function(checked) {
-            embedState.customDims = checked;
-            if (!checked) embedState.dimensions = '';
-            embedState.result = null;
-            renderToolsDetail();
-        };
-
-        window.setEmbedMode = function(mode) {
-            embedState.mode = mode;
-            embedState.result = null;
-            embedState.error = '';
-            renderToolsDetail();
-        };
-
-        function cosineSimilarity(a, b) {
-            let dot = 0, normA = 0, normB = 0;
-            for (let i = 0; i < a.length; i++) {
-                dot += a[i] * b[i];
-                normA += a[i] * a[i];
-                normB += b[i] * b[i];
-            }
-            const denom = Math.sqrt(normA) * Math.sqrt(normB);
-            if (denom === 0) return null; // 零向量无法计算
-            return dot / denom;
-        }
-
-        async function callEmbedding(text) {
-            const params = new URLSearchParams();
-            if (embedState.endpointId) params.set('endpoint_id', embedState.endpointId);
-            const body = { input: text };
-            if (embedState.model) body.model = embedState.model;
-            if (embedState.customDims && embedState.dimensions) {
-                body.dimensions = Number(embedState.dimensions);
-            }
-            const res = await fetch('/v1/embeddings?' + params.toString(), {
-                method: 'POST',
-                headers: {
-                    'Content-Type': 'application/json',
-                    'X-Gateway-Client': embedState.client,
-                },
-                body: JSON.stringify(body),
-            });
-            const json = await res.json();
-            if (!res.ok) {
-                throw new Error(json?.error?.message || '请求失败 (' + res.status + ')');
-            }
-            const vec = json?.data?.[0]?.embedding;
-            if (!Array.isArray(vec)) throw new Error('返回数据格式异常,未找到向量');
-            return {
-                vector: vec,
-                model: json.model || embedState.model,
-                dimensions: vec.length,
-                tokens: json?.usage?.prompt_tokens ?? null,
-            };
-        }
-
-        window.runEmbedding = async function() {
-            if (!embedState.textA.trim()) {
-                embedState.error = '请输入文本 A';
-                renderToolsDetail();
-                return;
-            }
-            if (embedState.mode === 'similarity' && !embedState.textB.trim()) {
-                embedState.error = '请输入文本 B';
-                renderToolsDetail();
-                return;
-            }
-            embedState.loading = true;
-            embedState.error = '';
-            embedState.result = null;
-            renderToolsDetail();
-            try {
-                const t0 = performance.now();
-                const a = await callEmbedding(embedState.textA);
-                const t1 = performance.now();
-                if (embedState.mode === 'single') {
-                    embedState.result = { mode: 'single', a, elapsedMs: t1 - t0 };
-                } else {
-                    const b = await callEmbedding(embedState.textB);
-                    const t2 = performance.now();
-                    const sim = cosineSimilarity(a.vector, b.vector);
-                    embedState.result = { mode: 'similarity', a, b, similarity: sim, elapsedMsA: t1 - t0, elapsedMsB: t2 - t1 };
-                }
-            } catch (err) {
-                embedState.error = err.message || String(err);
-            } finally {
-                embedState.loading = false;
-                renderToolsDetail();
-            }
-        };
-
-        function renderEmbedResult() {
-            if (embedState.loading) return '<div class="embed-result-empty">计算中...</div>';
-            if (embedState.error) return '<div class="embed-error">' + escapeHtml(embedState.error) + '</div>';
-            if (!embedState.result) return '<div class="embed-result-empty">输入文本后点击「向量化」查看结果。</div>';
-
-            const r = embedState.result;
-            const vectorHtml = (label, info) => {
-                const fullVec = '[' + info.vector.map(v => v.toFixed(6)).join(', ') + ']';
-                const elapsed = r.mode === 'single' ? r.elapsedMs : (label === 'A' ? r.elapsedMsA : r.elapsedMsB);
-                return `
-                    <div style="margin-top:8px;">
-                        <div class="embed-vector-head">
-                            <span class="embed-vector-label">${label} 向量 (${info.dimensions} 维)</span>
-                            <div class="embed-vector-actions">
-                                <button class="embed-vector-btn" onclick="toggleEmbedVector('${label}')">收起</button>
-                                <button class="embed-vector-btn" onclick="copyEmbedVector('${label}')">
-                                    <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="9" width="13" height="13" rx="2" ry="2"></rect><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"></path></svg>
-                                    复制
-                                </button>
-                            </div>
-                        </div>
-                        <div class="embed-vector" id="embed-vec-${label}">${escapeHtml(fullVec)}</div>
-                        <div class="embed-meta" style="margin-top:4px;">
-                            <span>模型: ${escapeHtml(info.model)}</span>
-                            <span>维度: ${info.dimensions}</span>
-                            ${info.tokens != null ? '<span>tokens: ' + info.tokens + '</span>' : ''}
-                            <span>耗时: ${elapsed.toFixed(0)}ms</span>
-                        </div>
-                    </div>`;
-            };
-
-            if (r.mode === 'single') {
-                return `
-                    <h3>结果</h3>
-                    ${vectorHtml('A', r.a)}
-                `;
-            }
-            const score = r.similarity === null ? '无法计算(向量模长为 0)' : r.similarity.toFixed(4);
-            return `
-                <h3>相似度</h3>
-                <div class="embed-similarity-score">${escapeHtml(String(score))}</div>
-                <div class="embed-formula">余弦相似度 = (A·B) / (‖A‖ × ‖B‖)</div>
-                <div class="embed-formula-note">对两段文本分别向量化后计算两个向量的余弦值,范围 -1 到 1,越接近 1 越相似。</div>
-                ${vectorHtml('A', r.a)}
-                ${vectorHtml('B', r.b)}
-            `;
-        }
-
-        window.toggleEmbedVector = function(label) {
-            const el = document.getElementById('embed-vec-' + label);
-            if (!el) return;
-            const hidden = el.style.display === 'none';
-            el.style.display = hidden ? 'block' : 'none';
-            const btn = el.previousElementSibling?.querySelector('button');
-            if (btn) btn.textContent = hidden ? '收起' : '展开';
-        };
-
-        window.copyEmbedVector = function(label) {
-            const el = document.getElementById('embed-vec-' + label);
-            if (!el) return;
-            const text = el.textContent;
-            navigator.clipboard.writeText(text).then(
-                () => showToast('已复制 ' + label + ' 向量(' + text.length + ' 字符)', 'success'),
-                () => showToast('复制失败', 'danger')
-            );
-        };
-
-        window.addEventListener('load', () => {
-            const hash = window.location.hash.replace('#', '');
-            if (hash === 'code' || hash === 'desktop' || hash === 'codex' || hash === 'sync' || hash === 'skills' || hash === 'install-history' || hash === 'tools') {
-                switchTab(hash);
-            }
-        });
-
-        window.addEndpoint = function(client) {
-            config.clients[client].endpoints = config.clients[client].endpoints || [];
-            const type = client === 'codex' ? 'openai-responses' : 'anthropic';
-            config.clients[client].endpoints.unshift({
-                id: `ep_${crypto.randomUUID()}`,
-                name: "新服务商",
-                type,
-                base_url: "",
-                auth: 'bearer',
-                api_key: "",
-                models: [],
-                model_mapping: {}
-            });
-            selectedEndpoint = { client, index: 0 };
-            render();
-            setTimeout(() => {
-                const nameInput = document.getElementById(`input-name-${client}-0`);
-                if (nameInput) {
-                    nameInput.focus();
-                    nameInput.select();
-                }
-            }, 0);
-        }
-
-        window.addVisionFallbackEndpoint = function(client) {
-            config.clients[client].endpoints = config.clients[client].endpoints || [];
-            const existingIndex = config.clients[client].endpoints.findIndex(
-                endpoint => endpoint.purpose === 'vision_fallback'
-            );
-            if (existingIndex >= 0) {
-                selectedEndpoint = { client, index: existingIndex };
-                render();
-                return;
-            }
-            const type = client === 'codex' ? 'openai-responses' : 'anthropic';
-            config.clients[client].endpoints.unshift({
-                id: `ep_${crypto.randomUUID()}`,
-                name: "视觉兜底节点",
-                purpose: 'vision_fallback',
-                vision_fallback_enabled: true,
-                vision_model: "",
-                type,
-                base_url: "",
-                auth: 'bearer',
-                api_key: "",
-                models: [],
-                model_mapping: {}
-            });
-            selectedEndpoint = { client, index: 0 };
-            render();
-        }
-
-        window.addNodeByPurpose = function(client, purpose) {
-            if (!purpose) return;
-            closeAddNodeMenus();
-            if (purpose === 'vision_fallback') {
-                addVisionFallbackEndpoint(client);
-            } else if (purpose === 'web_search') {
-                addWebSearchEndpoint(client);
-            } else if (purpose === 'embedding') {
-                addEmbeddingEndpoint(client);
-            } else {
-                addEndpoint(client);
-            }
-        }
-
-        window.closeAddNodeMenus = function(exceptClient = '') {
-            document.querySelectorAll('.add-node-dropdown').forEach(dropdown => {
-                if (exceptClient && dropdown.id === `add-node-dropdown-${exceptClient}`) return;
-                dropdown.classList.remove('is-open');
-                dropdown.querySelector('.add-node-trigger')?.setAttribute('aria-expanded', 'false');
-            });
-        }
-
-        window.toggleAddNodeMenu = function(client, event) {
-            event?.stopPropagation();
-            const dropdown = document.getElementById(`add-node-dropdown-${client}`);
-            if (!dropdown) return;
-            const shouldOpen = !dropdown.classList.contains('is-open');
-            closeAddNodeMenus(client);
-            dropdown.classList.toggle('is-open', shouldOpen);
-            dropdown.querySelector('.add-node-trigger')
-                ?.setAttribute('aria-expanded', shouldOpen ? 'true' : 'false');
-            if (shouldOpen) {
-                dropdown.querySelector('.add-node-option')?.focus();
-            }
-        }
-
-        window.addEmbeddingEndpoint = function(client) {
-            config.clients[client].endpoints = config.clients[client].endpoints || [];
-            const hasDefaultEmbedding = config.clients[client].endpoints.some(
-                endpoint => endpoint.purpose === 'embedding' && endpoint.is_default === true
-            );
-            config.clients[client].endpoints.unshift({
-                id: `ep_${crypto.randomUUID()}`,
-                name: "向量模型节点",
-                purpose: 'embedding',
-                type: 'openai-chat',
-                base_url: "",
-                api_key: "",
-                enabled: true,
-                is_default: !hasDefaultEmbedding,
-                models: [],
-                model_mapping: {},
-                embedding_model: ""
-            });
-            selectedEndpoint = { client, index: 0 };
-            render();
-        }
-
-        window.setAsDefaultEmbedding = async function(client, index) {
-            const endpoint = config.clients[client].endpoints[index];
-            if (endpoint?.purpose !== 'embedding') return;
-            const previous = config.clients[client].endpoints.map(ep => ({
-                purpose: ep.purpose,
-                is_default: ep.is_default === true,
-            }));
-            config.clients[client].endpoints.forEach((ep, i) => {
-                if (ep.purpose === 'embedding') ep.is_default = (i === index);
-            });
-            render();
-            const saved = await saveConfig({ client, scope: 'default-embedding' });
-            if (!saved) {
-                config.clients[client].endpoints.forEach((ep, i) => {
-                    if (previous[i]?.purpose === 'embedding') ep.is_default = previous[i].is_default;
-                });
-                render();
-            }
-        }
-
-        window.addWebSearchEndpoint = function(client) {
-            config.clients[client].endpoints = config.clients[client].endpoints || [];
-            const hasDefaultSearch = config.clients[client].endpoints.some(
-                endpoint => endpoint.purpose === 'web_search' && endpoint.is_default === true
-            );
-            config.clients[client].endpoints.unshift({
-                id: `ep_${crypto.randomUUID()}`,
-                name: "联网搜索节点",
-                purpose: 'web_search',
-                provider: 'tavily',
-                enabled: true,
-                is_default: !hasDefaultSearch,
-                auth: 'bearer',
-                api_key: "",
-                options: {
-                    search_depth: 'basic',
-                    max_results: 5,
-                    topic: 'general',
-                    include_answer: false,
-                    include_raw_content: false,
-                    country: 'china'
-                },
-                models: [],
-                model_mapping: {}
-            });
-            selectedEndpoint = { client, index: 0 };
-            render();
-        }
-
-        window.updateWebSearchOption = function(client, index, key, value) {
-            const endpoint = config.clients[client].endpoints[index];
-            endpoint.options = endpoint.options && typeof endpoint.options === 'object'
-                ? endpoint.options
-                : {};
-            if (value === '' || value == null) delete endpoint.options[key];
-            else endpoint.options[key] = value;
-        }
-
-        window.setAsDefaultWebSearch = async function(client, index) {
-            const endpoint = config.clients[client].endpoints[index];
-            if (endpoint?.purpose !== 'web_search') return;
-            const previous = config.clients[client].endpoints.map(ep => ({
-                purpose: ep.purpose,
-                is_default: ep.is_default === true,
-            }));
-            config.clients[client].endpoints.forEach((ep, i) => {
-                if (ep.purpose === 'web_search') ep.is_default = (i === index);
-            });
-            render();
-            const saved = await saveConfig({ client, scope: 'default-web-search' });
-            if (!saved) {
-                config.clients[client].endpoints.forEach((ep, i) => {
-                    if (previous[i]?.purpose === 'web_search') ep.is_default = previous[i].is_default;
-                });
-                render();
-            }
-        }
-
-        window.removeEndpoint = async function(client, index) {
-            if (!confirm('确定删除这个节点吗？')) return;
-            const [removedEndpoint] = config.clients[client].endpoints.splice(index, 1);
-            const previousSelection = selectedEndpoint;
-            if (selectedEndpoint && selectedEndpoint.client === client) {
-                selectedEndpoint = null;
-            }
-            render();
-            const saved = await saveConfig({ client, scope: 'delete' });
-            if (!saved) {
-                config.clients[client].endpoints.splice(index, 0, removedEndpoint);
-                selectedEndpoint = previousSelection;
-                render();
-            }
-        }
-
-        window.setAsDefault = async function(client, index) {
-            const purpose = config.clients[client].endpoints[index]?.purpose;
-            if (['vision_fallback', 'web_search', 'embedding'].includes(purpose)) return;
-            const previousDefaults = config.clients[client].endpoints.map(ep => ep.is_default === true);
-            const previousSlots = client === 'code'
-                ? structuredClone(config.clients.code.model_slots || {})
-                : null;
-            config.clients[client].endpoints.forEach((ep, i) => {
-                ep.is_default = (i === index);
-            });
-            if (client === 'code') pruneClaudeCodeModelSlots();
-            render();
-            const saved = await saveConfig({ client, scope: 'default' });
-            if (!saved) {
-                config.clients[client].endpoints.forEach((ep, i) => {
-                    ep.is_default = previousDefaults[i];
-                });
-                if (client === 'code') config.clients.code.model_slots = previousSlots;
-                render();
-            }
-        }
-
-        window.updateEndpoint = function(client, index, field, value) {
-            const endpoint = config.clients[client].endpoints[index];
-            endpoint[field] = value;
-            if (field === 'name' && selectedEndpoint && selectedEndpoint.client === client && selectedEndpoint.index === index) {
-                const title = document.querySelector('.detail-title');
-                if (title) title.textContent = value || `节点 ${index + 1}`;
-            }
-        }
-
-        window.updateCodexCapability = function(client, index, capability, enabled) {
-            const endpoint = config.clients[client].endpoints[index];
-            endpoint.capabilities ||= {
-                input_modalities: ['text'],
-                reasoning: false,
-                tools: true,
-            };
-            if (capability === 'image') {
-                endpoint.capabilities.input_modalities = enabled
-                    ? ['text', 'image']
-                    : ['text'];
-            } else {
-                endpoint.capabilities[capability] = enabled;
-            }
-        }
-
-        window.updateModelImageCapability = function(client, index, modelIndex, state) {
-            const endpoint = config.clients[client].endpoints[index];
-            const model = endpoint.models?.[modelIndex];
-            if (!model) return;
-
-            // state: 'auto' | 'supported' | 'unsupported'
-            const desired = state === 'supported' ? true : state === 'unsupported' ? false : undefined;
-
-            if (desired === undefined) {
-                // auto = remove the field
-                if (endpoint.model_capabilities?.[model]?.image != null) {
-                    delete endpoint.model_capabilities[model].image;
-                    if (Object.keys(endpoint.model_capabilities[model]).length === 0) {
-                        delete endpoint.model_capabilities[model];
-                    }
-                    if (endpoint.model_capabilities && Object.keys(endpoint.model_capabilities).length === 0) {
-                        delete endpoint.model_capabilities;
-                    }
-                }
-            } else {
-                endpoint.model_capabilities ||= {};
-                endpoint.model_capabilities[model] ||= {};
-                endpoint.model_capabilities[model].image = desired;
-            }
-            render();
-        }
-
-        window.toggleCtxVisionMenu = function(client, index, modelIndex, event) {
-            event?.stopPropagation();
-            const dropdown = document.getElementById(`ctx-vision-${client}-${index}-${modelIndex}`);
-            if (!dropdown) return;
-            const shouldOpen = !dropdown.classList.contains('is-open');
-            closeAllCtxVisionMenus();
-            closeAllCtxWindowMenus();
-            dropdown.classList.toggle('is-open', shouldOpen);
-        }
-
-        window.closeAllCtxVisionMenus = function() {
-            document.querySelectorAll('.vision-dropdown.is-open').forEach(d => d.classList.remove('is-open'));
-        }
-
-        window.updateModelContextWindow = function(client, index, modelIndex, value) {
-            const endpoint = config.clients[client].endpoints[index];
-            const model = endpoint.models?.[modelIndex];
-            if (!model) return;
-
-            const cw = Number(value);
-            if (cw === 1000000) {
-                // 1M is the default - remove the field so config stays clean
-                if (endpoint.model_capabilities?.[model]?.context_window != null) {
-                    delete endpoint.model_capabilities[model].context_window;
-                    if (Object.keys(endpoint.model_capabilities[model]).length === 0) {
-                        delete endpoint.model_capabilities[model];
-                    }
-                    if (endpoint.model_capabilities && Object.keys(endpoint.model_capabilities).length === 0) {
-                        delete endpoint.model_capabilities;
-                    }
-                }
-            } else {
-                endpoint.model_capabilities ||= {};
-                endpoint.model_capabilities[model] ||= {};
-                endpoint.model_capabilities[model].context_window = cw;
-            }
-            render();
-        }
-
-        window.toggleCtxWindowMenu = function(client, index, modelIndex, event) {
-            event?.stopPropagation();
-            const dropdown = document.getElementById(`ctx-win-${client}-${index}-${modelIndex}`);
-            if (!dropdown) return;
-            const shouldOpen = !dropdown.classList.contains('is-open');
-            closeAllCtxWindowMenus();
-            closeAllCtxVisionMenus();
-            dropdown.classList.toggle('is-open', shouldOpen);
-        }
-
-        window.closeAllCtxWindowMenus = function() {
-            document.querySelectorAll('.ctx-window-dropdown.is-open').forEach(d => d.classList.remove('is-open'));
-        }
-
-        window.handleTagInput = function(e, client, index, field) {
-            if (e.key === 'Enter') {
-                e.preventDefault();
-                const val = e.target.value.trim();
-                if (val) {
-                    config.clients[client].endpoints[index][field] = config.clients[client].endpoints[index][field] || [];
-                    if (!config.clients[client].endpoints[index][field].includes(val)) {
-                        config.clients[client].endpoints[index][field].push(val);
-                    }
-                    e.target.value = '';
-                    render();
-                    setTimeout(() => {
-                        const input = document.getElementById(`input-${field}-${client}-${index}`);
-                        if (input) input.focus();
-                    }, 0);
-                }
-            }
-        };
-
-        window.removeTag = function(client, index, field, tagIndex) {
-            const endpoint = config.clients[client].endpoints[index];
-            if (endpoint[field]) {
-                const removedModel = field === 'models' ? endpoint[field][tagIndex] : null;
-                endpoint[field].splice(tagIndex, 1);
-                if (removedModel && endpoint.model_capabilities?.[removedModel]) {
-                    delete endpoint.model_capabilities[removedModel];
-                    if (Object.keys(endpoint.model_capabilities).length === 0) {
-                        delete endpoint.model_capabilities;
-                    }
-                }
-                render();
-            }
-        };
-
-        window.handleMappingInput = function(e, client, index, isReq) {
-            if (e.key === 'Enter') {
-                e.preventDefault();
-                const reqInput = document.getElementById(`input-mapping-req-${client}-${index}`);
-                const upInput = document.getElementById(`input-mapping-up-${client}-${index}`);
-                if (!reqInput || !upInput) return;
-
-                const k = reqInput.value.trim();
-                const v = upInput.value.trim();
-
-                if (isReq && k && !v) {
-                    upInput.focus();
-                    return;
-                }
-
-                if (k && v) {
-                    config.clients[client].endpoints[index].model_mapping = config.clients[client].endpoints[index].model_mapping || {};
-                    config.clients[client].endpoints[index].model_mapping[k] = v;
-                    render();
-                    setTimeout(() => {
-                        const input = document.getElementById(`input-mapping-req-${client}-${index}`);
-                        if (input) input.focus();
-                    }, 0);
-                }
-            }
-        };
-
-        window.togglePasswordVisibility = async function(client, index, inputId) {
-            const input = document.getElementById(inputId);
-            if (!input) return;
-            const btn = input.nextElementSibling;
-            if (input.type === 'password') {
-                const endpoint = config.clients?.[client]?.endpoints?.[index];
-                if (!input.value && endpoint?.has_api_key) {
-                    btn.disabled = true;
-                    try {
-                        const params = new URLSearchParams({ id: endpoint.id || '' });
-                        const response = await fetch(`/v1/config/secret?${params}`, {
-                            headers: { 'X-Gateway-Secret-Intent': 'reveal' },
-                            cache: 'no-store',
-                        });
-                        const payload = await response.json().catch(() => ({}));
-                        if (!response.ok) {
-                            throw new Error(payload.error?.message || '读取密钥失败');
-                        }
-                        input.value = payload.api_key || '';
-                        if (!input.value) throw new Error('未找到已保存密钥');
-                    } catch (error) {
-                        showToast(error.message || '读取密钥失败', 'error');
-                        return;
-                    } finally {
-                        btn.disabled = false;
-                    }
-                }
-                input.type = 'text';
-                input.focus();
-                input.setSelectionRange(input.value.length, input.value.length);
-                btn.title = '隐藏密钥';
-                btn.innerHTML = `<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-                    <path d="M17.94 17.94A10.07 10.07 0 0 1 12 20c-7 0-11-8-11-8a18.45 18.45 0 0 1 5.06-5.94M9.9 4.24A9.12 9.12 0 0 1 12 4c7 0 11 8 11 8a18.5 18.5 0 0 1-2.16 3.19m-6.72-1.07a3 3 0 1 1-4.24-4.24"></path>
-                    <line x1="1" y1="1" x2="23" y2="23"></line>
-                </svg>`;
-            } else {
-                input.type = 'password';
-                btn.title = input.value ? '显示密钥' : '查看已保存密钥';
-                btn.innerHTML = `<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-                    <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"></path>
-                    <circle cx="12" cy="12" r="3"></circle>
-                </svg>`;
-            }
-        };
-
-        window.removeMapping = function(client, index, key) {
-            if (config.clients[client].endpoints[index].model_mapping) {
-                delete config.clients[client].endpoints[index].model_mapping[key];
-                render();
-            }
-        };
-
-       window.saveNode = async function(client, index) {
-           const endpoint = config.clients?.[client]?.endpoints?.[index];
-           const btn = document.getElementById(`save-node-${client}-${index}`);
-           if (!endpoint || !btn) return;
-            if (endpoint.purpose === 'embedding') {
-                if (!String(endpoint.base_url || '').trim()) {
-                    showToast('请先填写向量模型节点的 Base URL', 'error');
-                    return;
-                }
-                if (!endpoint.embedding_model && (!endpoint.models || endpoint.models.length === 0)) {
-                    showToast('请先为向量模型节点添加或选择一个模型', 'error');
-                    return;
-                }
-            }
-            if (endpoint.purpose === 'web_search') {
-                if (!endpoint.provider) {
-                    showToast('请先选择搜索提供商', 'error');
-                    return;
-                }
-                if (!endpoint.api_key && !endpoint.has_api_key) {
-                    if (!confirm('该搜索节点未配置 API Key，搜索功能将无法使用。确定要保存吗？')) {
-                        return;
-                    }
-                }
-            }
-            await saveConfig({ button: btn, client, scope: 'node' });
-        }
-
-        window.saveCurrentConfig = async function() {
-            const btn = document.getElementById('save-btn');
-            if (!btn) return;
-            if (activeClient === 'sync') {
-                await saveSyncConfig('sync');
-            } else if (activeClient === 'skills') {
-                await refreshSkillsLibrary(true);
-                showToast('技能挂载已是即时生效，当前库已刷新', 'success');
-            } else {
-                await saveConfig({ button: btn, client: activeClient, scope: 'global' });
-            }
-        }
-
-        window.toggleEndpointExposure = async function(event, client, index, input) {
-            event.stopPropagation();
-            const endpoint = config.clients?.[client]?.endpoints?.[index];
-            if (!endpoint || !input) return;
-            const previous = endpoint.expose_models === true;
-            endpoint.expose_models = input.checked;
-            const saved = await saveConfig({
-                button: input,
-                client,
-                scope: 'exposure',
-            });
-            if (!saved) {
-                endpoint.expose_models = previous;
-                render();
-            }
-        }
-
-        window.toggleEndpointEnabled = async function(event, client, index, input) {
-            event.stopPropagation();
-            const endpoint = config.clients?.[client]?.endpoints?.[index];
-            if (!endpoint || !input) return;
-            const previous = endpoint.enabled !== false;
-            endpoint.enabled = input.checked;
-            render();
-            const saved = await saveConfig({
-                button: input,
-                client,
-                scope: 'enabled',
-            });
-            if (!saved) {
-                endpoint.enabled = previous;
-                render();
-            }
-        }
-
-        window.saveConfig = async function(options = {}) {
-            const btn = options.button || null;
-            const originalContent = btn?.innerHTML || '';
-            const showButtonProgress = btn?.tagName === 'BUTTON';
-
-            if (showButtonProgress) {
-                btn.innerHTML = `<svg class="spinner" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" style="animation: spin 1s linear infinite;"><line x1="12" y1="2" x2="12" y2="6"></line><line x1="12" y1="18" x2="12" y2="22"></line><line x1="4.93" y1="4.93" x2="7.76" y2="7.76"></line><line x1="16.24" y1="16.24" x2="19.07" y2="19.07"></line><line x1="2" y1="12" x2="6" y2="12"></line><line x1="18" y1="12" x2="22" y2="12"></line><line x1="4.93" y1="19.07" x2="7.76" y2="16.24"></line><line x1="16.24" y1="7.76" x2="19.07" y2="4.93"></line></svg> 保存中...`;
-            }
-            if (btn) btn.disabled = true;
-
-            try {
-                pruneClaudeCodeModelSlots();
-                const res = await fetch('/v1/config/save', {
-                    method: 'POST',
-                    headers: {
-                        'Content-Type': 'application/json',
-                        'X-Gateway-Config-Client': options.client || (options.scope === 'template' ? 'code' : activeClient)
-                    },
-                    body: JSON.stringify(config)
-                });
-
-                if (res.ok) {
-                    const payload = await res.json().catch(() => ({}));
-                    for (const client of Object.values(config.clients || {})) {
-                        for (const endpoint of client.endpoints || []) {
-                            if (endpoint.api_key) endpoint.has_api_key = true;
-                            delete endpoint.api_key;
-                            delete endpoint.api_key_env;
-                        }
-                    }
-                    if (payload.codex_model_catalog?.path_posix) {
-                        codexModelCatalogPath = payload.codex_model_catalog.path_posix;
-                    } else if (payload.codex_model_catalog?.path) {
-                        codexModelCatalogPath = String(payload.codex_model_catalog.path).replaceAll('\\', '/');
-                    }
-                    render();
-                    if (options.scope === 'exposure') {
-                        showToast(
-                            options.client === 'desktop' && payload.claude3pSync?.updated
-                                ? '模型展示设置已保存，Claude 3P 模型列表已同步'
-                                : '模型展示设置已保存',
-                            'success'
-                        );
-                    } else if (options.scope === 'node' && options.client === 'desktop') {
-                        if (payload.claude3pSync?.updated) {
-                            showToast('节点已保存，Claude 3P 模型列表已同步', 'success');
-                        } else if (payload.claude3pSync?.reason === 'already-in-sync') {
-                            showToast('节点已保存，Claude 3P 模型列表无变化', 'success');
-                        } else {
-                            const reason = payload.claude3pSync?.error || payload.claude3pSync?.reason || '未知原因';
-                            showToast(`节点已保存，但 Claude 3P 同步未完成：${reason}`, 'error');
-                        }
-                    } else if (options.scope === 'node' && options.client === 'codex') {
-                        showToast(
-                            payload.codex_model_catalog?.exists
-                                ? '节点已保存，Codex 模型目录已刷新'
-                                : '节点已保存',
-                            'success'
-                        );
-                    } else if (options.scope === 'node' && options.client === 'code') {
-                        if (payload.claudeCodeSync?.updated) {
-                            showToast('节点已保存，Claude Code 模型配置已同步', 'success');
-                        } else if (payload.claudeCodeSync?.reason === 'already-in-sync') {
-                            showToast('节点已保存，Claude Code 模型配置无变化', 'success');
-                        } else {
-                            const reason = payload.claudeCodeSync?.error || payload.claudeCodeSync?.reason || '未知原因';
-                            showToast(`节点已保存，但 Claude Code 同步未完成：${reason}`, 'error');
-                        }
-                    } else if (options.scope === 'node') {
-                        showToast('节点已保存', 'success');
-                    } else if (options.scope === 'default') {
-                        showToast(
-                            options.client === 'code' && payload.claudeCodeSync?.updated
-                                ? '默认节点已设置，Claude Code 模型配置已同步'
-                                : '默认节点已设置',
-                            'success'
-                        );
-                    } else if (options.scope === 'default-web-search') {
-                        showToast('默认搜索节点已设置', 'success');
-                    } else if (options.scope === 'delete' && options.client === 'desktop' && payload.claude3pSync?.updated) {
-                        showToast('节点已删除，Claude 3P 模型列表已同步', 'success');
-                    } else if (options.scope === 'delete' && options.client === 'codex' && payload.codex_model_catalog?.exists) {
-                        showToast('节点已删除，Codex 模型目录已刷新', 'success');
-                    } else if (options.scope === 'delete') {
-                        showToast('节点已删除', 'success');
-                    } else if (options.scope === 'template') {
-                        showToast('默认模板已恢复', 'success');
-                    } else if (options.scope === 'global' && options.client === 'code') {
-                        if (payload.claudeCodeSync?.updated) {
-                            showToast('配置已保存，Claude Code 模型配置已同步', 'success');
-                        } else if (payload.claudeCodeSync?.reason === 'already-in-sync') {
-                            showToast('配置已保存，Claude Code 模型配置无变化', 'success');
-                        } else {
-                            showToast('配置已保存', 'success');
-                        }
-                    } else if (options.scope === 'global' && options.client === 'desktop') {
-                        if (payload.claude3pSync?.updated) {
-                            showToast('配置已保存，Claude 3P 模型列表已同步', 'success');
-                        } else if (payload.claude3pSync?.reason === 'already-in-sync') {
-                            showToast('配置已保存，Claude 3P 模型列表无变化', 'success');
-                        } else {
-                            showToast('配置已保存', 'success');
-                        }
-                    } else if (options.scope === 'global' && options.client === 'codex') {
-                        showToast(
-                            payload.codex_model_catalog?.exists
-                                ? '配置已保存，Codex 模型目录已刷新'
-                                : '配置已保存',
-                            'success'
-                        );
-                    } else {
-                        showToast('配置已保存', 'success');
-                    }
-                    return true;
-                } else {
-                    const payload = await res.json().catch(() => null);
-                    const conflicts = payload?.error?.issues?.filter(issue =>
-                        issue.code === 'duplicate_public_model'
-                    ) || [];
-                    const invalidClaudeNames = payload?.error?.issues?.filter(issue =>
-                        issue.code === 'invalid_claude_model_name'
-                    ) || [];
-                    if (conflicts.length || invalidClaudeNames.length) {
-                        const messages = conflicts.map(issue => {
-                            const suggestions = issue.occurrences
-                                .map(item => `${item.endpoint_name}: ${item.suggestion}`)
-                                .join('；');
-                            return `模型 ${issue.model_id} 重复，候选名称：${suggestions}`;
-                        });
-                        messages.push(...invalidClaudeNames.map(issue =>
-                            `Claude Desktop 映射名称 ${issue.model_id} 不符合规范，建议改为：${issue.suggestion}`
-                        ));
-                        showToast(messages.join('\n'), 'error');
-                    } else {
-                        showToast(payload?.error?.message || '保存配置失败', 'error');
-                    }
-                    return false;
-                }
-            } catch (e) {
-                showToast('保存时网络出错', 'error');
-                return false;
-            } finally {
-                if (showButtonProgress) btn.innerHTML = originalContent;
-                if (btn) btn.disabled = false;
-            }
-        }
-
-        window.migrateCodexHistory = async function() {
-            const btn = document.getElementById('codex-history-unify-btn');
-            if (!btn) return;
-            const original = btn.innerHTML;
-            btn.disabled = true;
-            btn.innerHTML = '预览中...';
-
-            try {
-                const previewRes = await fetch('/v1/codex/history/unify', {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ dry_run: true, target_provider: 'custom' }),
-                });
-                const preview = await previewRes.json().catch(() => ({}));
-                if (!previewRes.ok || preview.success === false) {
-                    const msg = preview?.error?.message || '预览失败';
-                    if (preview?.error?.type === 'codex_running') {
-                        showToast('请先完全退出 Codex Desktop，再迁移历史', 'error');
-                    } else {
-                        showToast(msg, 'error');
-                    }
-                    return;
-                }
-
-                const count = Number(preview.affectedThreads || 0);
-                const counts = preview.providerCounts || {};
-                const detail = Object.entries(counts)
-                    .map(([k, v]) => `${k}: ${v}`)
-                    .join(', ') || '无';
-
-                if (count === 0) {
-                    showToast('没有需要迁移的历史会话', 'success');
-                    return;
-                }
-
-                const ok = confirm(
-                    `将把 ${count} 条历史会话迁移到 model_provider="custom"。\n\n` +
-                    `来源分布：${detail}\n\n` +
-                    `只会改会话标签，不改登录态/插件/配置。\n` +
-                    `会自动备份到 ~/.codex/history-unify-backups/。\n\n` +
-                    `请先完全退出 Codex Desktop，然后点确定继续。`
-                );
-                if (!ok) {
-                    showToast('已取消迁移', 'success');
-                    return;
-                }
-
-                btn.innerHTML = '迁移中...';
-                const applyRes = await fetch('/v1/codex/history/unify', {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({
-                        dry_run: false,
-                        apply: true,
-                        target_provider: 'custom',
-                    }),
-                });
-                const applied = await applyRes.json().catch(() => ({}));
-                if (!applyRes.ok || applied.success === false) {
-                    if (applied?.error?.type === 'codex_running') {
-                        showToast('Codex 仍在运行，请完全退出后再试', 'error');
-                    } else {
-                        showToast(applied?.error?.message || '迁移失败', 'error');
-                    }
-                    return;
-                }
-
-                const backup = applied.backupRoot
-                    ? String(applied.backupRoot).replaceAll('\\', '/')
-                    : '';
-                showToast(
-                    `已迁移 ${applied.affectedThreads || count} 条会话` +
-                    (backup ? `，备份：${backup}` : '') +
-                    '。请重新打开 Codex Desktop。',
-                    'success',
-                );
-            } catch (e) {
-                showToast('迁移请求失败：' + (e?.message || e), 'error');
-            } finally {
-                btn.disabled = false;
-                btn.innerHTML = original;
-            }
-        }
-
-        // Copy the text content of a code-snippet block to the clipboard and briefly
-        // flash a check mark so the user sees it succeeded.
-        window.copyCodeSnippet = async function(btn) {
-            const snippet = btn.closest('.code-snippet');
-            const pre = snippet?.querySelector('pre');
-            const text = pre ? pre.textContent : '';
-            try {
-                await navigator.clipboard.writeText(text);
-            } catch {
-                // Fallback for non-secure contexts (headless / file origins).
-                const ta = document.createElement('textarea');
-                ta.value = text;
-                ta.style.position = 'fixed';
-                ta.style.opacity = '0';
-                document.body.appendChild(ta);
-                ta.select();
-                document.execCommand('copy');
-                ta.remove();
-            }
-            const original = btn.innerHTML;
-            btn.classList.add('copied');
-            btn.innerHTML = '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"></polyline></svg>';
-            setTimeout(() => { btn.classList.remove('copied'); btn.innerHTML = original; }, 1500);
-        };
-
-        function showToast(message, type = 'success') {
-            const container = document.getElementById('toast-container');
-            const toast = document.createElement('div');
-            toast.className = `toast ${type}`;
-
-            const icon = type === 'success'
-                ? `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"></path><polyline points="22 4 12 14.01 9 11.01"></polyline></svg>`
-                : `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"></circle><line x1="12" y1="8" x2="12" y2="12"></line><line x1="12" y1="16" x2="12.01" y2="16"></line></svg>`;
-
-            toast.innerHTML = `${icon} <span>${message}</span>`;
-            container.appendChild(toast);
-
-            setTimeout(() => {
-                toast.style.animation = 'toastExit 0.3s forwards';
-                setTimeout(() => toast.remove(), 300);
-            }, 3500);
-        }
-
-        // Add spinner keyframes
-        const style = document.createElement('style');
-        style.textContent = `@keyframes spin { 100% { transform: rotate(360deg); } }`;
-        document.head.appendChild(style);
-
-        // Theme management
-        window.toggleTheme = function() {
-            const root = document.documentElement;
-            const currentTheme = root.getAttribute('data-theme') || 'dark';
-            const newTheme = currentTheme === 'dark' ? 'light' : 'dark';
-
-            root.setAttribute('data-theme', newTheme);
-            localStorage.setItem('app-theme', newTheme);
-            updateThemeIcon(newTheme);
-        };
-
-        function updateThemeIcon(theme) {
-            const darkIcon = document.getElementById('theme-icon-dark');
-            const lightIcon = document.getElementById('theme-icon-light');
-            if (!darkIcon || !lightIcon) return;
-
-            if (theme === 'dark') {
-                darkIcon.style.display = 'block';
-                lightIcon.style.display = 'none';
-            } else {
-                darkIcon.style.display = 'none';
-                lightIcon.style.display = 'block';
-            }
-        }
-
-        document.addEventListener('DOMContentLoaded', () => {
-            renderAddNodeMenus();
-            // Wire the create-agent-node modal interactions once.
-            document.querySelectorAll('input[name="client-create-mode"]').forEach(radio => {
-                radio.addEventListener('change', (e) => { onClientCreateModeChange(e); syncClientCreateProtocol(); });
-            });
-            const clientCreateSource = document.getElementById('client-create-source');
-            if (clientCreateSource) {
-                clientCreateSource.addEventListener('change', syncClientCreateProtocol);
-            }
-            const createNameInput = document.getElementById('client-create-name');
-            if (createNameInput) {
-                createNameInput.addEventListener('keydown', (e) => {
-                    if (e.key === 'Enter') { e.preventDefault(); submitCreateClient(); }
-                });
-            }
-            init();
-            const currentTheme = document.documentElement.getAttribute('data-theme') || 'dark';
-            updateThemeIcon(currentTheme);
-        });
-
-        document.addEventListener('click', (e) => {
-            if (!e.target.closest('.add-node-dropdown')) closeAddNodeMenus();
-            if (!e.target.closest('.ctx-window-dropdown')) {
-                closeAllCtxWindowMenus();
-                closeAllCtxVisionMenus();
-            }
-            // Close the create-agent-node modal when clicking outside its dialog.
-            if (clientCreateOpen && !e.target.closest('#client-create-modal .skill-modal') && !e.target.closest('.nav-create-client')) {
-                closeClientCreateModal();
-            }
-        });
-
-        document.addEventListener('keydown', (e) => {
-            if (e.key === 'Escape' && clientCreateOpen) {
-                closeClientCreateModal();
-                return;
-            }
-            if (e.key === 'Escape' && document.querySelector('.add-node-dropdown.is-open')) {
-                closeAddNodeMenus();
                 return;
             }
             if (e.key === 'Escape' && document.querySelector('.ctx-window-dropdown.is-open')) {

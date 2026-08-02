@@ -1,6 +1,21 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { buildProxyUrl, resolveOutboundProxyAgent } from "../../lib/config/proxy-resolver.mjs";
+import {
+  buildProxyUrl,
+  defaultProxyConfig,
+  resolveOutboundProxyAgent,
+} from "../../lib/config/proxy-resolver.mjs";
+
+test("default proxy configuration matches Clash Verge HTTP defaults", () => {
+  assert.deepEqual(defaultProxyConfig(), {
+    enabled: true,
+    protocol: "http",
+    host: "127.0.0.1",
+    port: 7897,
+    username: "",
+    password: "",
+  });
+});
 
 test("buildProxyUrl builds valid proxy URLs for http, https, and socks5", () => {
   assert.equal(
@@ -45,4 +60,13 @@ test("resolveOutboundProxyAgent respects endpoint proxy overrides", () => {
   const defaultEp = {};
   const globalAgent = resolveOutboundProxyAgent(defaultEp, globalConfig);
   assert.ok(globalAgent);
+});
+
+test("resolveOutboundProxyAgent uses a SOCKS agent for socks5 URLs", () => {
+  const agent = resolveOutboundProxyAgent(
+    { proxy_mode: "custom", proxy_url: "socks5://127.0.0.1:1080" },
+    {},
+  );
+
+  assert.equal(agent?.constructor?.name, "SocksProxyAgent");
 });
