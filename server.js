@@ -71,6 +71,7 @@ import {
 } from "./lib/config/gateway-config-store.mjs";
 import { syncClaudeCodeSettings } from "./lib/config/claude-code-settings.mjs";
 import { createModelDiscoveryService } from "./lib/models/discovery-service.mjs";
+import { createTokenTracker } from "./lib/analytics/token-tracker.mjs";
 import { createDefaultStrategies } from "./lib/models/strategies/index.mjs";
 import { mergeClaudeOfficialModels, BUILTIN_CLAUDE_OFFICIAL_MODELS } from "./lib/config/claude-official-models.mjs";
 import { SkillInstaller } from "./lib/session-sync/skill-installer.mjs";
@@ -1501,6 +1502,23 @@ function collectGroupedModelsFromConfig(config) {
   }
 
   // --- CLI discovery + install history (parallel to skills) ---
+  if (reqPath === "/v1/analytics/token-usage" && req.method === "GET") {
+    if (!checkLocalAuth(req, res)) return;
+    try {
+      const granularity = String(url.searchParams.get("granularity") || "hour");
+      const range = String(url.searchParams.get("range") || "24h");
+      const purpose = String(url.searchParams.get("purpose") || "all");
+      const client = String(url.searchParams.get("client") || "all");
+      const model = String(url.searchParams.get("model") || "all");
+
+      const result = globalTokenTracker.queryUsage({ granularity, range, purpose, client, model });
+      sendJson(res, 200, result);
+    } catch (error) {
+      sendJson(res, 500, { error: { type: "analytics_failed", message: error.message } });
+    }
+    return;
+  }
+
   if (reqPath === "/v1/cli/discover" && req.method === "GET") {
     if (!checkLocalAuth(req, res)) return;
     try {
@@ -5579,6 +5597,24 @@ function missingProviderApiKeyMessage(provider, req) {
   return `API key is not set for provider ${provider.id}. Set ${keyName} in the gateway .env, or pass it in the client Authorization / x-api-key header.`;
 }
 
+function recordRequestTokenUsage(opts = {}) {
+  try {
+    const ep = opts.endpoint || {};
+    const usage = opts.usage || {};
+    globalTokenTracker.recordUsage({
+      timestamp: Date.now(),
+      client: opts.client || ep.client || "unknown",
+      endpoint_id: ep.id || "ep_unknown",
+      endpoint_name: ep.name || ep.id || "unknown",
+      purpose: opts.purpose || ep.purpose || "chat",
+      model: opts.model || ep.upstream_model || "unknown",
+      prompt_tokens: usage.prompt_tokens || usage.input_tokens || 0,
+      completion_tokens: usage.completion_tokens || usage.output_tokens || 0,
+      total_tokens: usage.total_tokens || ((usage.prompt_tokens || usage.input_tokens || 0) + (usage.completion_tokens || usage.output_tokens || 0)),
+    });
+  } catch {}
+}
+
 function modelDiscovery(client = 'claude') {
   const now = Math.floor(Date.now() / 1000);
   if (client === "code") {
@@ -5782,6 +5818,7 @@ function resolveCapabilityForProtocol(model, protocol, client = null) {
 
 const CODEX_MODELS_LIVE_ENABLED = !isTruthy(process.env.CODEX_MODELS_LIVE_DISABLED);
 let modelDiscoveryService = null;
+const globalTokenTracker = createTokenTracker({ dbPath: path.join(PROJECT_ROOT, "gateway.db") });
 
 const CODEX_MODELS_TTL_MS = intEnv("CODEX_MODELS_TTL_MS", 300_000);
 const CODEX_MODELS_LIVE_TIMEOUT_MS = intEnv("CODEX_MODELS_LIVE_TIMEOUT_MS", 2_500);
