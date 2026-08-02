@@ -1728,10 +1728,10 @@ function collectGroupedModelsFromConfig(config) {
             body: init.body || null,
             signal: init.signal || null,
           }),
-          resolveApiKey: (ep) => getConfiguredProviderApiKey(ep),
+          resolveApiKey: (ep) => getConfiguredProviderApiKey(ep) || getEndpointApiKey(ep, GATEWAY_SECRETS, process.env, allGatewayEndpoints()),
         });
       }
-      const result = await modelDiscoveryService.discoverEndpointModels({
+      let result = await modelDiscoveryService.discoverEndpointModels({
         client: resolvedClient,
         endpoint,
         refresh,
@@ -1760,17 +1760,7 @@ function collectGroupedModelsFromConfig(config) {
               name: model.display_name || model.id || model.slug,
             })).filter((model) => model.id);
           },
-          loadGrokModels: async () => {
-            try {
-              const catalog = loadGrokModelCatalog();
-              return [...catalog.entries()].map(([id, info]) => ({
-                id,
-                name: info?.display_name || id,
-              }));
-            } catch {
-              return ["grok-4.5", "grok-4", "grok-3"];
-            }
-          },
+          loadGrokModels: async () => fetchOfficialGrokModels(endpoint),
           loadAntigravityModels: async () => {
             // Prefer live subscription catalog when available; never silently pretend success with empty hardcoded lists.
             try {
@@ -1793,6 +1783,69 @@ function collectGroupedModelsFromConfig(config) {
           },
         },
       });
+      // Volcengine plan roots often do not expose a public models catalog.
+      // If discovery fails, borrow a working coding-catalog endpoint/key from current config.
+      if (
+        (!result.models || result.models.length === 0)
+        && /ark\.cn-beijing\.volces\.com/i.test(String(endpoint.base_url || ""))
+        && /\/api\/plan/i.test(String(endpoint.base_url || ""))
+      ) {
+        try {
+          const allEndpoints = allGatewayEndpoints();
+          const codingCandidates = allEndpoints.filter((ep) =>
+            /ark\.cn-beijing\.volces\.com/i.test(String(ep?.base_url || ""))
+            && /\/api\/coding/i.test(String(ep?.base_url || ""))
+            && !isCapabilityEndpoint(ep)
+          );
+          const tryList = [
+            {
+              base_url: "https://ark.cn-beijing.volces.com/api/coding/v3",
+              apiKey: getConfiguredProviderApiKey(endpoint)
+                || getEndpointApiKey(endpoint, GATEWAY_SECRETS, process.env, allEndpoints)
+                || String(GATEWAY_SECRETS?.api_keys?.[endpoint.id] || ""),
+            },
+            ...codingCandidates.map((ep) => ({
+              base_url: /\/v\d+$/i.test(String(ep.base_url || "").replace(/\/+$/, ""))
+                ? String(ep.base_url).replace(/\/+$/, "")
+                : "https://ark.cn-beijing.volces.com/api/coding/v3",
+              apiKey: getConfiguredProviderApiKey(ep)
+                || getEndpointApiKey(ep, GATEWAY_SECRETS, process.env, allEndpoints)
+                || String(GATEWAY_SECRETS?.api_keys?.[ep.id] || ""),
+            })),
+          ].filter((item) => item.apiKey);
+
+          for (const candidate of tryList) {
+            const sibling = {
+              ...endpoint,
+              id: `${endpoint.id}__coding_fallback`,
+              base_url: candidate.base_url,
+              auth: endpoint.auth || "bearer",
+            };
+            const alt = await modelDiscoveryService.discoverEndpointModels({
+              client: resolvedClient,
+              endpoint: sibling,
+              refresh: true,
+              context: { apiKey: candidate.apiKey },
+            });
+            if (Array.isArray(alt.models) && alt.models.length) {
+              result = {
+                ...alt,
+                endpoint_id: endpoint.id,
+                client: resolvedClient,
+                strategy: "openai-compatible",
+                source: "base_url",
+                error: result.error
+                  ? {
+                      code: "plan_models_fallback",
+                      message: `${result.error.message}；plan 目录不可用，已回退到火山 coding 模型目录`,
+                    }
+                  : null,
+              };
+              break;
+            }
+          }
+        } catch {}
+      }
       sendJson(res, 200, result);
     } catch (error) {
       const status = Number(error?.status) || 500;
@@ -2224,46 +2277,164 @@ function mediaProviderContext(req, endpoint, signal) {
 
 
 async function listAntigravityModels(endpoint = null) {
-  // Best-effort discovery for Antigravity subscription nodes.
-  // 1) Prefer models already configured on the endpoint.
-  // 2) Try local secrets/status metadata if present.
-  // 3) Fall back to a small known cloudcode model set only when login appears healthy.
+  // True-source discovery via Antigravity loadCodeAssist (v1internal).
+  const tokenInfo = await ensureAntigravityToken().catch((error) => {
+    const err = new Error(error?.message || "Antigravity 登录态无效");
+    err.code = "antigravity_auth_missing";
+    throw err;
+  });
+  const accessToken = tokenInfo?.access_token || getAntigravityStoredToken?.() || "";
+  if (!accessToken) {
+    const error = new Error("Antigravity 未登录或缺少 access_token");
+    error.code = "antigravity_auth_missing";
+    throw error;
+  }
+
+  // Reuse the same proxy-aware fetch path as chat routing when available.
+  const fetchImpl = (url, init = {}) => fetchWithOptionalProxy(url, {
+    method: init.method || "POST",
+    headers: init.headers || {},
+    body: init.body || null,
+    signal: init.signal || null,
+  });
+
+  const loaded = await loadAntigravityProject({ accessToken, fetchImpl });
+  const raw = loaded?.raw || {};
+  const models = extractAntigravityModelsFromLoadCodeAssist(raw);
+  if (models.length) return models;
+
+  // Keep endpoint-configured models as last resort, but mark that true-source returned empty.
   if (Array.isArray(endpoint?.models) && endpoint.models.length) {
     return endpoint.models.map((id) => ({ id, name: id }));
   }
+  const error = new Error("Antigravity loadCodeAssist 未返回可用模型列表");
+  error.code = "antigravity_models_unavailable";
+  throw error;
+}
 
-  try {
-    const secrets = loadAntigravitySecrets?.() || {};
-    const fromSecrets = []
-      .concat(secrets.models || [])
-      .concat(secrets.available_models || [])
-      .concat(secrets.model_list || []);
-    if (fromSecrets.length) {
-      return fromSecrets.map((item) => (
-        typeof item === "string"
-          ? { id: item, name: item }
-          : { id: item?.id || item?.name, name: item?.name || item?.id }
-      )).filter((item) => item.id);
-  }
+function extractAntigravityModelsFromLoadCodeAssist(raw) {
+  const bags = [];
+  const pushBag = (value) => {
+    if (!value) return;
+    if (Array.isArray(value)) bags.push(value);
+    else if (typeof value === "object") bags.push(Object.values(value));
+  };
+  pushBag(raw?.models);
+  pushBag(raw?.availableModels);
+  pushBag(raw?.modelConfigs);
+  pushBag(raw?.allowedModels);
+  pushBag(raw?.supportedModels);
+  pushBag(raw?.modelList);
+  pushBag(raw?.cloudCodeConfig?.models);
+  pushBag(raw?.cloudaicompanionConfig?.models);
+  pushBag(raw?.currentTier);
+  pushBag(raw?.tiers);
 
-    const token = secrets.access_token || getAntigravityStoredToken?.() || "";
-    const hasCreds = Boolean(token || getAntigravityCreds?.()?.client_id);
-    if (!hasCreds) {
-      const error = new Error("Antigravity 未登录或缺少 OAuth 凭据");
-      error.code = "antigravity_auth_missing";
-      throw error;
+  // Nested common shapes: tiers[].models / configs[].model
+  for (const tier of [].concat(raw?.tiers || [], raw?.currentTier || [])) {
+    if (tier && typeof tier === "object") {
+      pushBag(tier.models);
+      pushBag(tier.availableModels);
+      pushBag(tier.modelConfigs);
     }
-  } catch (error) {
-    if (error?.code) throw error;
   }
 
-  // Stable known set used by cloudcode-like Antigravity deployments.
-  return [
-    { id: "gemini-2.5-pro", name: "gemini-2.5-pro" },
-    { id: "gemini-2.5-flash", name: "gemini-2.5-flash" },
-    { id: "claude-sonnet-4-5", name: "claude-sonnet-4-5" },
-    { id: "claude-opus-4-7", name: "claude-opus-4-7" },
-  ];
+  const seen = new Set();
+  const out = [];
+  const visit = (item) => {
+    if (!item) return;
+    if (typeof item === "string") {
+      const id = item.trim();
+      if (!id || seen.has(id)) return;
+      seen.add(id);
+      out.push({ id, name: id });
+      return;
+    }
+    if (typeof item !== "object") return;
+    const id = String(item.id || item.model || item.name || item.modelId || item.model_name || "").trim();
+    if (id) {
+      if (!seen.has(id)) {
+        seen.add(id);
+        out.push({ id, name: String(item.displayName || item.display_name || item.name || id) });
+      }
+    }
+    // Dive lightly into nested values that look like model containers.
+    for (const [k, v] of Object.entries(item)) {
+      if (/model/i.test(k)) {
+        if (Array.isArray(v)) v.forEach(visit);
+        else if (v && typeof v === "object") visit(v);
+      }
+    }
+  };
+  for (const bag of bags) {
+    for (const item of bag) visit(item);
+  }
+  return out;
+}
+
+async function fetchOfficialGrokModels(endpoint = null) {
+  // Official Grok catalog from cli-chat-proxy, matching grok-build ModelsManager behavior.
+  const base = String(endpoint?.base_url || process.env.GROK_MODELS_BASE_URL || GROK_DEFAULT_BASE_URL || "https://cli-chat-proxy.grok.com/v1")
+    .replace(/\/+$/, "");
+  const listUrl = process.env.GROK_MODELS_LIST_URL || `${base}/models`;
+  const auth = resolveGrokSessionAuth(endpoint);
+  if (!auth?.token) {
+    // Fall back to local cache if offline/unauthenticated.
+    try {
+      const catalog = loadGrokModelCatalog();
+      const cached = [...catalog.entries()].map(([id, info]) => ({ id, name: info?.display_name || id }));
+      if (cached.length) return cached;
+    } catch {}
+    const error = new Error("Grok 未登录，无法访问官方模型列表");
+    error.code = "grok_auth_missing";
+    throw error;
+  }
+
+  const headers = {
+    Accept: "application/json",
+    Authorization: `Bearer ${auth.token}`,
+    "X-XAI-Token-Auth": "xai-grok-cli",
+    "User-Agent": "shrimp/0.0.3 grok-models",
+  };
+  const response = await fetchWithOptionalProxy(listUrl, {
+    method: "GET",
+    headers,
+  });
+  if (!response.ok) {
+    // Prefer local official cache over hard failure.
+    try {
+      const catalog = loadGrokModelCatalog();
+      const cached = [...catalog.entries()].map(([id, info]) => ({ id, name: info?.display_name || id }));
+      if (cached.length) return cached;
+    } catch {}
+    const error = new Error(`Grok 官方模型列表请求失败 (${response.status}) @ ${listUrl}`);
+    error.code = "upstream_http_error";
+    error.status = response.status;
+    throw error;
+  }
+  const payload = await response.json();
+  // cli-chat-proxy may return {models:{id:info}} or OpenAI list shape.
+  if (payload?.models && !Array.isArray(payload.models) && typeof payload.models === "object") {
+    return Object.entries(payload.models).map(([id, entry]) => ({
+      id,
+      name: entry?.info?.name || entry?.name || id,
+    }));
+  }
+  return payload;
+}
+
+function resolveGrokSessionAuth(endpoint = null) {
+  try {
+    const authPath = process.env.GROK_AUTH_PATH || path.join(os.homedir(), ".grok", "auth.json");
+    if (!fs.existsSync(authPath)) return null;
+    const parsed = JSON.parse(fs.readFileSync(authPath, "utf8"));
+    const first = parsed[Object.keys(parsed)[0]] || {};
+    const token = first.access_token || first.key || first.token || "";
+    if (!token) return null;
+    return { token, email: first.email || "", authPath };
+  } catch {
+    return null;
+  }
 }
 
 function resolveMediaApiKey(req, endpoint) {

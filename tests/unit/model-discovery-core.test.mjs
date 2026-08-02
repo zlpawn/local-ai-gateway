@@ -3,7 +3,7 @@ import assert from "node:assert/strict";
 import { normalizeDiscoveredModels } from "../../lib/models/normalize.mjs";
 import { createModelDiscoveryCache } from "../../lib/models/cache.mjs";
 import { createModelDiscoveryService } from "../../lib/models/discovery-service.mjs";
-import { openaiCompatibleStrategy, buildOpenAICompatibleModelsUrl } from "../../lib/models/strategies/openai-compatible.mjs";
+import { openaiCompatibleStrategy, buildOpenAICompatibleModelsUrl, buildOpenAICompatibleModelsUrlCandidates } from "../../lib/models/strategies/openai-compatible.mjs";
 
 test("normalizeDiscoveredModels accepts OpenAI list payload", () => {
   const models = normalizeDiscoveredModels({
@@ -130,9 +130,10 @@ test("buildOpenAICompatibleModelsUrl handles volcengine roots and chat completio
     buildOpenAICompatibleModelsUrl("https://ark.cn-beijing.volces.com/api/coding"),
     "https://ark.cn-beijing.volces.com/api/coding/v3/models",
   );
+  // plan root prefers shared /api/v3/models because /api/plan/v3/models often 404s
   assert.equal(
     buildOpenAICompatibleModelsUrl("https://ark.cn-beijing.volces.com/api/plan"),
-    "https://ark.cn-beijing.volces.com/api/plan/v3/models",
+    "https://ark.cn-beijing.volces.com/api/v3/models",
   );
   assert.equal(
     buildOpenAICompatibleModelsUrl("https://huskyapi.com/v1/chat/completions"),
@@ -142,4 +143,36 @@ test("buildOpenAICompatibleModelsUrl handles volcengine roots and chat completio
     buildOpenAICompatibleModelsUrl("https://api.example.com/v1"),
     "https://api.example.com/v1/models",
   );
+});
+
+
+test("volcengine plan candidates include shared /api/v3/models before plan/v3/models", () => {
+  const candidates = buildOpenAICompatibleModelsUrlCandidates("https://ark.cn-beijing.volces.com/api/plan");
+  assert.ok(candidates.includes("https://ark.cn-beijing.volces.com/api/v3/models"));
+  assert.ok(candidates.indexOf("https://ark.cn-beijing.volces.com/api/v3/models") < candidates.indexOf("https://ark.cn-beijing.volces.com/api/plan/v3/models"));
+});
+
+test("openai compatible strategy tries next candidate after 404", async () => {
+  const calls = [];
+  const result = await openaiCompatibleStrategy.discover(
+    { id: "ep1", base_url: "https://ark.cn-beijing.volces.com/api/plan", auth: "bearer" },
+    {
+      apiKey: "sk-test",
+      fetchImpl: async (url) => {
+        calls.push(url);
+        if (url.endsWith("/api/plan/v3/models")) {
+          return { ok: false, status: 404 };
+        }
+        if (url.endsWith("/api/v3/models")) {
+          return {
+            ok: true,
+            async json() { return { data: [{ id: "doubao-pro" }] }; },
+          };
+        }
+        return { ok: false, status: 404 };
+      },
+    },
+  );
+  assert.equal(result.models[0].id, "doubao-pro");
+  assert.ok(calls.some((u) => u.endsWith("/api/v3/models")));
 });
