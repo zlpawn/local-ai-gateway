@@ -4780,33 +4780,47 @@ experimental_bearer_token = "dummy"</pre>
             const globalLabel = globalEnabled
                 ? `${String(globalProxy.protocol || 'http').toUpperCase()}://${globalProxy.host || '127.0.0.1'}:${globalProxy.port || 7897}`
                 : '已关闭';
-            const rows = Object.entries(config.clients || {}).flatMap(([client, body]) =>
+            const items = Object.entries(config.clients || {}).flatMap(([client, body]) =>
                 (body?.endpoints || []).map(endpoint => {
                     const mode = String(endpoint.proxy_mode || 'global');
                     const legacyProxy = typeof endpoint.proxy === 'string' ? endpoint.proxy : '';
                     const isDirect = mode === 'disabled' || endpoint.proxy === '';
-                    const isCustom = (mode === 'custom' && endpoint.proxy_url) || legacyProxy;
-                    const effective = isDirect ? '直连'
-                        : isCustom ? `自定义 · ${endpoint.proxy_url || legacyProxy}`
-                        : (globalEnabled ? '全局代理' : '直连');
+                    const isCustom = (mode === 'custom' && endpoint.proxy_url) || Boolean(legacyProxy);
+                    const effectiveType = isDirect ? 'direct'
+                        : isCustom ? 'custom'
+                        : (globalEnabled ? 'global' : 'direct');
+                    const effectiveText = effectiveType === 'direct' ? '直连'
+                        : effectiveType === 'custom' ? `自定义 · ${endpoint.proxy_url || legacyProxy}`
+                        : '全局代理';
                     let host = '';
                     try { host = endpoint.base_url ? new URL(endpoint.base_url).host : (endpoint.type === 'codex-subscription' ? 'chatgpt.com' : endpoint.type === 'antigravity' ? 'cloudcode-pa.googleapis.com' : '—'); } catch { host = endpoint.base_url || '—'; }
-                    const action = isDirect
+                    const action = (effectiveType === 'direct')
                         ? `<button class="btn btn-xs" data-proxy-client="${client}" data-proxy-index="${(body.endpoints.indexOf(endpoint))}" onclick="setEndpointProxyMode(this, 'global')">恢复全局</button>`
                         : `<button class="btn btn-xs btn-danger" data-proxy-client="${client}" data-proxy-index="${(body.endpoints.indexOf(endpoint))}" onclick="setEndpointProxyMode(this, 'disabled')">直连</button>`;
-                    return `<tr>
+                    return {
+                        effectiveType,
+                        html: `<tr>
                         <td style="padding:9px 10px;border-bottom:1px solid var(--border-color)">${escapeHtml(client)}</td>
                         <td style="padding:9px 10px;border-bottom:1px solid var(--border-color)">${escapeHtml(endpoint.name || endpoint.id || '未命名节点')}</td>
                         <td style="padding:9px 10px;border-bottom:1px solid var(--border-color);font-family:var(--font-mono);font-size:12px;color:var(--text-secondary)">${escapeHtml(host)}</td>
-                        <td style="padding:9px 10px;border-bottom:1px solid var(--border-color);font-size:12px">${escapeHtml(effective)}</td>
+                        <td style="padding:9px 10px;border-bottom:1px solid var(--border-color);font-size:12px">${escapeHtml(effectiveText)}</td>
                         <td style="padding:9px 10px;border-bottom:1px solid var(--border-color)">${action}</td>
-                    </tr>`;
+                    </tr>`
+                    };
                 }),
             );
-            container.innerHTML = rows.length
-                ? `<div style="font-size:12px;color:var(--text-secondary);margin-bottom:8px">全局代理：${escapeHtml(globalLabel)} · 共 ${rows.length} 个节点，其中 ${rows.filter(r=>r.includes('全局代理')).length} 个走全局、${rows.filter(r=>r.includes('直连')).length} 个直连</div><div style="overflow:auto"><table style="width:100%;border-collapse:collapse;font-size:13px">
+            const globalCount = items.filter(i => i.effectiveType === 'global').length;
+            const directCount = items.filter(i => i.effectiveType === 'direct').length;
+            const customCount = items.filter(i => i.effectiveType === 'custom').length;
+            const summaryParts = [
+                `${globalCount} 个走全局`,
+                customCount > 0 ? `${customCount} 个自定义` : null,
+                `${directCount} 个直连`
+            ].filter(Boolean).join('、');
+            container.innerHTML = items.length
+                ? `<div style="font-size:12px;color:var(--text-secondary);margin-bottom:8px">全局代理：${escapeHtml(globalLabel)} · 共 ${items.length} 个节点（${summaryParts}）</div><div style="overflow:auto"><table style="width:100%;border-collapse:collapse;font-size:13px">
                     <thead><tr><th style="text-align:left;padding:8px 10px">客户端</th><th style="text-align:left;padding:8px 10px">节点</th><th style="text-align:left;padding:8px 10px">上游域名</th><th style="text-align:left;padding:8px 10px">生效方式</th><th style="text-align:left;padding:8px 10px">操作</th></tr></thead>
-                    <tbody>${rows.join('')}</tbody>
+                    <tbody>${items.map(i => i.html).join('')}</tbody>
                   </table></div>`
                 : '<div style="color:var(--text-secondary);font-size:13px">暂无节点</div>';
         };
