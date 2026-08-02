@@ -30,7 +30,7 @@ function tmpEnv() {
 }
 
 test("maskSecret keeps edges and hides middle", () => {
-  assert.equal(maskSecret("FAKESEC-aaaaaaaaaaaaaaaaaaaaaaaaxAAA", { keepStart: 7, keepEnd: 4 }), "FAKESEC-****qDAf");
+  assert.equal(maskSecret("FAKESEC-aaaaaaaaaaaaaaaaaaaaaaaaxAAA", { keepStart: 7, keepEnd: 4 }), "FAKESEC-****xAAA");
 });
 
 test("extracts concatenated GOCSPX secrets from binary-like text", () => {
@@ -41,12 +41,20 @@ test("extracts concatenated GOCSPX secrets from binary-like text", () => {
 });
 
 test("chooseCredentialPair prefers known Antigravity client id", () => {
+  // Preferred credentials are read from the secrets file at runtime.
+  // Seed a temp secrets file so the preferred id/secret are available.
+  const { dir, env } = tmpEnv();
+  fs.writeFileSync(path.join(dir, "antigravity.secrets.json"), JSON.stringify({
+    client_id: "9999999999-fakeclientid0fortesting0.apps.googleuser.test",
+    client_secret: "FAKESEC-aaaaaaaaaaaaaaaaaaaaaaaaxAAA",
+  }));
   const pair = chooseCredentialPair(
     [
       "9999999999-fakeclientid0fortesting0.apps.googleuser.test",
       "9999999999-fakeclientid0fortesting0.apps.googleuser.test",
     ],
     ["FAKESEC-aaaaaaaaaaaaaaaaaaaaaaaaxAAA", "FAKESEC-aaaaaaaaaaaaaaaaaaaaaaaaxAAA"],
+    env,
   );
   assert.equal(
     pair.client_id,
