@@ -6544,6 +6544,7 @@ ${(() => {
                 }
             });
 
+            if (activeClient === 'proxy') renderProxyEndpointsList();
             // Custom agent-node groups render into the shared custom-clients section.
             renderCustomClientNav();
             if (activeClient === 'custom-clients' || isCustomClient(activeClient) || (selectedEndpoint && isCustomClient(selectedEndpoint.client))) {
