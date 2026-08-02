@@ -3362,7 +3362,7 @@ experimental_bearer_token = "dummy"</pre>
                 <div class="card" style="margin-bottom: 20px;">
                     <div style="display: flex; gap: 16px; flex-wrap: wrap; align-items: center;">
                         <div style="display: flex; align-items: center; gap: 8px;">
-                            <label style="font-size: 13px; font-weight: 500;">统计粒度:</label>
+                            <label style="font-size: 13px; font-weight: 500; white-space: nowrap; flex-shrink: 0;">统计粒度:</label>
                             <select id="analytics-granularity" class="input" style="padding: 4px 8px; font-size: 13px;" onchange="loadAnalyticsData()">
                                 <option value="hour" selected>按小时 (Hourly)</option>
                                 <option value="minute">按分钟 (Minutely)</option>
@@ -3370,7 +3370,7 @@ experimental_bearer_token = "dummy"</pre>
                             </select>
                         </div>
                         <div style="display: flex; align-items: center; gap: 8px;">
-                            <label style="font-size: 13px; font-weight: 500;">时间范围:</label>
+                            <label style="font-size: 13px; font-weight: 500; white-space: nowrap; flex-shrink: 0;">时间范围:</label>
                             <select id="analytics-range" class="input" style="padding: 4px 8px; font-size: 13px;" onchange="loadAnalyticsData()">
                                 <option value="24h" selected>最近 24 小时</option>
                                 <option value="1h">最近 1 小时</option>
@@ -3379,7 +3379,7 @@ experimental_bearer_token = "dummy"</pre>
                             </select>
                         </div>
                         <div style="display: flex; align-items: center; gap: 8px;">
-                            <label style="font-size: 13px; font-weight: 500;">节点类型:</label>
+                            <label style="font-size: 13px; font-weight: 500; white-space: nowrap; flex-shrink: 0;">节点类型:</label>
                             <select id="analytics-purpose" class="input" style="padding: 4px 8px; font-size: 13px;" onchange="loadAnalyticsData()">
                                 <option value="all" selected>全部节点类型</option>
                                 <option value="chat">聊天节点 (Chat)</option>
