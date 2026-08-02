@@ -352,15 +352,17 @@ test("tools cards list renders text embedding card", async () => {
   const html = await readFile(path.join(ROOT, "desktop", "config-panel.html"), "utf8");
   assert.match(html, /window\.renderToolsCards\s*=\s*function/);
   assert.match(html, /文本向量化/);
-  assert.match(html, /openTool\('embedding'\)/);
+  assert.match(html, /'embedding':/);
+  assert.match(html, /renderToolGroups/);
   assert.match(html, /tools-card/);
 });
 
 test("image generation mini-tool sends media request and renders local history", async () => {
   const html = await readFile(path.join(ROOT, "desktop", "config-panel.html"), "utf8");
   const firstDocument = html.slice(0, html.indexOf("</html>") + "</html>".length);
-  assert.match(firstDocument, /id="image-gen"/);
-  assert.match(firstDocument, /openTool\('image-gen'\)/);
+  assert.match(firstDocument, /'image-gen':/);
+  assert.match(firstDocument, /toolCardHTML/);
+  assert.match(firstDocument, /toolId === 'image-gen'/);
   assert.match(firstDocument, /const imageGenState\s*=\s*\{/);
   assert.match(firstDocument, /function getMediaEndpoints\(client, purpose\)/);
   assert.match(firstDocument, /window\.renderImageGenDetail\s*=\s*function/);
@@ -396,7 +398,7 @@ test("media previews use history-owned same-origin files and history actions use
 test("tools cards list renders classification metrics lab card", async () => {
   const html = await readFile(path.join(ROOT, "desktop", "config-panel.html"), "utf8");
   assert.match(html, /分类评估实验室/);
-  assert.match(html, /openTool\('classification-metrics'\)/);
+  assert.match(html, /toolId === 'classification-metrics'/);
   assert.match(html, /window\.renderClassificationMetricsDetail\s*=\s*function/);
   assert.match(html, /TP 真正例/);
   assert.match(html, /精准率 Precision/);
@@ -495,7 +497,7 @@ test("custom agent-node blocks show the protocol and allow changing it inline", 
 test("tools cards list renders antigravity subscribe card", async () => {
   const html = await readFile(path.join(ROOT, "desktop", "config-panel.html"), "utf8");
   assert.match(html, /接入 Antigravity 订阅/);
-  assert.match(html, /openTool\('antigravity-subscribe'\)/);
+  assert.match(html, /toolId === 'antigravity-subscribe'/);
   assert.match(html, /window\.renderAntigravitySubscribeDetail/);
   assert.match(html, /\/v1\/subscription-auth\/antigravity\/status/);
   assert.match(html, /从本机提取/);
@@ -514,7 +516,7 @@ test("config panel includes video generation mini-tool card and detail", async (
   const html = await readFile(path.join(ROOT, "desktop", "config-panel.html"), "utf8");
   assert.match(html, /videoGenState/);
   assert.match(html, /renderVideoGenDetail/);
-  assert.match(html, /openTool\('video-gen'\)/);
+  assert.match(html, /toolId === 'video-gen'/);
   assert.match(html, /runVideoGeneration/);
   assert.match(html, /pollVideoTask/);
   assert.match(html, /\/v1\/media\/video/);
@@ -529,7 +531,7 @@ test("config panel includes TTS mini-tool card and detail", async () => {
   const html = await readFile(path.join(ROOT, "desktop", "config-panel.html"), "utf8");
   assert.match(html, /ttsGenState/);
   assert.match(html, /renderTtsGenDetail/);
-  assert.match(html, /openTool\('tts-gen'\)/);
+  assert.match(html, /toolId === 'tts-gen'/);
   assert.match(html, /runTtsGeneration/);
   assert.match(html, /\/v1\/media\/tts/);
   assert.match(html, /registerMediaHistoryTool\('tts'/);
@@ -576,7 +578,7 @@ test("chat model discovery suggestions and Claude catalog mini-tool are wired", 
   assert.match(firstDocument, /getUsedClaudeDesktopMappingSources/);
   assert.doesNotMatch(firstDocument, /'claude-sonnet'(?!,)/);
   assert.match(firstDocument, /'claude-opus-4-6'/);
-  assert.match(firstDocument, /openTool\('claude-model-catalog'\)/);
+  assert.match(firstDocument, /toolId === 'claude-model-catalog'/);
   assert.match(firstDocument, /renderClaudeModelCatalogDetail/);
   assert.doesNotMatch(firstDocument, /endpoint\.models\s*=\s*json\.models/);
 });
