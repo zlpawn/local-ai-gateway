@@ -3,7 +3,7 @@ import assert from "node:assert/strict";
 import { normalizeDiscoveredModels } from "../../lib/models/normalize.mjs";
 import { createModelDiscoveryCache } from "../../lib/models/cache.mjs";
 import { createModelDiscoveryService } from "../../lib/models/discovery-service.mjs";
-import { openaiCompatibleStrategy } from "../../lib/models/strategies/openai-compatible.mjs";
+import { openaiCompatibleStrategy, buildOpenAICompatibleModelsUrl } from "../../lib/models/strategies/openai-compatible.mjs";
 
 test("normalizeDiscoveredModels accepts OpenAI list payload", () => {
   const models = normalizeDiscoveredModels({
@@ -122,4 +122,24 @@ test("service uses shared cache fallback on failure", async () => {
   assert.equal(result.source, "cache");
   assert.equal(result.models[0].id, "cached");
   assert.match(result.error.message, /network down/);
+});
+
+
+test("buildOpenAICompatibleModelsUrl handles volcengine roots and chat completions paths", () => {
+  assert.equal(
+    buildOpenAICompatibleModelsUrl("https://ark.cn-beijing.volces.com/api/coding"),
+    "https://ark.cn-beijing.volces.com/api/coding/v3/models",
+  );
+  assert.equal(
+    buildOpenAICompatibleModelsUrl("https://ark.cn-beijing.volces.com/api/plan"),
+    "https://ark.cn-beijing.volces.com/api/plan/v3/models",
+  );
+  assert.equal(
+    buildOpenAICompatibleModelsUrl("https://huskyapi.com/v1/chat/completions"),
+    "https://huskyapi.com/v1/models",
+  );
+  assert.equal(
+    buildOpenAICompatibleModelsUrl("https://api.example.com/v1"),
+    "https://api.example.com/v1/models",
+  );
 });

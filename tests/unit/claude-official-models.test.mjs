@@ -59,3 +59,9 @@ test("availableClaudeDesktopMappingSources excludes all desktop chat mappings", 
   assert.ok(!models.includes("claude-sonnet-4-5"));
   assert.ok(models.includes("claude-haiku-4-0"));
 });
+
+
+test("builtin Claude official models do not include date suffixes", () => {
+  assert.ok(BUILTIN_CLAUDE_OFFICIAL_MODELS.every((id) => !/\d{8}$/.test(id)));
+  assert.ok(BUILTIN_CLAUDE_OFFICIAL_MODELS.includes("claude-haiku-4-5"));
+});

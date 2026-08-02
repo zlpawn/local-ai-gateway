@@ -1737,8 +1737,28 @@ function collectGroupedModelsFromConfig(config) {
         refresh,
         context: {
           loadCodexModels: async () => {
-            const payload = await codexModelDiscoveryFresh("codex");
-            return payload;
+            // Official-only for codex-subscription nodes. Do NOT mix local third-party custom models.
+            let officialModels = OFFICIAL_CODEX_MODELS || [];
+            try {
+              const refreshedBundled = loadOfficialCodexCatalogModels().map((model) => ({
+                id: model.slug,
+                display_name: model.display_name || model.slug,
+                owned_by: "openai",
+              }));
+              if (refreshedBundled.length) {
+                officialModels = mergeOfficialDiscoveryModels(officialModels, refreshedBundled);
+              }
+            } catch {}
+            try {
+              const liveModels = await fetchLiveOfficialCodexModels();
+              if (liveModels.length) {
+                officialModels = mergeOfficialDiscoveryModels(officialModels, liveModels);
+              }
+            } catch {}
+            return (officialModels || []).map((model) => ({
+              id: model.id || model.slug,
+              name: model.display_name || model.id || model.slug,
+            })).filter((model) => model.id);
           },
           loadGrokModels: async () => {
             try {
@@ -1752,14 +1772,24 @@ function collectGroupedModelsFromConfig(config) {
             }
           },
           loadAntigravityModels: async () => {
-            // Prefer endpoint-configured models first; otherwise provide a stable built-in starter set.
-            if (Array.isArray(endpoint.models) && endpoint.models.length) return endpoint.models;
-            return [
-              "gemini-2.5-pro",
-              "gemini-2.5-flash",
-              "claude-sonnet-4-5",
-              "claude-opus-4-7",
-            ];
+            // Prefer live subscription catalog when available; never silently pretend success with empty hardcoded lists.
+            try {
+              if (typeof listAntigravityModels === "function") {
+                const live = await listAntigravityModels(endpoint);
+                if (Array.isArray(live) && live.length) return live;
+              }
+            } catch (error) {
+              // fall through to endpoint models / explicit error
+              if (!Array.isArray(endpoint.models) || endpoint.models.length === 0) {
+                throw error;
+              }
+            }
+            if (Array.isArray(endpoint.models) && endpoint.models.length) {
+              return endpoint.models.map((id) => ({ id, name: id }));
+            }
+            const error = new Error("Antigravity 未返回可用模型。请确认订阅登录态后重试。");
+            error.code = "antigravity_models_unavailable";
+            throw error;
           },
         },
       });
@@ -2190,6 +2220,50 @@ function mediaProviderContext(req, endpoint, signal) {
     signal,
     getApiKey: (targetEndpoint) => resolveMediaApiKey(req, targetEndpoint || endpoint),
   };
+}
+
+
+async function listAntigravityModels(endpoint = null) {
+  // Best-effort discovery for Antigravity subscription nodes.
+  // 1) Prefer models already configured on the endpoint.
+  // 2) Try local secrets/status metadata if present.
+  // 3) Fall back to a small known cloudcode model set only when login appears healthy.
+  if (Array.isArray(endpoint?.models) && endpoint.models.length) {
+    return endpoint.models.map((id) => ({ id, name: id }));
+  }
+
+  try {
+    const secrets = loadAntigravitySecrets?.() || {};
+    const fromSecrets = []
+      .concat(secrets.models || [])
+      .concat(secrets.available_models || [])
+      .concat(secrets.model_list || []);
+    if (fromSecrets.length) {
+      return fromSecrets.map((item) => (
+        typeof item === "string"
+          ? { id: item, name: item }
+          : { id: item?.id || item?.name, name: item?.name || item?.id }
+      )).filter((item) => item.id);
+  }
+
+    const token = secrets.access_token || getAntigravityStoredToken?.() || "";
+    const hasCreds = Boolean(token || getAntigravityCreds?.()?.client_id);
+    if (!hasCreds) {
+      const error = new Error("Antigravity 未登录或缺少 OAuth 凭据");
+      error.code = "antigravity_auth_missing";
+      throw error;
+    }
+  } catch (error) {
+    if (error?.code) throw error;
+  }
+
+  // Stable known set used by cloudcode-like Antigravity deployments.
+  return [
+    { id: "gemini-2.5-pro", name: "gemini-2.5-pro" },
+    { id: "gemini-2.5-flash", name: "gemini-2.5-flash" },
+    { id: "claude-sonnet-4-5", name: "claude-sonnet-4-5" },
+    { id: "claude-opus-4-7", name: "claude-opus-4-7" },
+  ];
 }
 
 function resolveMediaApiKey(req, endpoint) {

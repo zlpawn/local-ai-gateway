@@ -566,6 +566,7 @@ test("chat model discovery suggestions and Claude catalog mini-tool are wired", 
   const html = await readFile(path.join(ROOT, "desktop", "config-panel.html"), "utf8");
   const firstDocument = html.slice(0, html.indexOf("</html>") + "</html>".length);
   assert.match(firstDocument, /fetchEndpointModels/);
+  assert.match(firstDocument, /Auto-discover when user focuses upstream model or mapping target fields/);
   assert.match(firstDocument, /refreshEndpointModels/);
   assert.match(firstDocument, /\/v1\/config\/endpoints\//);
   assert.match(firstDocument, /model-discovery-list/);

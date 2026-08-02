@@ -3907,7 +3907,7 @@ experimental_bearer_token = "dummy"</pre>
             'claude-opus-4-7',
             'claude-opus-4-6',
             'claude-sonnet-4-5',
-            'claude-haiku-4-5-20251001',
+            'claude-haiku-4-5',
             'claude-haiku-4-0',
         ];
 
@@ -4074,6 +4074,16 @@ experimental_bearer_token = "dummy"</pre>
             document.querySelectorAll('.model-suggest-wrap.is-open').forEach((el) => el.classList.remove('is-open'));
             const wrap = document.getElementById(`model-suggest-${which}-${client}-${endpointId}`);
             if (wrap) wrap.classList.add('is-open');
+            // Auto-discover when user focuses upstream model or mapping target fields.
+            if ((which === 'upstream' || which === 'map-target') && endpointId) {
+                const state = getDiscoveryState(client, endpointId);
+                if (!state.loading && (!state.models.length || !state.fetchedAt)) {
+                    fetchEndpointModels(client, endpointId, { refresh: false }).then(() => {
+                        if (which === 'upstream') renderDiscoverySuggestions(client, endpointId);
+                        if (which === 'map-target') renderMappingTargetSuggestions(client, endpointId);
+                    });
+                }
+            }
             if (which === 'upstream') renderDiscoverySuggestions(client, endpointId);
             if (which === 'map-target') renderMappingTargetSuggestions(client, endpointId);
             if (which === 'map-source') renderMappingSourceSuggestions(client, endpointId);
@@ -5665,8 +5675,8 @@ experimental_bearer_token = "dummy"</pre>
                                 const models = data.availableModels || [];
                                 if (models.length === 0) {
                                     const opt = document.createElement('option');
-                                    opt.value = 'claude-haiku-4-5-20251001';
-                                    opt.textContent = 'claude-haiku-4-5-20251001';
+                                    opt.value = 'claude-haiku-4-5';
+                                    opt.textContent = 'claude-haiku-4-5';
                                     modelSelect.appendChild(opt);
                                 } else {
                                     models.forEach(m => {
