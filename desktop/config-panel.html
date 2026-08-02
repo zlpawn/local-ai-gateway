@@ -4048,7 +4048,11 @@ experimental_bearer_token = "dummy"</pre>
             }
             list.innerHTML = models.slice(0, 80).map((m) => {
                 const id = escapeHtml(m.id || m.name || '');
-                return `<button type="button" class="model-suggest-item" title="${id}" onclick="addDiscoveredUpstreamModel('${client}', '${escapeHtml(endpointId)}', ${JSON.stringify(String(m.id || ''))})">${id}</button>`;
+                const name = escapeHtml(m.name || '');
+                const displayText = (name && name !== id)
+                    ? `${id} <span style="opacity:0.65;font-size:11px">(${name})</span>`
+                    : id;
+                return `<button type="button" class="model-suggest-item" title="${id}" onclick="addDiscoveredUpstreamModel('${client}', '${escapeHtml(endpointId)}', ${JSON.stringify(String(m.id || ''))})">${displayText}</button>`;
             }).join('');
         }
 
@@ -4100,9 +4104,16 @@ experimental_bearer_token = "dummy"</pre>
             const state = getDiscoveryState(client, endpointId);
             const index = getEndpointIndex(client, endpointId);
             const q = String(document.getElementById(`input-mapping-up-${client}-${index}`)?.value || '').trim().toLowerCase();
-            const models = (state.models || []).filter((m) => !q || String(m.id || '').toLowerCase().includes(q));
+            const models = (state.models || []).filter((m) => !q || String(m.id || '').toLowerCase().includes(q) || String(m.name || '').toLowerCase().includes(q));
             list.innerHTML = models.length
-                ? models.slice(0, 80).map((m) => `<button type="button" class="model-suggest-item" onclick="fillMappingField('${client}', ${index}, 'up', ${JSON.stringify(String(m.id || ''))})">${escapeHtml(m.id || '')}</button>`).join('')
+                ? models.slice(0, 80).map((m) => {
+                    const id = escapeHtml(m.id || m.name || '');
+                    const name = escapeHtml(m.name || '');
+                    const displayText = (name && name !== id)
+                        ? `${id} <span style="opacity:0.65;font-size:11px">(${name})</span>`
+                        : id;
+                    return `<button type="button" class="model-suggest-item" title="${id}" onclick="fillMappingField('${client}', ${index}, 'up', ${JSON.stringify(String(m.id || ''))})">${displayText}</button>`;
+                }).join('')
                 : `<div class="ui-select-empty">${state.loading ? '加载中...' : '无匹配上游模型'}</div>`;
         }
 
