@@ -59,3 +59,5 @@ antigravity.secrets.json
 antigravity.secrets.*.json
 antigravity-signatures.json
 antigravity-signatures.*.json
+
+gateway.db*
