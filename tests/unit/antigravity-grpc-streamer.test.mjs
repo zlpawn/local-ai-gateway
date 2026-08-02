@@ -122,3 +122,15 @@ test("gRPC: functionCall without thoughtSignature does not pollute cache", async
   ]), writer, "sess-stream-2");
   assert.equal(getSignature("sess-stream-2", "call_no_sig"), null);
 });
+
+test("gRPC: thoughtSignature on reasoning thought part is cached for functionCall", async () => {
+  _clearSignatureCache();
+  const { writer } = runWriter();
+  const sig = "t".repeat(120);
+  await streamGrpcResponses(fromArray([
+    { response: { candidates: [{ content: { role: "model", parts: [{ text: "Thinking...", thought: true, thoughtSignature: sig }] } }] } },
+    { response: { candidates: [{ content: { role: "model", parts: [{ functionCall: { name: "shell", args: { command: "pwd" }, id: "call_thought_sig" } }] } }] } },
+    { response: { candidates: [{ content: { parts: [] }, finishReason: "STOP" }] } },
+  ]), writer, "sess-stream-3");
+  assert.equal(getSignature("sess-stream-3", "call_thought_sig"), sig);
+});

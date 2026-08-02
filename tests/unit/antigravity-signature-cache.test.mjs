@@ -151,8 +151,8 @@ test("fingerprint falls back to _default when no message text", () => {
 
 test("getStoragePath honors env overrides and resolves config/data/source dirs", () => {
   assert.equal(getStoragePath({ ANTIGRAVITY_SIGNATURES_FILE: "/tmp/custom.json" }), "/tmp/custom.json");
-  assert.equal(getStoragePath({ GATEWAY_CONFIG_FILE: "/var/conf/gateway.config.json" }), "/var/conf/antigravity-signatures.json");
-  assert.equal(getStoragePath({ GATEWAY_DATA_DIR: "/var/data" }), "/var/data/antigravity-signatures.json");
+  assert.equal(getStoragePath({ GATEWAY_CONFIG_FILE: join("/var/conf", "gateway.config.json") }), join("/var/conf", "antigravity-signatures.json"));
+  assert.equal(getStoragePath({ GATEWAY_DATA_DIR: join("/var/data") }), join("/var/data", "antigravity-signatures.json"));
 });
 
 
