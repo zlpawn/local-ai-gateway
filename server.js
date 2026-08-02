@@ -3453,6 +3453,30 @@ function promoteAdditionalTools(body) {
 // --- Antigravity v1internal gRPC handler ---
 // Resolves OAuth token + project, builds the v1internal request, and streams
 // the gRPC response through ResponsesWriter as Codex /v1/responses events.
+// Map an Antigravity gRPC error to an HTTP status that tells the client
+// whether retrying would help. Without this, gRPC status=3 (bad request,
+// e.g. missing thought_signature) and status=8 (quota exhausted) both surface
+// as a generic 502, which Codex Desktop treats as retryable and keeps
+// hammering the upstream with identical (already-processed, already-billed)
+// requests for minutes on end.
+function antigravityErrorStatus(err) {
+  const s = err?.grpcStatus;
+  if (s === "3" || s === "2") return 400;       // INVALID_ARGUMENT: not retryable
+  if (s === "8") return 429;                     // RESOURCE_EXHAUSTED: back off
+  if (s === "7") return 403;                     // PERMISSION_DENIED
+  if (s === "16") return 401;                    // UNAUTHENTICATED
+  return 502;                                    // default: transient
+}
+
+function antigravityErrorType(err) {
+  const s = err?.grpcStatus;
+  if (s === "3" || s === "2") return "antigravity_invalid_request";
+  if (s === "8") return "antigravity_quota_exhausted";
+  if (s === "7") return "antigravity_forbidden";
+  if (s === "16") return "antigravity_unauthenticated";
+  return "antigravity_error";
+}
+
 async function proxyAntigravityResponse(body, clientRes, context, requestedModel, resolvedModel) {
   let fresh;
   try {
@@ -3512,10 +3536,16 @@ async function proxyAntigravityResponse(body, clientRes, context, requestedModel
   });
 
   if (body.stream) {
-    clientRes.writeHead(200, responsesSseHeaders());
+    // Defer writeHead(200) until the first SSE event is actually emitted, so
+    // that if the gRPC call fails before producing any output (e.g. status=3
+    // missing thought_signature, status=8 quota exhausted) we can still return
+    // a proper HTTP error code that tells the client not to retry blindly.
     const writer = new ResponsesWriter({
       model: requestedModel || "antigravity",
       emit(event, payload) {
+        if (!clientRes.headersSent) {
+          clientRes.writeHead(200, responsesSseHeaders());
+        }
         clientRes.write(`event: ${event}\n`);
         clientRes.write(`data: ${JSON.stringify(payload)}\n\n`);
       },
@@ -3527,10 +3557,22 @@ async function proxyAntigravityResponse(body, clientRes, context, requestedModel
     } catch (err) {
       streamError = err;
       if (!clientRes.headersSent) {
-        sendJson(clientRes, 502, { error: { type: "antigravity_error", message: err?.message || String(err) } });
+        const httpStatus = antigravityErrorStatus(err);
+        const errBody = JSON.stringify({
+          error: { type: antigravityErrorType(err), message: err?.message || String(err) },
+        }, null, 2);
+        const hdrs = {
+          "Content-Type": "application/json; charset=utf-8",
+          "Access-Control-Allow-Origin": "*",
+        };
+        if (httpStatus === 429) hdrs["Retry-After"] = "60";
+        clientRes.writeHead(httpStatus, hdrs);
+        clientRes.end(errBody);
+        logError("antigravity_stream_failed", err, context);
         return;
       }
-      writer.failed({ code: "antigravity_error", message: err?.message || String(err) });
+      // Headers already sent: we can only append an error event in the SSE stream.
+      writer.failed({ code: antigravityErrorType(err), message: err?.message || String(err) });
     }
     clientRes.end();
     if (streamError) {
@@ -3556,7 +3598,18 @@ async function proxyAntigravityResponse(body, clientRes, context, requestedModel
     const responses = antigravityGenerate({ accessToken: fresh.access_token, body: antigravityBody, proxyUrl });
     await streamAntigravityResponses(responses, writer, antigravitySessionFp);
   } catch (err) {
-    sendJson(clientRes, 502, { error: { type: "antigravity_error", message: err?.message || String(err) } });
+    const httpStatus = antigravityErrorStatus(err);
+    const errBody = JSON.stringify({
+      error: { type: antigravityErrorType(err), message: err?.message || String(err) },
+    }, null, 2);
+    const hdrs = {
+      "Content-Type": "application/json; charset=utf-8",
+      "Access-Control-Allow-Origin": "*",
+    };
+    if (httpStatus === 429) hdrs["Retry-After"] = "60";
+    clientRes.writeHead(httpStatus, hdrs);
+    clientRes.end(errBody);
+    logError("antigravity_stream_failed", err, context);
     return;
   }
   const response = buildResponseFromEvents(events, requestedModel);
@@ -3669,7 +3722,15 @@ async function forwardResolvedCodexResponse({
   body = promoteAdditionalTools(body);
 
   const searchEndpoints = GATEWAY_CONFIG.clients?.[context.client]?.endpoints || [];
-  const injectedSearch = maybeInjectGatewayWebSearch(body, {
+  // Antigravity uses its own tool protocol (functionDeclarations via v1internal
+  // gRPC) and does NOT run the gateway web_search loop, so injecting the
+  // web_search tool here only bloats every request with an unusable tool
+  // definition (wasted input tokens) and tempts the model to call it. Skip
+  // injection for the antigravity route; other providers still inject below.
+  const isAntigravityRoute = route?.provider?.type === "antigravity";
+  const injectedSearch = isAntigravityRoute
+    ? { body, injected: false, selected: null, reason: "antigravity_skipped" }
+    : maybeInjectGatewayWebSearch(body, {
     endpoints: searchEndpoints,
     secrets: GATEWAY_SECRETS,
     officialRoute: false,
