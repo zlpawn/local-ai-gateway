@@ -3132,6 +3132,7 @@ async function forwardOpenAIChatCompletionsResolved(body, clientReq, clientRes, 
         },
       });
       if (!loop.completion) return;
+      recordRequestTokenUsage({ client: context.client, endpoint: context.endpoint, purpose: context.endpoint?.purpose || "chat", model: requestedModel, usage: completion?.usage || {} });
       logInfo("openai_chat_response", {
         request_id: context.requestId,
         client: context.client,
