@@ -3967,6 +3967,7 @@ experimental_bearer_token = "dummy"</pre>
                 endpointModelDiscoveryState.set(key, {
                     loading: false,
                     error: '',
+                    notice: '',
                     models: [],
                     fetchedAt: '',
                     source: '',
@@ -3996,6 +3997,7 @@ experimental_bearer_token = "dummy"</pre>
                 state.source = json.source || '';
                 state.strategy = json.strategy || '';
                 state.error = json.error?.message || '';
+                state.notice = json.notice || '';
             } catch (err) {
                 if (requestId !== state.requestId) return state;
                 state.error = err.message || String(err);
@@ -4018,9 +4020,9 @@ experimental_bearer_token = "dummy"</pre>
                 meta.textContent = '正在获取上游模型列表...';
                 return;
             }
-            if (state.error) {
+            if (state.error && !state.models.length) {
                 meta.className = 'model-suggest-meta is-error';
-                meta.textContent = state.error + (state.models.length ? `（已显示缓存 ${state.models.length} 个）` : '');
+                meta.textContent = state.error;
                 return;
             }
             meta.className = 'model-suggest-meta';
@@ -4028,7 +4030,10 @@ experimental_bearer_token = "dummy"</pre>
                 meta.textContent = '暂无上游模型，可手动输入';
                 return;
             }
-            meta.textContent = `已发现 ${state.models.length} 个模型` + (state.strategy ? ` · ${state.strategy}` : '');
+            const notice = state.notice || (state.error && state.models.length ? state.error : '');
+            meta.textContent = `已发现 ${state.models.length} 个模型`
+              + (state.strategy ? ` · ${state.strategy}` : '')
+              + (notice ? ` · ${notice}` : '');
         }
 
         function renderDiscoverySuggestions(client, endpointId) {

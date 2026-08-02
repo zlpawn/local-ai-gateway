@@ -37,6 +37,7 @@ import {
 import {
   ensureFreshToken as ensureAntigravityToken,
   loadCodeAssist as loadAntigravityProject,
+  fetchAvailableModels as fetchAntigravityAvailableModels,
   buildGenerateContentRequest as buildAntigravityRequest,
   grpcGenerateContent as antigravityGenerate,
   streamGrpcResponses as streamAntigravityResponses,
@@ -1834,12 +1835,9 @@ function collectGroupedModelsFromConfig(config) {
                 client: resolvedClient,
                 strategy: "openai-compatible",
                 source: "base_url",
-                error: result.error
-                  ? {
-                      code: "plan_models_fallback",
-                      message: `${result.error.message}；plan 目录不可用，已回退到火山 coding 模型目录`,
-                    }
-                  : null,
+                // Successful fallback should not look like a hard failure in UI.
+              error: null,
+              notice: "plan 目录不可用，已回退到火山 coding 模型目录",
               };
               break;
             }
@@ -2277,7 +2275,8 @@ function mediaProviderContext(req, endpoint, signal) {
 
 
 async function listAntigravityModels(endpoint = null) {
-  // True-source discovery via Antigravity loadCodeAssist (v1internal).
+  // True-source official catalog:
+  // POST https://.../v1internal:fetchAvailableModels
   const tokenInfo = await ensureAntigravityToken().catch((error) => {
     const err = new Error(error?.message || "Antigravity 登录态无效");
     err.code = "antigravity_auth_missing";
@@ -2290,7 +2289,6 @@ async function listAntigravityModels(endpoint = null) {
     throw error;
   }
 
-  // Reuse the same proxy-aware fetch path as chat routing when available.
   const fetchImpl = (url, init = {}) => fetchWithOptionalProxy(url, {
     method: init.method || "POST",
     headers: init.headers || {},
@@ -2298,18 +2296,47 @@ async function listAntigravityModels(endpoint = null) {
     signal: init.signal || null,
   });
 
-  const loaded = await loadAntigravityProject({ accessToken, fetchImpl });
-  const raw = loaded?.raw || {};
-  const models = extractAntigravityModelsFromLoadCodeAssist(raw);
+  // project improves quota accuracy on official endpoint; best-effort only.
+  let project = null;
+  try {
+    const loaded = await loadAntigravityProject({ accessToken, fetchImpl });
+    project = loaded?.project || null;
+  } catch {
+    project = null;
+  }
+
+  const payload = await fetchAntigravityAvailableModels({ accessToken, project, fetchImpl });
+  const models = normalizeAntigravityAvailableModels(payload);
   if (models.length) return models;
 
-  // Keep endpoint-configured models as last resort, but mark that true-source returned empty.
   if (Array.isArray(endpoint?.models) && endpoint.models.length) {
     return endpoint.models.map((id) => ({ id, name: id }));
   }
-  const error = new Error("Antigravity loadCodeAssist 未返回可用模型列表");
+  const error = new Error("Antigravity fetchAvailableModels 未返回可用模型");
   error.code = "antigravity_models_unavailable";
   throw error;
+}
+
+function normalizeAntigravityAvailableModels(payload) {
+  const out = [];
+  const seen = new Set();
+  const modelsMap = payload?.models && typeof payload.models === "object" && !Array.isArray(payload.models)
+    ? payload.models
+    : null;
+  if (modelsMap) {
+    for (const [id, info] of Object.entries(modelsMap)) {
+      const modelId = String(id || "").trim();
+      if (!modelId || seen.has(modelId)) continue;
+      seen.add(modelId);
+      out.push({
+        id: modelId,
+        name: String(info?.displayName || info?.display_name || info?.name || modelId),
+      });
+    }
+    return out;
+  }
+  // Fallback parser for unexpected shapes.
+  return extractAntigravityModelsFromLoadCodeAssist(payload || {});
 }
 
 function extractAntigravityModelsFromLoadCodeAssist(raw) {
