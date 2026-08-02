@@ -182,6 +182,25 @@
     "codex": {
       "endpoints": [
         {
+          "id": "ep_60df571d-8056-4df0-9ac0-36b0ec182706",
+          "name": "houshan-codingplan-2",
+          "type": "openai-responses",
+          "base_url": "https://ark.cn-beijing.volces.com/api/coding/v3",
+          "auth": "bearer",
+          "models": [],
+          "model_mapping": {
+            "glm-5.2-loe": "glm-5.2"
+          },
+          "capabilities": {
+            "input_modalities": [
+              "text",
+              "image"
+            ],
+            "reasoning": false,
+            "tools": true
+          }
+        },
+        {
           "id": "ep_4806b00f-553c-4651-b395-23215904373b",
           "name": "codex 订阅",
           "type": "codex-subscription",
@@ -291,7 +310,7 @@
         },
         {
           "id": "ep_e679b525-ab58-452f-912c-179efd2e8865",
-          "name": "视觉兜底节点",
+          "name": "VLM",
           "purpose": "vision_fallback",
           "vision_fallback_enabled": true,
           "vision_model": "minimax-m3",
