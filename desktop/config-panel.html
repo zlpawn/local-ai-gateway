@@ -6501,6 +6501,9 @@ ${(() => {
                     <div class="tools-card-desc">使用已配置的图片生成节点，编写提示词、选择画面比例，并查看本地生成历史。</div>
                 </div>
                 <div class="tools-card" id="claude-model-catalog" onclick="openTool('claude-model-catalog')">
+                    <div class="tools-card-icon">
+                        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 8V4H8"></path><rect x="4" y="8" width="16" height="12" rx="2"></rect><path d="M2 14h2"></path><path d="M20 14h2"></path><path d="M15 13v2"></path><path d="M9 13v2"></path></svg>
+                    </div>
                     <div class="tools-card-name">Claude 模型列表</div>
                     <div class="tools-card-desc">维护 Claude Desktop 映射原模型候选项：内置官方名 + 用户自定义。</div>
                 </div>
@@ -6800,7 +6803,14 @@ ${(() => {
                 '      <div class="subauth-stat"><div class="subauth-stat-label">Token 剩余</div><div class="subauth-stat-value">' + escapeHtml(formatExpiresIn(s?.token?.expires_in_seconds)) + '</div></div>',
                 '      <div class="subauth-stat"><div class="subauth-stat-label">Client 凭据</div><div class="subauth-stat-value">' + (s?.client?.configured ? escapeHtml(s.client.client_id_masked || '已配置') : '未配置') + '</div></div>',
                 '    </div>',
-                                antigravityAuthState.showManual ? (
+                '    <div class="subauth-actions">',
+                '      <button class="btn" onclick="loadAntigravityAuthStatus()" ' + (busy ? 'disabled' : '') + '>刷新状态</button>',
+                '      <button class="btn btn-primary" onclick="discoverAntigravityClient()" ' + (busy ? 'disabled' : '') + '>' + (antigravityAuthState.busyAction === 'discover' ? '提取中...' : '从本机提取') + '</button>',
+                '      <button class="btn btn-primary" onclick="loginAntigravitySubscription()" ' + (busy ? 'disabled' : '') + '>' + (antigravityAuthState.busyAction === 'login-start' ? '启动中...' : (antigravityAuthState.busyAction === 'login-wait' ? '等待授权中' : '一键登录')) + '</button>',
+                (antigravityAuthState.busyAction === 'login-wait' ? '<button class="btn" onclick="cancelAntigravityLoginWait()">取消等待</button>' : ''),
+                '      <button class="btn" onclick="toggleAntigravityManualForm()" ' + (busy ? 'disabled' : '') + '>手动填写</button>',
+                '    </div>',
+                antigravityAuthState.showManual ? (
                   '<div class="subauth-form-row">' +
                   '<input id="ag-client-id" class="subauth-input" placeholder="client_id（*.apps.googleuser.test）" value="' + escapeHtml(antigravityAuthState.clientId || '') + '" oninput="antigravityAuthState.clientId=this.value">' +
                   '<input id="ag-client-secret" class="subauth-input" placeholder="client_secret（FAKESEC-...）" value="' + escapeHtml(antigravityAuthState.clientSecret || '') + '" oninput="antigravityAuthState.clientSecret=this.value">' +
