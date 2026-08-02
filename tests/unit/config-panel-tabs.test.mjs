@@ -69,3 +69,39 @@ test("proxy and analytics tabs expose one complete set of working page actions",
   assert.match(html, /fetch\('\/v1\/config\/proxy\/test'/);
   assert.match(html, /fetch\(`\/v1\/analytics\/token-usage\?/);
 });
+
+test("proxy endpoint status table lets users toggle each node between global and direct", () => {
+  const html = fs.readFileSync(panelPath, "utf8");
+  assert.match(html, /setEndpointProxyMode/);
+  assert.match(html, /data-proxy-client=/);
+  assert.match(html, /上游域名/);
+});
+
+test("mini tools are grouped into categories instead of one flat grid", () => {
+  const html = fs.readFileSync(panelPath, "utf8");
+  assert.match(html, /renderToolGroups|toolGroupConfigs/);
+  assert.match(html, /媒体生成/);
+  assert.match(html, /文本与向量/);
+  assert.match(html, /订阅接入/);
+  assert.match(html, /模型配置/);
+  assert.match(html, /其他/);
+  assert.match(html, /tools-group/);
+});
+
+test("proxy endpoint status table lets users toggle each node between global and direct", () => {
+  const html = fs.readFileSync(panelPath, "utf8");
+  assert.match(html, /setEndpointProxyMode/);
+  assert.match(html, /data-proxy-client=/);
+  assert.match(html, /上游域名/);
+});
+
+test("mini tools are grouped into categories instead of one flat grid", () => {
+  const html = fs.readFileSync(panelPath, "utf8");
+  assert.match(html, /renderToolGroups|toolGroupConfigs/);
+  assert.match(html, /媒体生成/);
+  assert.match(html, /文本与向量/);
+  assert.match(html, /订阅接入/);
+  assert.match(html, /模型配置/);
+  assert.match(html, /其他/);
+  assert.match(html, /tools-group/);
+});

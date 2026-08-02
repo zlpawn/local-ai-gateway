@@ -4743,28 +4743,71 @@ experimental_bearer_token = "dummy"</pre>
             const container = document.getElementById('proxy-endpoints-list');
             if (!container) return;
             const globalProxy = config.server?.proxy || currentProxyFormValue();
+            const globalEnabled = globalProxy.enabled !== false;
+            const globalLabel = globalEnabled
+                ? `${String(globalProxy.protocol || 'http').toUpperCase()}://${globalProxy.host || '127.0.0.1'}:${globalProxy.port || 7897}`
+                : '已关闭';
             const rows = Object.entries(config.clients || {}).flatMap(([client, body]) =>
                 (body?.endpoints || []).map(endpoint => {
                     const mode = String(endpoint.proxy_mode || 'global');
                     const legacyProxy = typeof endpoint.proxy === 'string' ? endpoint.proxy : '';
-                    let label = globalProxy.enabled === false ? '直连（全局代理已关闭）' : `全局代理 · ${String(globalProxy.protocol || 'http').toUpperCase()}://${globalProxy.host || '127.0.0.1'}:${globalProxy.port || 7897}`;
-                    if (mode === 'disabled' || endpoint.proxy === '') label = '节点直连';
-                    else if (mode === 'custom' && endpoint.proxy_url) label = `节点自定义 · ${endpoint.proxy_url}`;
-                    else if (legacyProxy) label = `节点自定义 · ${legacyProxy}`;
+                    const isDirect = mode === 'disabled' || endpoint.proxy === '';
+                    const isCustom = (mode === 'custom' && endpoint.proxy_url) || legacyProxy;
+                    const effective = isDirect ? '直连'
+                        : isCustom ? `自定义 · ${endpoint.proxy_url || legacyProxy}`
+                        : (globalEnabled ? '全局代理' : '直连');
+                    let host = '';
+                    try { host = endpoint.base_url ? new URL(endpoint.base_url).host : (endpoint.type === 'codex-subscription' ? 'chatgpt.com' : endpoint.type === 'antigravity' ? 'cloudcode-pa.googleapis.com' : '—'); } catch { host = endpoint.base_url || '—'; }
+                    const action = isDirect
+                        ? `<button class="btn btn-xs" data-proxy-client="${client}" data-proxy-index="${(body.endpoints.indexOf(endpoint))}" onclick="setEndpointProxyMode(this, 'global')">恢复全局</button>`
+                        : `<button class="btn btn-xs btn-danger" data-proxy-client="${client}" data-proxy-index="${(body.endpoints.indexOf(endpoint))}" onclick="setEndpointProxyMode(this, 'disabled')">直连</button>`;
                     return `<tr>
                         <td style="padding:9px 10px;border-bottom:1px solid var(--border-color)">${escapeHtml(client)}</td>
                         <td style="padding:9px 10px;border-bottom:1px solid var(--border-color)">${escapeHtml(endpoint.name || endpoint.id || '未命名节点')}</td>
-                        <td style="padding:9px 10px;border-bottom:1px solid var(--border-color);font-family:var(--font-mono);font-size:12px">${escapeHtml(label)}</td>
+                        <td style="padding:9px 10px;border-bottom:1px solid var(--border-color);font-family:var(--font-mono);font-size:12px;color:var(--text-secondary)">${escapeHtml(host)}</td>
+                        <td style="padding:9px 10px;border-bottom:1px solid var(--border-color);font-size:12px">${escapeHtml(effective)}</td>
+                        <td style="padding:9px 10px;border-bottom:1px solid var(--border-color)">${action}</td>
                     </tr>`;
                 }),
             );
             container.innerHTML = rows.length
-                ? `<div style="overflow:auto"><table style="width:100%;border-collapse:collapse;font-size:13px">
-                    <thead><tr><th style="text-align:left;padding:8px 10px">客户端</th><th style="text-align:left;padding:8px 10px">节点</th><th style="text-align:left;padding:8px 10px">生效方式</th></tr></thead>
+                ? `<div style="font-size:12px;color:var(--text-secondary);margin-bottom:8px">全局代理：${escapeHtml(globalLabel)} · 共 ${rows.length} 个节点，其中 ${rows.filter(r=>r.includes('全局代理')).length} 个走全局、${rows.filter(r=>r.includes('直连')).length} 个直连</div><div style="overflow:auto"><table style="width:100%;border-collapse:collapse;font-size:13px">
+                    <thead><tr><th style="text-align:left;padding:8px 10px">客户端</th><th style="text-align:left;padding:8px 10px">节点</th><th style="text-align:left;padding:8px 10px">上游域名</th><th style="text-align:left;padding:8px 10px">生效方式</th><th style="text-align:left;padding:8px 10px">操作</th></tr></thead>
                     <tbody>${rows.join('')}</tbody>
                   </table></div>`
                 : '<div style="color:var(--text-secondary);font-size:13px">暂无节点</div>';
         };
+
+        window.setEndpointProxyMode = async function(btn, mode) {
+            const client = btn.dataset.proxyClient;
+            const index = Number(btn.dataset.proxyIndex);
+            const ep = config.clients?.[client]?.endpoints?.[index];
+            if (!ep) return;
+            const original = btn.textContent;
+            btn.disabled = true;
+            btn.textContent = '...';
+            try {
+                if (mode === 'disabled') {
+                    ep.proxy_mode = 'disabled';
+                    delete ep.proxy_url;
+                } else {
+                    delete ep.proxy_mode;
+                    delete ep.proxy_url;
+                }
+                const saved = await saveConfig({ button: btn, client, scope: 'node' });
+                if (!saved) {
+                    btn.textContent = original;
+                    btn.disabled = false;
+                    return;
+                }
+                renderProxyEndpointsList();
+                showToast(mode === 'disabled' ? '该节点已切换为直连' : '该节点已恢复全局代理', 'success');
+            } catch (e) {
+                showToast('切换代理模式失败：' + (e.message || e), 'error');
+                btn.textContent = original;
+                btn.disabled = false;
+            }
+        };    };
 
         function formatUsageNumber(value) {
             return new Intl.NumberFormat('zh-CN').format(Number(value) || 0);
@@ -6895,72 +6938,56 @@ ${(() => {
             document.querySelector('.content-area').scrollTop = 0;
         }
 
+        const toolGroupConfigs = [
+            { title: '媒体生成', tools: ['image-gen', 'video-gen', 'tts-gen'] },
+            { title: '文本与向量', tools: ['embedding'] },
+            { title: '订阅接入', tools: ['antigravity-subscribe', 'codex-subscribe'] },
+            { title: '模型配置', tools: ['claude-model-catalog'] },
+            { title: '其他', tools: ['classification-metrics'] },
+        ];
+
+        function toolDefs() {
+            return {
+                'image-gen': { name: '图片生成', desc: '使用已配置的图片生成节点，编写提示词、选择画面比例，并查看本地生成历史。', icon: '<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="18" height="18" rx="2"></rect><circle cx="8.5" cy="8.5" r="1.5"></circle><path d="m21 15-5-5L5 21"></path></svg>' },
+                'video-gen': { name: '视频生成', desc: '使用已配置的视频生成节点，编写分镜提示词，提交异步任务并轮询结果，查看本地生成历史。', icon: '<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="4" width="14" height="16" rx="2"></rect><path d="m22 8-6 4 6 4V8z"></path></svg>' },
+                'tts-gen': { name: 'TTS 语音合成', desc: '使用已配置的 TTS 节点，选择音色、调节语速，将文本转为语音并查看本地生成历史。', icon: '<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M11 5 6 9H2v6h4l5 4z"></path><path d="M15.5 8.5a5 5 0 0 1 0 7"></path><path d="M19 5a10 10 0 0 1 0 14"></path></svg>' },
+                'embedding': { name: '文本向量化', desc: '选择已配置的向量模型,对文本生成向量或计算两段文本的余弦相似度。', icon: '<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z"></path></svg>' },
+                'antigravity-subscribe': { name: '接入 Antigravity 订阅', desc: '从本机提取 OAuth 凭据，登录 Google 订阅账号，让网关使用 Antigravity 的 Gemini 模型。', icon: '<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"></path><path d="M9 12l2 2 4-4"></path></svg>' },
+                'codex-subscribe': { name: '接入 Codex 订阅', desc: '读取本机 Codex/ChatGPT 登录态，把官方模型做成可给 Claude Desktop / DeepTutor 使用的节点。', icon: '<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"></circle><path d="M8 12h8"></path><path d="M12 8v8"></path></svg>' },
+                'claude-model-catalog': { name: 'Claude 模型列表', desc: '维护 Claude Desktop 映射原模型候选项：内置官方名 + 用户自定义。', icon: '<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 8V4H8"></path><rect x="4" y="8" width="16" height="12" rx="2"></rect><path d="M2 14h2"></path><path d="M20 14h2"></path><path d="M15 13v2"></path><path d="M9 13v2"></path></svg>' },
+                'classification-metrics': { name: '分类评估实验室', desc: '讲清 TP/FP/FN/TN，以及准确率、精准率、召回率，并用你的数据现场计算。', icon: '<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="7" height="7"></rect><rect x="14" y="3" width="7" height="7"></rect><rect x="14" y="14" width="7" height="7"></rect><rect x="3" y="14" width="7" height="7"></rect></svg>' },
+            };
+        }
+
+        function toolCardHTML(id, def) {
+            return `<div class="tools-card" id="${id}" onclick="openTool('${id}')">
+                <div class="tools-card-icon">${def.icon}</div>
+                <div class="tools-card-name">${escapeHtml(def.name)}</div>
+                <div class="tools-card-desc">${escapeHtml(def.desc)}</div>
+            </div>`;
+        }
+
+        function renderToolGroups(groups, defs) {
+            return groups.map(group => {
+                const cardsHtml = group.tools
+                    .filter(id => defs[id])
+                    .map(id => toolCardHTML(id, defs[id]))
+                    .join("");
+                return `<div class="tools-group">
+                    <div class="tools-group-title">${escapeHtml(group.title)}</div>
+                    <div class="tools-cards">${cardsHtml}</div>
+                </div>`;
+            }).join("");
+        }
+
         window.renderToolsCards = function() {
             const cards = document.getElementById('tools-cards');
             const detail = document.getElementById('tools-detail');
             if (!cards || !detail) return;
             detail.innerHTML = '';
             cards.style.display = '';
-            cards.innerHTML = `
-                <div class="tools-card" id="image-gen" onclick="openTool('image-gen')">
-                    <div class="tools-card-icon">
-                        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="18" height="18" rx="2"></rect><circle cx="8.5" cy="8.5" r="1.5"></circle><path d="m21 15-5-5L5 21"></path></svg>
-                    </div>
-                    <div class="tools-card-name">图片生成</div>
-                    <div class="tools-card-desc">使用已配置的图片生成节点，编写提示词、选择画面比例，并查看本地生成历史。</div>
-                </div>
-                <div class="tools-card" id="claude-model-catalog" onclick="openTool('claude-model-catalog')">
-                    <div class="tools-card-icon">
-                        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 8V4H8"></path><rect x="4" y="8" width="16" height="12" rx="2"></rect><path d="M2 14h2"></path><path d="M20 14h2"></path><path d="M15 13v2"></path><path d="M9 13v2"></path></svg>
-                    </div>
-                    <div class="tools-card-name">Claude 模型列表</div>
-                    <div class="tools-card-desc">维护 Claude Desktop 映射原模型候选项：内置官方名 + 用户自定义。</div>
-                </div>
-                <div class="tools-card" id="video-gen" onclick="openTool('video-gen')">
-                    <div class="tools-card-icon">
-                        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="4" width="14" height="16" rx="2"></rect><path d="m22 8-6 4 6 4V8z"></path></svg>
-                    </div>
-                    <div class="tools-card-name">视频生成</div>
-                    <div class="tools-card-desc">使用已配置的视频生成节点，编写分镜提示词，提交异步任务并轮询结果，查看本地生成历史。</div>
-                </div>
-                <div class="tools-card" id="tts-gen" onclick="openTool('tts-gen')">
-                    <div class="tools-card-icon">
-                        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M11 5 6 9H2v6h4l5 4z"></path><path d="M15.5 8.5a5 5 0 0 1 0 7"></path><path d="M19 5a10 10 0 0 1 0 14"></path></svg>
-                    </div>
-                    <div class="tools-card-name">TTS 语音合成</div>
-                    <div class="tools-card-desc">使用已配置的 TTS 节点，选择音色、调节语速，将文本转为语音并查看本地生成历史。</div>
-                </div>
-                <div class="tools-card" onclick="openTool('embedding')">
-                    <div class="tools-card-icon">
-                        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z"></path></svg>
-                    </div>
-                    <div class="tools-card-name">文本向量化</div>
-                    <div class="tools-card-desc">选择已配置的向量模型,对文本生成向量或计算两段文本的余弦相似度。</div>
-                </div>
-                <div class="tools-card" onclick="openTool('classification-metrics')">
-                    <div class="tools-card-icon">
-                        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="7" height="7"></rect><rect x="14" y="3" width="7" height="7"></rect><rect x="14" y="14" width="7" height="7"></rect><rect x="3" y="14" width="7" height="7"></rect></svg>
-                    </div>
-                    <div class="tools-card-name">分类评估实验室</div>
-                    <div class="tools-card-desc">讲清 TP/FP/FN/TN，以及准确率、精准率、召回率，并用你的数据现场计算。</div>
-                </div>
-                <div class="tools-card" onclick="openTool('antigravity-subscribe')">
-                    <div class="tools-card-icon">
-                        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"></path><path d="M9 12l2 2 4-4"></path></svg>
-                    </div>
-                    <div class="tools-card-name">接入 Antigravity 订阅</div>
-                    <div class="tools-card-desc">从本机提取 OAuth 凭据，登录 Google 订阅账号，让网关使用 Antigravity 的 Gemini 模型。</div>
-                </div>
-                <div class="tools-card" onclick="openTool('codex-subscribe')">
-                    <div class="tools-card-icon">
-                        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"></circle><path d="M8 12h8"></path><path d="M12 8v8"></path></svg>
-                    </div>
-                    <div class="tools-card-name">接入 Codex 订阅</div>
-                    <div class="tools-card-desc">读取本机 Codex/ChatGPT 登录态，把官方模型做成可给 Claude Desktop / DeepTutor 使用的节点。</div>
-                </div>
-            `;
+            cards.innerHTML = renderToolGroups(toolGroupConfigs, toolDefs());
         };
-
         window.openTool = function(toolId) {
             toolsView = toolId;
             if (toolId === 'image-gen') renderImageGenDetail();
