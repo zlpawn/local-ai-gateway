@@ -1720,18 +1720,17 @@ function collectGroupedModelsFromConfig(config) {
         // If client filter provided and mismatches ownership, still allow when id unique.
         resolvedClient = clientName;
       }
-      if (!modelDiscoveryService) {
-        modelDiscoveryService = createModelDiscoveryService({
-          strategies: createDefaultStrategies(),
-          fetchImpl: (url, init = {}) => fetchWithOptionalProxy(url, {
-            method: init.method || "GET",
-            headers: init.headers || {},
-            body: init.body || null,
-            signal: init.signal || null,
-          }),
-          resolveApiKey: (ep) => getConfiguredProviderApiKey(ep) || getEndpointApiKey(ep, GATEWAY_SECRETS, process.env, allGatewayEndpoints()),
-        });
-      }
+      // Create per-request service so route loaders always close over current endpoint helpers.
+      const modelDiscoveryService = createModelDiscoveryService({
+        strategies: createDefaultStrategies(),
+        fetchImpl: (url, init = {}) => fetchWithOptionalProxy(url, {
+          method: init.method || "GET",
+          headers: init.headers || {},
+          body: init.body || null,
+          signal: init.signal || null,
+        }),
+        resolveApiKey: (ep) => getConfiguredProviderApiKey(ep) || getEndpointApiKey(ep, GATEWAY_SECRETS, process.env, allGatewayEndpoints()),
+      });
       let result = await modelDiscoveryService.discoverEndpointModels({
         client: resolvedClient,
         endpoint,
@@ -1763,87 +1762,16 @@ function collectGroupedModelsFromConfig(config) {
           },
           loadGrokModels: async () => fetchOfficialGrokModels(endpoint),
           loadAntigravityModels: async () => {
-            // Prefer live subscription catalog when available; never silently pretend success with empty hardcoded lists.
-            try {
-              if (typeof listAntigravityModels === "function") {
-                const live = await listAntigravityModels(endpoint);
-                if (Array.isArray(live) && live.length) return live;
-              }
-            } catch (error) {
-              // fall through to endpoint models / explicit error
-              if (!Array.isArray(endpoint.models) || endpoint.models.length === 0) {
-                throw error;
-              }
+            // Official desktop path only. Never hide failures with incomplete endpoint.models.
+            if (typeof listAntigravityModels !== "function") {
+              const error = new Error("Antigravity 模型发现器未注入");
+              error.code = "strategy_dependency_missing";
+              throw error;
             }
-            if (Array.isArray(endpoint.models) && endpoint.models.length) {
-              return endpoint.models.map((id) => ({ id, name: id }));
-            }
-            const error = new Error("Antigravity 未返回可用模型。请确认订阅登录态后重试。");
-            error.code = "antigravity_models_unavailable";
-            throw error;
+            return listAntigravityModels(endpoint);
           },
         },
       });
-      // Volcengine plan roots often do not expose a public models catalog.
-      // If discovery fails, borrow a working coding-catalog endpoint/key from current config.
-      if (
-        (!result.models || result.models.length === 0)
-        && /ark\.cn-beijing\.volces\.com/i.test(String(endpoint.base_url || ""))
-        && /\/api\/plan/i.test(String(endpoint.base_url || ""))
-      ) {
-        try {
-          const allEndpoints = allGatewayEndpoints();
-          const codingCandidates = allEndpoints.filter((ep) =>
-            /ark\.cn-beijing\.volces\.com/i.test(String(ep?.base_url || ""))
-            && /\/api\/coding/i.test(String(ep?.base_url || ""))
-            && !isCapabilityEndpoint(ep)
-          );
-          const tryList = [
-            {
-              base_url: "https://ark.cn-beijing.volces.com/api/coding/v3",
-              apiKey: getConfiguredProviderApiKey(endpoint)
-                || getEndpointApiKey(endpoint, GATEWAY_SECRETS, process.env, allEndpoints)
-                || String(GATEWAY_SECRETS?.api_keys?.[endpoint.id] || ""),
-            },
-            ...codingCandidates.map((ep) => ({
-              base_url: /\/v\d+$/i.test(String(ep.base_url || "").replace(/\/+$/, ""))
-                ? String(ep.base_url).replace(/\/+$/, "")
-                : "https://ark.cn-beijing.volces.com/api/coding/v3",
-              apiKey: getConfiguredProviderApiKey(ep)
-                || getEndpointApiKey(ep, GATEWAY_SECRETS, process.env, allEndpoints)
-                || String(GATEWAY_SECRETS?.api_keys?.[ep.id] || ""),
-            })),
-          ].filter((item) => item.apiKey);
-
-          for (const candidate of tryList) {
-            const sibling = {
-              ...endpoint,
-              id: `${endpoint.id}__coding_fallback`,
-              base_url: candidate.base_url,
-              auth: endpoint.auth || "bearer",
-            };
-            const alt = await modelDiscoveryService.discoverEndpointModels({
-              client: resolvedClient,
-              endpoint: sibling,
-              refresh: true,
-              context: { apiKey: candidate.apiKey },
-            });
-            if (Array.isArray(alt.models) && alt.models.length) {
-              result = {
-                ...alt,
-                endpoint_id: endpoint.id,
-                client: resolvedClient,
-                strategy: "openai-compatible",
-                source: "base_url",
-                // Successful fallback should not look like a hard failure in UI.
-              error: null,
-              notice: "plan 目录不可用，已回退到火山 coding 模型目录",
-              };
-              break;
-            }
-          }
-        } catch {}
-      }
       sendJson(res, 200, result);
     } catch (error) {
       const status = Number(error?.status) || 500;
@@ -2275,16 +2203,17 @@ function mediaProviderContext(req, endpoint, signal) {
 
 
 async function listAntigravityModels(endpoint = null) {
-  // True-source official catalog:
-  // POST https://.../v1internal:fetchAvailableModels
-  const tokenInfo = await ensureAntigravityToken().catch((error) => {
-    const err = new Error(error?.message || "Antigravity 登录态无效");
-    err.code = "antigravity_auth_missing";
-    throw err;
+  // Real desktop path from language_server.log:
+  // POST https://daily-cloudcode-pa.googleapis.com/v1internal:fetchAvailableModels
+  const creds = getAntigravityCreds();
+  const tokenInfo = await ensureAntigravityToken({
+    store: { getStoredToken: getAntigravityStoredToken, saveSecrets: saveAntigravitySecrets },
+    clientId: creds.client_id,
+    clientSecret: creds.client_secret,
   });
-  const accessToken = tokenInfo?.access_token || getAntigravityStoredToken?.() || "";
+  const accessToken = tokenInfo?.access_token || "";
   if (!accessToken) {
-    const error = new Error("Antigravity 未登录或缺少 access_token");
+    const error = new Error("Antigravity 未登录或缺少 access_token；请先在迷你工具完成 Google 登录");
     error.code = "antigravity_auth_missing";
     throw error;
   }
@@ -2296,47 +2225,75 @@ async function listAntigravityModels(endpoint = null) {
     signal: init.signal || null,
   });
 
-  // project improves quota accuracy on official endpoint; best-effort only.
+  // Empty body first (desktop/AG-Manager). If empty, retry with project.
+  let payload = null;
+  let lastError = null;
   let project = null;
   try {
     const loaded = await loadAntigravityProject({ accessToken, fetchImpl });
     project = loaded?.project || null;
-  } catch {
-    project = null;
-  }
+  } catch {}
 
-  const payload = await fetchAntigravityAvailableModels({ accessToken, project, fetchImpl });
+  for (const proj of [null, project]) {
+    try {
+      payload = await fetchAntigravityAvailableModels({ accessToken, project: proj, fetchImpl });
+      const count = payload?.models && typeof payload.models === "object" ? Object.keys(payload.models).length : 0;
+      try {
+        fs.writeFileSync(path.join(process.cwd(), "antigravity-models-raw.json"), JSON.stringify({
+          dumped_at: new Date().toISOString(),
+          project: proj,
+          model_keys: payload?.models && typeof payload.models === "object" ? Object.keys(payload.models) : [],
+          payload,
+        }, null, 2));
+      } catch {}
+      if (count > 0) break;
+    } catch (error) {
+      lastError = error;
+    }
+  }
+  if (!payload) throw lastError || new Error("fetchAvailableModels failed");
+
   const models = normalizeAntigravityAvailableModels(payload);
-  if (models.length) return models;
-
-  if (Array.isArray(endpoint?.models) && endpoint.models.length) {
-    return endpoint.models.map((id) => ({ id, name: id }));
+  if (!models.length) {
+    const error = new Error("Antigravity fetchAvailableModels 未返回可用模型");
+    error.code = "antigravity_models_unavailable";
+    throw error;
   }
-  const error = new Error("Antigravity fetchAvailableModels 未返回可用模型");
-  error.code = "antigravity_models_unavailable";
-  throw error;
+  return models;
 }
 
 function normalizeAntigravityAvailableModels(payload) {
   const out = [];
   const seen = new Set();
+  const push = (id, name = id) => {
+    const modelId = String(id || "").trim();
+    if (!modelId || seen.has(modelId)) return;
+    if (!/^(gemini|claude|gpt|image|imagen)/i.test(modelId)) return;
+    seen.add(modelId);
+    out.push({ id: modelId, name: String(name || modelId) });
+  };
   const modelsMap = payload?.models && typeof payload.models === "object" && !Array.isArray(payload.models)
     ? payload.models
     : null;
   if (modelsMap) {
     for (const [id, info] of Object.entries(modelsMap)) {
-      const modelId = String(id || "").trim();
-      if (!modelId || seen.has(modelId)) continue;
-      seen.add(modelId);
-      out.push({
-        id: modelId,
-        name: String(info?.displayName || info?.display_name || info?.name || modelId),
-      });
+      push(id, info?.displayName || info?.display_name || info?.name || id);
     }
-    return out;
   }
-  // Fallback parser for unexpected shapes.
-  return extractAntigravityModelsFromLoadCodeAssist(payload || {});
+  const rank = (id) => {
+    const s = String(id).toLowerCase();
+    if (s.includes("3.6") && s.includes("flash") && s.includes("high")) return 10;
+    if (s.includes("3.6") && s.includes("flash") && s.includes("medium")) return 20;
+    if (s.includes("3.6") && s.includes("flash") && s.includes("low")) return 30;
+    if (s.includes("3.5") && s.includes("flash") && s.includes("high")) return 40;
+    if (s.includes("3.5") && s.includes("flash") && s.includes("medium")) return 50;
+    if (s.includes("3.5") && s.includes("flash") && s.includes("low")) return 60;
+    if (s.includes("3.1") && s.includes("pro") && s.includes("high")) return 70;
+    if (s.includes("3.1") && s.includes("pro") && s.includes("low")) return 80;
+    return 500;
+  };
+  out.sort((a, b) => rank(a.id) - rank(b.id) || a.id.localeCompare(b.id));
+  return out;
 }
 
 function extractAntigravityModelsFromLoadCodeAssist(raw) {
