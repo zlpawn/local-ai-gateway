@@ -3905,13 +3905,10 @@ experimental_bearer_token = "dummy"</pre>
         const BUILTIN_CLAUDE_OFFICIAL_MODELS = [
             'claude-opus-4-8',
             'claude-opus-4-7',
-            'claude-opus',
+            'claude-opus-4-6',
             'claude-sonnet-4-5',
-            'claude-sonnet',
             'claude-haiku-4-5-20251001',
             'claude-haiku-4-0',
-            'claude-haiku',
-            'claude-fable',
         ];
 
         function getClaudeModelCatalogConfig() {
@@ -3936,6 +3933,28 @@ experimental_bearer_token = "dummy"</pre>
                 out.push(model);
             }
             return out;
+        }
+
+        function getUsedClaudeDesktopMappingSources() {
+            const used = new Set();
+            const endpoints = config.clients?.desktop?.endpoints || [];
+            for (const endpoint of endpoints) {
+                const purpose = endpoint?.purpose;
+                if (purpose && purpose !== 'chat') continue;
+                for (const source of Object.keys(endpoint?.model_mapping || {})) {
+                    const id = String(source || '').trim();
+                    if (id) used.add(id);
+                }
+            }
+            return used;
+        }
+
+        function availableClaudeDesktopMappingSources(query = '') {
+            const q = String(query || '').trim().toLowerCase();
+            const used = getUsedClaudeDesktopMappingSources();
+            return mergeClaudeOfficialModelsLocal()
+                .filter((id) => !used.has(id))
+                .filter((id) => !q || id.toLowerCase().includes(q));
         }
 
         function discoveryKey(client, endpointId) {
@@ -4076,11 +4095,14 @@ experimental_bearer_token = "dummy"</pre>
             const list = document.getElementById(`map-source-list-${client}-${endpointId}`);
             if (!list) return;
             const index = getEndpointIndex(client, endpointId);
-            const q = String(document.getElementById(`input-mapping-req-${client}-${index}`)?.value || '').trim().toLowerCase();
-            const models = mergeClaudeOfficialModelsLocal().filter((id) => !q || id.toLowerCase().includes(q));
+            const q = String(document.getElementById(`input-mapping-req-${client}-${index}`)?.value || '').trim();
+            // Desktop source suggestions are global across all Claude Desktop chat nodes.
+            const models = client === 'desktop'
+                ? availableClaudeDesktopMappingSources(q)
+                : mergeClaudeOfficialModelsLocal().filter((id) => !q || id.toLowerCase().includes(q.toLowerCase()));
             list.innerHTML = models.length
                 ? models.map((id) => `<button type="button" class="model-suggest-item" onclick="fillMappingField('${client}', ${index}, 'req', ${JSON.stringify(id)})">${escapeHtml(id)}</button>`).join('')
-                : `<div class="ui-select-empty">无匹配 Claude 模型</div>`;
+                : `<div class="ui-select-empty">${client === 'desktop' ? '没有剩余可映射的 Claude 官方模型' : '无匹配 Claude 模型'}</div>`;
         }
 
         window.fillMappingField = function(client, index, side, value) {

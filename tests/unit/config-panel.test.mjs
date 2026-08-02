@@ -571,6 +571,10 @@ test("chat model discovery suggestions and Claude catalog mini-tool are wired", 
   assert.match(firstDocument, /model-discovery-list/);
   assert.match(firstDocument, /map-target-list/);
   assert.match(firstDocument, /mergeClaudeOfficialModelsLocal/);
+  assert.match(firstDocument, /availableClaudeDesktopMappingSources/);
+  assert.match(firstDocument, /getUsedClaudeDesktopMappingSources/);
+  assert.doesNotMatch(firstDocument, /'claude-sonnet'(?!,)/);
+  assert.match(firstDocument, /'claude-opus-4-6'/);
   assert.match(firstDocument, /openTool\('claude-model-catalog'\)/);
   assert.match(firstDocument, /renderClaudeModelCatalogDetail/);
   assert.doesNotMatch(firstDocument, /endpoint\.models\s*=\s*json\.models/);
