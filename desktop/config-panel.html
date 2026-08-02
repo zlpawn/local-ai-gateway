@@ -3107,6 +3107,14 @@
                 </a>
 
                 <div class="nav-group-title">系统扩展</div>
+                <a href="#analytics" class="nav-item" onclick="switchTab('analytics')">
+                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="margin-right: 8px;"><line x1="18" y1="20" x2="18" y2="10"></line><line x1="12" y1="20" x2="12" y2="4"></line><line x1="6" y1="20" x2="6" y2="14"></line></svg>
+                    用量统计
+                </a>
+                <a href="#proxy" class="nav-item" onclick="switchTab('proxy')">
+                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="margin-right: 8px;"><circle cx="12" cy="12" r="10"></circle><line x1="2" y1="12" x2="22" y2="12"></line><path d="M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z"></path></svg>
+                    网络代理
+                </a>
                 <a href="#sync" class="nav-item" onclick="switchTab('sync')">
                     <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="margin-right: 8px;"><path d="M21.5 2v6h-6M21.34 15.57a10 10 0 1 1-.57-8.38l5.67-5.67"></path></svg>
                     会话同步 (Session Sync)
@@ -3339,6 +3347,162 @@ experimental_bearer_token = "dummy"</pre>
             </section>
 
             <!-- Session Sync Section -->
+            <!-- Section: Analytics (用量统计) -->
+            <section id="section-analytics" class="tab-section" style="display: none;">
+                <div class="section-header">
+                    <div>
+                        <h2>用量统计 (Token Analytics)</h2>
+                        <div class="subtitle">按时间维度（分钟、小时、天）以及节点类型统计网关 Token 消耗趋势</div>
+                    </div>
+                    <button class="btn btn-secondary" onclick="loadAnalyticsData()">
+                        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="margin-right: 6px;"><path d="M21.5 2v6h-6M21.34 15.57a10 10 0 1 1-.57-8.38l5.67-5.67"></path></svg>刷新数据
+                    </button>
+                </div>
+
+                <div class="card" style="margin-bottom: 20px;">
+                    <div style="display: flex; gap: 16px; flex-wrap: wrap; align-items: center;">
+                        <div style="display: flex; align-items: center; gap: 8px;">
+                            <label style="font-size: 13px; font-weight: 500;">统计粒度:</label>
+                            <select id="analytics-granularity" class="input" style="padding: 4px 8px; font-size: 13px;" onchange="loadAnalyticsData()">
+                                <option value="hour" selected>按小时 (Hourly)</option>
+                                <option value="minute">按分钟 (Minutely)</option>
+                                <option value="day">按天 (Daily)</option>
+                            </select>
+                        </div>
+                        <div style="display: flex; align-items: center; gap: 8px;">
+                            <label style="font-size: 13px; font-weight: 500;">时间范围:</label>
+                            <select id="analytics-range" class="input" style="padding: 4px 8px; font-size: 13px;" onchange="loadAnalyticsData()">
+                                <option value="24h" selected>最近 24 小时</option>
+                                <option value="1h">最近 1 小时</option>
+                                <option value="7d">最近 7 天</option>
+                                <option value="30d">最近 30 天</option>
+                            </select>
+                        </div>
+                        <div style="display: flex; align-items: center; gap: 8px;">
+                            <label style="font-size: 13px; font-weight: 500;">节点类型:</label>
+                            <select id="analytics-purpose" class="input" style="padding: 4px 8px; font-size: 13px;" onchange="loadAnalyticsData()">
+                                <option value="all" selected>全部节点类型</option>
+                                <option value="chat">聊天节点 (Chat)</option>
+                                <option value="embedding">向量节点 (Embedding)</option>
+                                <option value="image_generation">图像生成节点 (Image)</option>
+                                <option value="video_generation">视频生成节点 (Video)</option>
+                                <option value="tts">语音节点 (TTS)</option>
+                            </select>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Analytics Cards -->
+                <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 16px; margin-bottom: 20px;">
+                    <div class="card" style="padding: 16px;">
+                        <div style="font-size: 12px; color: var(--text-secondary);">总 Token 消耗</div>
+                        <div id="stat-total-tokens" style="font-size: 24px; font-weight: 700; margin-top: 4px;">0</div>
+                    </div>
+                    <div class="card" style="padding: 16px;">
+                        <div style="font-size: 12px; color: var(--text-secondary);">输入 Token (Prompt)</div>
+                        <div id="stat-prompt-tokens" style="font-size: 24px; font-weight: 700; margin-top: 4px; color: #3b82f6;">0</div>
+                    </div>
+                    <div class="card" style="padding: 16px;">
+                        <div style="font-size: 12px; color: var(--text-secondary);">输出 Token (Completion)</div>
+                        <div id="stat-completion-tokens" style="font-size: 24px; font-weight: 700; margin-top: 4px; color: #10b981;">0</div>
+                    </div>
+                    <div class="card" style="padding: 16px;">
+                        <div style="font-size: 12px; color: var(--text-secondary);">总请求次数</div>
+                        <div id="stat-total-requests" style="font-size: 24px; font-weight: 700; margin-top: 4px;">0</div>
+                    </div>
+                </div>
+
+                <!-- Timeline Chart -->
+                <div class="card" style="margin-bottom: 20px;">
+                    <h3 style="font-size: 14px; margin-bottom: 12px;">Token 消耗趋势</h3>
+                    <div id="analytics-chart-container" style="width: 100%; min-height: 220px; display: flex; align-items: center; justify-content: center;">
+                        <div style="color: var(--text-secondary); font-size: 13px;">暂无 Token 数据</div>
+                    </div>
+                </div>
+
+                <!-- Purpose Breakdown Table -->
+                <div class="card">
+                    <h3 style="font-size: 14px; margin-bottom: 12px;">节点类型消耗分布</h3>
+                    <div id="analytics-breakdown-container">
+                        <div style="color: var(--text-secondary); font-size: 13px;">暂无数据</div>
+                    </div>
+                </div>
+            </section>
+
+            <!-- Section: Network Proxy (网络代理) -->
+            <section id="section-proxy" class="tab-section" style="display: none;">
+                <div class="section-header">
+                    <div>
+                        <h2>网络代理 (System Proxy)</h2>
+                        <div class="subtitle">配置全局科学上网代理（访问 Grok, OpenAI, Anthropic, Gemini 等国外模型）</div>
+                    </div>
+                    <button class="btn btn-secondary" onclick="testProxyConnection()">
+                        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="margin-right: 6px;"><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"></path><polyline points="22 4 12 14.01 9 11.01"></polyline></svg>测试连通性
+                    </button>
+                </div>
+
+                <div class="card" style="margin-bottom: 20px;">
+                    <h3 style="font-size: 15px; margin-bottom: 16px;">全局代理设置</h3>
+                    <form id="proxy-config-form" onsubmit="saveProxyConfig(event)">
+                        <div style="display: flex; align-items: center; gap: 12px; margin-bottom: 16px;">
+                            <label class="switch">
+                                <input type="checkbox" id="proxy-enabled" checked>
+                                <span class="slider round"></span>
+                            </label>
+                            <span style="font-size: 14px; font-weight: 500;">启用全局出站代理</span>
+                        </div>
+
+                        <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 16px; margin-bottom: 16px;">
+                            <div>
+                                <label style="display: block; font-size: 12px; color: var(--text-secondary); margin-bottom: 4px;">代理协议</label>
+                                <select id="proxy-protocol" class="input" style="width: 100%;">
+                                    <option value="http" selected>HTTP</option>
+                                    <option value="https">HTTPS</option>
+                                    <option value="socks5">SOCKS5</option>
+                                </select>
+                            </div>
+                            <div>
+                                <label style="display: block; font-size: 12px; color: var(--text-secondary); margin-bottom: 4px;">代理主机 / IP</label>
+                                <input type="text" id="proxy-host" class="input" value="127.0.0.1" placeholder="例如: 127.0.0.1 或 proxy.example.com" style="width: 100%;">
+                            </div>
+                            <div>
+                                <label style="display: block; font-size: 12px; color: var(--text-secondary); margin-bottom: 4px;">代理端口</label>
+                                <input type="number" id="proxy-port" class="input" value="7897" placeholder="例如: 7897" style="width: 100%;">
+                            </div>
+                        </div>
+
+                        <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 16px; margin-bottom: 20px;">
+                            <div>
+                                <label style="display: block; font-size: 12px; color: var(--text-secondary); margin-bottom: 4px;">用户名 (可选)</label>
+                                <input type="text" id="proxy-username" class="input" placeholder="无鉴权留空" style="width: 100%;">
+                            </div>
+                            <div>
+                                <label style="display: block; font-size: 12px; color: var(--text-secondary); margin-bottom: 4px;">密码 (可选)</label>
+                                <input type="password" id="proxy-password" class="input" placeholder="无鉴权留空" style="width: 100%;">
+                            </div>
+                        </div>
+
+                        <div style="display: flex; gap: 12px;">
+                            <button type="submit" class="btn btn-primary">保存代理配置</button>
+                            <button type="button" class="btn btn-secondary" onclick="testProxyConnection()">测试连通性</button>
+                        </div>
+                    </form>
+                </div>
+
+                <div id="proxy-test-result" class="card" style="margin-bottom: 20px; display: none;">
+                    <h3 style="font-size: 14px; margin-bottom: 8px;">连通性测试结果</h3>
+                    <div id="proxy-test-content"></div>
+                </div>
+
+                <div class="card">
+                    <h3 style="font-size: 15px; margin-bottom: 12px;">节点代理生效状态</h3>
+                    <div style="font-size: 12px; color: var(--text-secondary); margin-bottom: 12px;">默认情况下，国外模型节点继承全局代理配置。可在单个节点高级设置中覆盖为直连或自定义代理。</div>
+                    <div id="proxy-endpoints-list">
+                        <div style="color: var(--text-secondary); font-size: 13px;">加载中...</div>
+                    </div>
+                </div>
+            </section>
+
             <section id="section-sync" class="tab-section" style="display: none;">
                 <div class="section-header">
                     <div>
@@ -4088,6 +4252,8 @@ experimental_bearer_token = "dummy"</pre>
             ep.models = Array.isArray(ep.models) ? ep.models : [];
             if (!ep.models.includes(modelId)) ep.models.push(modelId);
             render();
+            if (tabId === 'analytics') loadAnalyticsData();
+            if (tabId === 'proxy') loadProxyConfig();
             // reopen detail
             setTimeout(() => {
                 const card = document.getElementById(`ep-${client}-${index}`);
