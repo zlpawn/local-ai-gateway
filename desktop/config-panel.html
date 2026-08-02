@@ -152,6 +152,22 @@
             display: flex;
             flex-direction: column;
             gap: 4px;
+            overflow-y: auto;
+            overflow-x: hidden;
+        }
+
+        .sidebar-nav::-webkit-scrollbar {
+            width: 4px;
+        }
+        .sidebar-nav::-webkit-scrollbar-track {
+            background: transparent;
+        }
+        .sidebar-nav::-webkit-scrollbar-thumb {
+            background: var(--border-color);
+            border-radius: 4px;
+        }
+        .sidebar-nav::-webkit-scrollbar-thumb:hover {
+            background: var(--text-secondary);
         }
 
         .nav-item {
@@ -2065,6 +2081,23 @@
             cursor: pointer;
         }
 
+        .tools-groups {
+            display: flex;
+            flex-direction: column;
+            gap: 28px;
+        }
+        .tools-group {
+            display: flex;
+            flex-direction: column;
+        }
+        .tools-group-title {
+            color: var(--text-primary);
+            font-size: 14px;
+            font-weight: 600;
+            margin-bottom: 12px;
+            padding-bottom: 8px;
+            border-bottom: 1px solid var(--border-color);
+        }
         .tools-cards {
             display: grid;
             grid-template-columns: repeat(auto-fill, minmax(260px, 1fr));
@@ -3677,7 +3710,7 @@ experimental_bearer_token = "dummy"</pre>
                         <p>实验性迷你工具集合，提供文本向量化、分类评估教学、Antigravity 订阅接入等便捷能力。</p>
                     </div>
                 </div>
-                <div id="tools-cards" class="tools-cards"></div>
+                <div id="tools-cards" class="tools-groups"></div>
                 <div id="tools-detail"></div>
             </section>
 
@@ -4807,7 +4840,7 @@ experimental_bearer_token = "dummy"</pre>
                 btn.textContent = original;
                 btn.disabled = false;
             }
-        };    };
+        };
 
         function formatUsageNumber(value) {
             return new Intl.NumberFormat('zh-CN').format(Number(value) || 0);
@@ -6940,7 +6973,7 @@ ${(() => {
 
         const toolGroupConfigs = [
             { title: '媒体生成', tools: ['image-gen', 'video-gen', 'tts-gen'] },
-            { title: '文本与向量', tools: ['embedding'] },
+            { title: '向量化', tools: ['embedding'] },
             { title: '订阅接入', tools: ['antigravity-subscribe', 'codex-subscribe'] },
             { title: '模型配置', tools: ['claude-model-catalog'] },
             { title: '其他', tools: ['classification-metrics'] },

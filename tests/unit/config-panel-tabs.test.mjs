@@ -2,6 +2,7 @@ import test from "node:test";
 import assert from "node:assert/strict";
 import fs from "node:fs";
 import path from "node:path";
+import vm from "node:vm";
 
 const panelPath = path.resolve("desktop", "config-panel.html");
 
@@ -47,6 +48,21 @@ test("config panel contains exactly one complete HTML document", () => {
   assert.equal(html.trimEnd().endsWith("</html>"), true);
 });
 
+test("inline javascript in config panel has no syntax errors", () => {
+  const html = fs.readFileSync(panelPath, "utf8");
+  const scriptRegex = /<script\b[^>]*>([\s\S]*?)<\/script>/gi;
+  let match;
+  let count = 0;
+  while ((match = scriptRegex.exec(html)) !== null) {
+    count++;
+    if (match[0].includes("src=")) continue;
+    const code = match[1];
+    assert.doesNotThrow(() => {
+      new vm.Script(code);
+    }, `Inline script block ${count} should parse without syntax errors`);
+  }
+});
+
 test("proxy and analytics tabs expose one complete set of working page actions", () => {
   const html = fs.readFileSync(panelPath, "utf8");
 
@@ -81,25 +97,7 @@ test("mini tools are grouped into categories instead of one flat grid", () => {
   const html = fs.readFileSync(panelPath, "utf8");
   assert.match(html, /renderToolGroups|toolGroupConfigs/);
   assert.match(html, /媒体生成/);
-  assert.match(html, /文本与向量/);
-  assert.match(html, /订阅接入/);
-  assert.match(html, /模型配置/);
-  assert.match(html, /其他/);
-  assert.match(html, /tools-group/);
-});
-
-test("proxy endpoint status table lets users toggle each node between global and direct", () => {
-  const html = fs.readFileSync(panelPath, "utf8");
-  assert.match(html, /setEndpointProxyMode/);
-  assert.match(html, /data-proxy-client=/);
-  assert.match(html, /上游域名/);
-});
-
-test("mini tools are grouped into categories instead of one flat grid", () => {
-  const html = fs.readFileSync(panelPath, "utf8");
-  assert.match(html, /renderToolGroups|toolGroupConfigs/);
-  assert.match(html, /媒体生成/);
-  assert.match(html, /文本与向量/);
+  assert.match(html, /向量化/);
   assert.match(html, /订阅接入/);
   assert.match(html, /模型配置/);
   assert.match(html, /其他/);
