@@ -1520,7 +1520,7 @@ function collectGroupedModelsFromConfig(config) {
   if (reqPath === "/v1/config/proxy" && req.method === "POST") {
     if (!checkLocalAuth(req, res)) return;
     try {
-      const body = await parseJsonBody(req);
+      const body = await readJson(req);
       GATEWAY_CONFIG.server = GATEWAY_CONFIG.server || {};
       GATEWAY_CONFIG.server.proxy = {
         enabled: Boolean(body.enabled),
@@ -1541,7 +1541,7 @@ function collectGroupedModelsFromConfig(config) {
   if (reqPath === "/v1/config/proxy/test" && req.method === "POST") {
     if (!checkLocalAuth(req, res)) return;
     try {
-      const body = await parseJsonBody(req).catch(() => ({}));
+      const body = await readJson(req).catch(() => ({}));
       const testConfig = body.proxy || GATEWAY_CONFIG.server?.proxy || { enabled: true, protocol: "http", host: "127.0.0.1", port: 7897 };
       const proxyUrl = buildProxyUrl(testConfig);
       if (!proxyUrl) {
