@@ -8741,7 +8741,7 @@ ${(() => {
                         <div class="media-gen-form-group"><label>音频格式</label>
                             ${encodingSelect}</div>
                         <div class="media-gen-form-group"><label>语速倍率（0.5 - 2.0）</label>
-                            <input type="range" class="media-gen-form-control" min="0.5" max="2.0" step="0.1" value="${ttsGenState.speedRatio}" onchange="ttsGenState.speedRatio=Number(this.value)" style="width:100%;">
+                            <input type="range" class="media-gen-form-control" min="0.5" max="2.0" step="0.1" value="${ttsGenState.speedRatio}" onchange="ttsGenState.speedRatio=Number(this.value); document.getElementById('tts-speed-value').textContent=this.value+'x'" style="width:100%;">
                             <span class="media-gen-tip" id="tts-speed-value">${ttsGenState.speedRatio}x</span></div>
                         <div class="media-gen-tip"><strong>音色说明：</strong>zh_female_qingxin 适合通用播报；zh_male_wennuanshizhong 适合叙事；zh_female_wanwanxiaohe 适合活泼内容；en_male_rm_emo / en_female_rm_emo 适合英文情感朗读。</div>
                         <button class="btn btn-primary" onclick="runTtsGeneration()" ${ttsGenState.loading || !endpoints.length ? 'disabled' : ''}>${ttsGenState.loading ? '合成中...' : '合成语音'}</button>
