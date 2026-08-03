@@ -4952,7 +4952,8 @@ experimental_bearer_token = "dummy"</pre>
                 ? `<th style="text-align:left;padding:8px 10px">${escapeHtml(nameLabel)}</th><th style="text-align:left;padding:8px 10px">类型</th><th style="text-align:right;padding:8px 10px">请求数</th><th style="text-align:right;padding:8px 10px">输入</th><th style="text-align:right;padding:8px 10px">输出</th><th style="text-align:right;padding:8px 10px">Token</th>`
                 : `<th style="text-align:left;padding:8px 10px">${escapeHtml(nameLabel)}</th><th style="text-align:right;padding:8px 10px">请求数</th><th style="text-align:right;padding:8px 10px">输入</th><th style="text-align:right;padding:8px 10px">输出</th><th style="text-align:right;padding:8px 10px">Token</th>`;
             const body = rows.map(row => {
-                const name = escapeHtml(row[nameKey] || '其他');
+                const rawName = row[nameKey] || '其他';
+                const name = escapeHtml(nameKey === 'purpose' ? (ANALYTICS_PURPOSE_LABELS[rawName] || rawName) : rawName);
                 const purposeCell = purposeCol
                     ? `<td style="padding:9px 10px;border-top:1px solid var(--border-color)">${escapeHtml(ANALYTICS_PURPOSE_LABELS[row.purpose] || row.purpose || '-')}</td>`
                     : '';
