@@ -1,4 +1,4 @@
-import http from "node:http";
+﻿import http from "node:http";
 import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
@@ -858,15 +858,38 @@ async function route(req, res) {
     return;
   }
 
+  // --- Static assets for modularized config panel ---
+  if (reqPath.startsWith("/desktop/dist/") && req.method === "GET") {
+    const distRoot = path.join(PROJECT_ROOT, "desktop", "dist");
+    const filePath = path.resolve(path.join(PROJECT_ROOT, reqPath));
+    if (!filePath.startsWith(distRoot + path.sep)) {
+      sendJson(res, 403, { error: "forbidden" });
+      return;
+    }
+    if (!fs.existsSync(filePath)) {
+      sendJson(res, 404, { error: "not found" });
+      return;
+    }
+    const ext = path.extname(filePath);
+    const mimeTypes = {
+      ".js": "text/javascript; charset=utf-8",
+      ".css": "text/css; charset=utf-8",
+      ".map": "application/json",
+    };
+    res.writeHead(200, { "Content-Type": mimeTypes[ext] || "application/octet-stream" });
+    res.end(fs.readFileSync(filePath));
+    return;
+  }
+
   const reqPath = context.path;
 
   if ((reqPath === "/" || reqPath === "/config") && req.method === "GET") {
-    const htmlPath = path.join(PROJECT_ROOT, "desktop", "config-panel.html");
+    const htmlPath = path.join(PROJECT_ROOT, "desktop", "index.html");
     if (fs.existsSync(htmlPath)) {
       res.writeHead(200, { "Content-Type": "text/html; charset=utf-8" });
       res.end(fs.readFileSync(htmlPath));
     } else {
-      sendJson(res, 404, { error: { message: "config-panel.html not found" }});
+      sendJson(res, 404, { error: { message: "index.html not found" }});
     }
     return;
   }

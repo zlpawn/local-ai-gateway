@@ -1,0 +1,867 @@
+﻿<!DOCTYPE html>
+<html lang="en" data-theme="dark">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Shrimp</title>
+    <link rel="stylesheet" href="/desktop/dist/panel.css">
+    <script>
+        // Prevent FOUC by setting theme early
+        (function() {
+            const savedTheme = localStorage.getItem('app-theme');
+            if (savedTheme) {
+                document.documentElement.setAttribute('data-theme', savedTheme);
+            } else {
+                const prefersLight = window.matchMedia('(prefers-color-scheme: light)').matches;
+                document.documentElement.setAttribute('data-theme', prefersLight ? 'light' : 'dark');
+            }
+        })();
+    </script>
+    <link rel="stylesheet" href="/xterm/xterm.css" />
+    <script src="/xterm/xterm.js"></script>
+    <script src="/xterm/addon-fit.js"></script>
+</head>
+<body>
+
+    <div class="app-layout">
+        <aside class="sidebar">
+            <div class="sidebar-header">
+                <div class="status-dot"></div>
+                Shrimp
+            </div>
+            <nav class="sidebar-nav">
+                <div class="nav-group-title">代理节点</div>
+                <a href="#code" class="nav-item active" onclick="switchTab('code')">
+                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="margin-right: 8px;"><polyline points="16 18 22 12 16 6"></polyline><polyline points="8 6 2 12 8 18"></polyline></svg>
+                    Claude Code 代理
+                </a>
+                <a href="#desktop" class="nav-item" onclick="switchTab('desktop')">
+                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="margin-right: 8px;"><rect x="2" y="3" width="20" height="14" rx="2" ry="2"></rect><line x1="8" y1="21" x2="16" y2="21"></line><line x1="12" y1="17" x2="12" y2="21"></line></svg>
+                    Claude Desktop 代理
+                </a>
+                <a href="#codex" class="nav-item" onclick="switchTab('codex')">
+                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="margin-right: 8px;"><path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z"></path></svg>
+                    Codex 代理
+                </a>
+                <a href="#deeptutor" class="nav-item" onclick="switchTab('deeptutor')">
+                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="margin-right: 8px;"><path d="M22 10v6M2 10l10-5 10 5-10 5z"></path><path d="M6 12v5c3 3 9 3 12 0v-5"></path></svg>
+                    DeepTutor 代理
+                </a>
+                <div id="nav-custom-clients"></div>
+                <a href="#custom-clients" class="nav-create-client" onclick="openClientCreateModal(event)">
+                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="12" y1="5" x2="12" y2="19"></line><line x1="5" y1="12" x2="19" y2="12"></line></svg>
+                    新建代理节点
+                </a>
+
+                <div class="nav-group-title">系统扩展</div>
+                <a href="#analytics" class="nav-item" onclick="switchTab('analytics')">
+                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="margin-right: 8px;"><line x1="18" y1="20" x2="18" y2="10"></line><line x1="12" y1="20" x2="12" y2="4"></line><line x1="6" y1="20" x2="6" y2="14"></line></svg>
+                    用量统计 (Token Analytics)
+                </a>
+                <a href="#proxy" class="nav-item" onclick="switchTab('proxy')">
+                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="margin-right: 8px;"><circle cx="12" cy="12" r="10"></circle><line x1="2" y1="12" x2="22" y2="12"></line><path d="M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z"></path></svg>
+                    网络代理 (System Proxy)
+                </a>
+                <a href="#sync" class="nav-item" onclick="switchTab('sync')">
+                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="margin-right: 8px;"><path d="M21.5 2v6h-6M21.34 15.57a10 10 0 1 1-.57-8.38l5.67-5.67"></path></svg>
+                    会话同步 (Session Sync)
+                </a>
+                <div class="nav-collapsible" id="nav-skills-group">
+                    <div class="nav-parent-row">
+                        <a href="#skills" class="nav-item" onclick="switchTab('skills')">
+                            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="margin-right: 8px;"><path d="M12 2L2 7l10 5 10-5-10-5zM2 17l10 5 10-5M2 12l10 5 10-5"></path></svg>
+                            预置技能 (Agent Skills)
+                        </a>
+                        <button class="nav-caret-btn" title="展开/收起" onclick="toggleNavGroup('nav-skills-group', event)"><span class="nav-caret">▶</span></button>
+                    </div>
+                    <div class="nav-children">
+                        <a href="#install-history" class="nav-item nav-child" onclick="switchTab('install-history')">
+                            <span class="nav-child-dot">└</span>安装记录
+                        </a>
+                    </div>
+                </div>
+                <a href="#tools" class="nav-item" onclick="switchTab('tools')">
+                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="margin-right: 8px;"><path d="M14.7 6.3a1 1 0 0 0 0 1.4l1.6 1.6a1 1 0 0 0 1.4 0l3.77-3.77a6 6 0 0 1-7.94 7.94l-6.91 6.91a2.12 2.12 0 0 1-3-3l6.91-6.91a6 6 0 0 1 7.94-7.94l-3.76 3.76z"></path></svg>
+                    迷你工具 (Mini Tools)
+                </a>
+                <div class="nav-collapsible" id="nav-cli-group">
+                    <div class="nav-parent-row">
+                        <a href="#cli" class="nav-item" onclick="switchTab('cli')">
+                            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="margin-right: 8px;"><polyline points="4 17 10 11 4 5"></polyline><line x1="12" y1="19" x2="20" y2="19"></line></svg>
+                            本机 CLI (Local CLI)
+                        </a>
+                        <button class="nav-caret-btn" title="展开/收起" onclick="toggleNavGroup('nav-cli-group', event)"><span class="nav-caret">▶</span></button>
+                    </div>
+                    <div class="nav-children">
+                        <a href="#cli-install-history" class="nav-item nav-child" onclick="switchTab('cli-install-history')">
+                            <span class="nav-child-dot">└</span>安装记录
+                        </a>
+                        <a href="#cli-sources" class="nav-item nav-child" onclick="switchTab('cli-sources')">
+                            <span class="nav-child-dot">└</span>扫描来源
+                        </a>
+                    </div>
+                </div>
+            </nav>
+            <div class="sidebar-footer" style="flex-direction: column;">
+                <div style="display: flex; gap: 12px; width: 100%;">
+                    <button class="btn" id="theme-toggle" onclick="toggleTheme()" aria-label="Toggle Theme" style="padding: 8px; border-radius: 50%;">
+                        <svg id="theme-icon-dark" style="display: none;" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"></path></svg>
+                        <svg id="theme-icon-light" style="display: none;" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="5"></circle><line x1="12" y1="1" x2="12" y2="3"></line><line x1="12" y1="21" x2="12" y2="23"></line><line x1="4.22" y1="4.22" x2="5.64" y2="5.64"></line><line x1="18.36" y1="18.36" x2="19.78" y2="19.78"></line><line x1="1" y1="12" x2="3" y2="12"></line><line x1="21" y1="12" x2="23" y2="12"></line><line x1="4.22" y1="19.78" x2="5.64" y2="18.36"></line><line x1="18.36" y1="5.64" x2="19.78" y2="4.22"></line></svg>
+                    </button>
+                    <button class="btn btn-primary" id="save-btn" onclick="saveCurrentConfig()" style="flex: 1;">
+                        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z"></path><polyline points="17 21 17 13 7 13 7 21"></polyline><polyline points="7 3 7 8 15 8"></polyline></svg>
+                        保存配置
+                    </button>
+                </div>
+                <button class="btn" onclick="loadDefaultTemplate()" style="width: 100%; border-color: transparent; color: var(--text-secondary); margin-top: 4px; background: var(--input-bg);">
+                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 12a9 9 0 1 0 9-9 9.75 9.75 0 0 0-6.74 2.74L3 8"></path><polyline points="3 3 3 8 8 8"></polyline></svg>
+                    恢复默认模板
+                </button>
+            </div>
+        </aside>
+
+        <main class="content-area" id="app">
+            <!-- Claude Code Section -->
+            <section id="section-code" class="tab-section active">
+                <div class="section-header">
+                    <div>
+                        <h2>Claude Code 代理</h2>
+                        <p>为 Claude Code CLI 工具提供下游代理支持。</p>
+                    </div>
+                    <div class="section-header-actions">
+                        <div class="add-node-dropdown" id="add-node-dropdown-code">
+                            <button type="button" class="btn add-node-trigger" aria-expanded="false" aria-haspopup="menu" onclick="toggleAddNodeMenu('code', event)">
+                                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="12" y1="5" x2="12" y2="19"></line><line x1="5" y1="12" x2="19" y2="12"></line></svg>
+                                添加节点
+                                <svg class="add-node-chevron" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 12 15 18 9"></polyline></svg>
+                            </button>
+                            <div class="add-node-popover" role="menu" data-client="code"></div>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="usage-guide">
+                    <h3>配置自动同步</h3>
+                    <p>保存 Claude Code 节点或本页配置后，网关会自动同步到 <code>~/.claude/settings.json</code>。完全退出并重新启动 Claude Code 后生效。</p>
+                </div>
+
+                <div class="model-slots-panel" id="claude-code-model-slots">
+                    <div class="model-slots-header">
+                        <h3>Claude Code 快捷模型</h3>
+                        <p id="claude-code-model-slots-help">
+                            从默认节点选择 Opus、Sonnet、Haiku 和 Fable 的固定模型。
+                        </p>
+                    </div>
+                    <div class="model-slots-grid">
+                        <div class="form-group model-slot-field">
+                            <label>Opus</label>
+                            <select id="claude-code-slot-opus" onchange="updateClaudeCodeModelSlot('opus', this.value)"></select>
+                        </div>
+                        <div class="form-group model-slot-field">
+                            <label>Sonnet</label>
+                            <select id="claude-code-slot-sonnet" onchange="updateClaudeCodeModelSlot('sonnet', this.value)"></select>
+                        </div>
+                        <div class="form-group model-slot-field">
+                            <label>Haiku</label>
+                            <select id="claude-code-slot-haiku" onchange="updateClaudeCodeModelSlot('haiku', this.value)"></select>
+                        </div>
+                        <div class="form-group model-slot-field">
+                            <label>Fable</label>
+                            <select id="claude-code-slot-fable" onchange="updateClaudeCodeModelSlot('fable', this.value)"></select>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="endpoints-grid" id="code-endpoints"></div>
+            </section>
+
+            <!-- Claude Desktop Section -->
+            <section id="section-desktop" class="tab-section" style="display: none;">
+                <div class="section-header">
+                    <div>
+                        <h2>Claude Desktop 代理</h2>
+                        <p>为 Claude Desktop 桌面客户端提供下游代理支持。</p>
+                    </div>
+                    <div class="section-header-actions">
+                        <div class="add-node-dropdown" id="add-node-dropdown-desktop">
+                            <button type="button" class="btn add-node-trigger" aria-expanded="false" aria-haspopup="menu" onclick="toggleAddNodeMenu('desktop', event)">
+                                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="12" y1="5" x2="12" y2="19"></line><line x1="5" y1="12" x2="19" y2="12"></line></svg>
+                                添加节点
+                                <svg class="add-node-chevron" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 12 15 18 9"></polyline></svg>
+                            </button>
+                            <div class="add-node-popover" role="menu" data-client="desktop"></div>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="usage-guide">
+                    <h3>配置自动同步</h3>
+                    <p>保存 Claude Desktop 节点或本页配置后，网关会自动同步到 Claude Desktop 的第三方推理配置。完全退出并重新启动 Claude Desktop 后生效。</p>
+                </div>
+
+                <div class="endpoints-grid" id="desktop-endpoints"></div>
+            </section>
+
+            <!-- Codex Section -->
+            <section id="section-codex" class="tab-section" style="display: none;">
+                <div class="section-header">
+                    <div>
+                        <h2>Codex 代理</h2>
+                        <p>为兼容 OpenAI 接口的独立 Codex 客户端提供下游代理支持。</p>
+                    </div>
+                    <div class="section-header-actions">
+                        <button class="btn" id="codex-history-unify-btn" onclick="migrateCodexHistory()" title="把旧会话的 model_provider 迁移到 custom，以便在当前网关配置下重新显示历史">
+                            迁移历史会话
+                        </button>
+                        <div class="add-node-dropdown" id="add-node-dropdown-codex">
+                            <button type="button" class="btn add-node-trigger" aria-expanded="false" aria-haspopup="menu" onclick="toggleAddNodeMenu('codex', event)">
+                                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="12" y1="5" x2="12" y2="19"></line><line x1="5" y1="12" x2="19" y2="12"></line></svg>
+                                添加节点
+                                <svg class="add-node-chevron" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 12 15 18 9"></polyline></svg>
+                            </button>
+                            <div class="add-node-popover" role="menu" data-client="codex"></div>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="usage-guide">
+                    <h3>🚀 如何连接此网关？</h3>
+                    <p>对于独立的 Codex 桌面端或命令行：保存本页配置后，网关会自动生成模型目录文件 <code class="cfg-catalog-path">~/.codex/gateway-model-catalog.json</code>（官方模型 + 下方 Codex 节点里的第三方模型）。把下面片段贴到 <code>~/.codex/config.toml</code>，并确保放在第一个 <code>[section]</code> 之前：</p>
+                    <div class="code-snippet" style="margin-top: 10px;">
+                        <button type="button" class="code-snippet-copy" title="复制" onclick="copyCodeSnippet(this)" aria-label="复制"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="9" width="13" height="13" rx="2" ry="2"></rect><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"></path></svg></button>
+                        <pre style="margin: 0; color: inherit; font-family: inherit; font-size: inherit; background: transparent; padding: 0; overflow-x: auto;">
+model_provider = "custom"
+model_catalog_json = "<span class="cfg-catalog-path">~/.codex/gateway-model-catalog.json</span>"
+openai_base_url = "http://<span class="cfg-host">127.0.0.1</span>:<span class="cfg-port">8787</span>/codex/v1"
+
+[model_providers.custom]
+name = "Shrimp"
+base_url = "http://<span class="cfg-host">127.0.0.1</span>:<span class="cfg-port">8787</span>/codex/v1"
+wire_api = "responses"
+requires_openai_auth = true
+experimental_bearer_token = "dummy"</pre>
+                    </div>
+                    <p style="font-size: 12px; margin-top: 8px; margin-bottom: 0; color: var(--text-secondary);">说明：改 Codex 节点/模型后点保存即可刷新目录文件，不必手动跑 <code>npm run codex:catalog</code>。若 Desktop 已打开，保存后重启或重载 Codex 才能看到新模型。</p>
+                    <p style="font-size: 12px; margin-top: 8px; margin-bottom: 0; color: var(--text-secondary);">切换到 <code>model_provider = "custom"</code> 后，旧会话可能暂时不显示。可点右上角「迁移历史会话」：先预览数量，确认后再写入；会自动备份 <code>~/.codex</code>，不影响登录态和插件。</p>
+                </div>
+
+                <div class="endpoints-grid" id="codex-endpoints"></div>
+            </section>
+
+            <!-- DeepTutor Section -->
+            <section id="section-deeptutor" class="tab-section" style="display: none;">
+                <div class="section-header">
+                    <div>
+                        <h2>DeepTutor 代理</h2>
+                        <p>为 DeepTutor 客户端提供 OpenAI 兼容的下游代理支持。默认从 Codex 复制节点与密钥。</p>
+                    </div>
+                    <div class="section-header-actions">
+                        <div class="add-node-dropdown" id="add-node-dropdown-deeptutor">
+                            <button type="button" class="btn add-node-trigger" aria-expanded="false" aria-haspopup="menu" onclick="toggleAddNodeMenu('deeptutor', event)">
+                                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="12" y1="5" x2="12" y2="19"></line><line x1="5" y1="12" x2="19" y2="12"></line></svg>
+                                添加节点
+                                <svg class="add-node-chevron" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 12 15 18 9"></polyline></svg>
+                            </button>
+                            <div class="add-node-popover" role="menu" data-client="deeptutor"></div>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="usage-guide">
+                    <h3>🚀 如何连接此网关？</h3>
+                    <p>DeepTutor 走 OpenAI 兼容协议。大语言模型 base_url 填 API 根路径；向量模型 base_url 填完整 embeddings 端点（DeepTutor 会直接 POST 到该地址）：</p>
+                    <div style="display:flex; flex-direction:column; gap:8px; margin-top: 10px;">
+                        <div class="code-snippet">
+                            <button type="button" class="code-snippet-copy" title="复制" onclick="copyCodeSnippet(this)" aria-label="复制"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="9" width="13" height="13" rx="2" ry="2"></rect><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"></path></svg></button>
+                            <pre style="margin: 0; color: inherit; font-family: inherit; font-size: inherit; background: transparent; padding: 0; overflow-x: auto;">大语言模型 base_url：http://<span class="cfg-host">127.0.0.1</span>:<span class="cfg-port">8787</span>/deeptutor/</pre>
+                        </div>
+                        <div class="code-snippet">
+                            <button type="button" class="code-snippet-copy" title="复制" onclick="copyCodeSnippet(this)" aria-label="复制"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="9" width="13" height="13" rx="2" ry="2"></rect><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"></path></svg></button>
+                            <pre style="margin: 0; color: inherit; font-family: inherit; font-size: inherit; background: transparent; padding: 0; overflow-x: auto;">向量模型 base_url：http://<span class="cfg-host">127.0.0.1</span>:<span class="cfg-port">8787</span>/deeptutor/emb/embeddings</pre>
+                        </div>
+                    </div>
+                    <p style="font-size: 12px; margin-top: 8px; margin-bottom: 0; color: var(--text-secondary);">首次进入时若 DeepTutor 为空，网关会自动从 Codex 复制节点与密钥。</p>
+                </div>
+
+                <div class="endpoints-grid" id="deeptutor-endpoints"></div>
+            </section>
+
+            <!-- Custom agent-node groups (dynamically created clients).
+                 Each custom group renders its own section-header (matching the
+                 built-in agents), so this section only needs a bare container. -->
+            <section id="section-custom-clients" class="tab-section" style="display: none;">
+                <div id="custom-clients-container"></div>
+            </section>
+
+            <!-- Session Sync Section -->
+            <!-- Section: Analytics (用量统计) -->
+            <section id="section-analytics" class="tab-section" style="display: none;">
+                <div class="section-header">
+                    <div>
+                        <h2>用量统计 (Token Analytics)</h2>
+                        <div class="subtitle">按时间维度（分钟、小时、天）以及节点类型统计网关 Token 消耗趋势</div>
+                    </div>
+                    <button class="btn btn-secondary" onclick="loadAnalyticsData()">
+                        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="margin-right: 6px;"><path d="M21.5 2v6h-6M21.34 15.57a10 10 0 1 1-.57-8.38l5.67-5.67"></path></svg>刷新数据
+                    </button>
+                </div>
+
+                <div class="card" style="margin-bottom: 20px;">
+                    <div style="display: flex; gap: 16px; flex-wrap: wrap; align-items: center;">
+                        <div style="display: flex; align-items: center; gap: 8px;">
+                            <label style="font-size: 13px; font-weight: 500; white-space: nowrap; flex-shrink: 0;">统计粒度:</label>
+                            <select id="analytics-granularity" class="input" style="padding: 4px 8px; font-size: 13px;" onchange="loadAnalyticsData()">
+                                <option value="hour" selected>按小时 (Hourly)</option>
+                                <option value="minute">按分钟 (Minutely)</option>
+                                <option value="day">按天 (Daily)</option>
+                            </select>
+                        </div>
+                        <div style="display: flex; align-items: center; gap: 8px;">
+                            <label style="font-size: 13px; font-weight: 500; white-space: nowrap; flex-shrink: 0;">时间范围:</label>
+                            <select id="analytics-range" class="input" style="padding: 4px 8px; font-size: 13px;" onchange="loadAnalyticsData()">
+                                <option value="24h" selected>最近 24 小时</option>
+                                <option value="1h">最近 1 小时</option>
+                                <option value="7d">最近 7 天</option>
+                                <option value="30d">最近 30 天</option>
+                            </select>
+                        </div>
+                        <div style="display: flex; align-items: center; gap: 8px;">
+                            <label style="font-size: 13px; font-weight: 500; white-space: nowrap; flex-shrink: 0;">节点类型:</label>
+                            <select id="analytics-purpose" class="input" style="padding: 4px 8px; font-size: 13px;" onchange="loadAnalyticsData()">
+                                <option value="all" selected>全部节点类型</option>
+                                <option value="chat">聊天节点 (Chat)</option>
+                                <option value="embedding">向量节点 (Embedding)</option>
+                                <option value="image_generation">图像生成节点 (Image)</option>
+                                <option value="video_generation">视频生成节点 (Video)</option>
+                                <option value="audio_tts">语音节点 (TTS)</option>
+                            </select>
+                        </div>
+                        <div style="display: flex; align-items: center; gap: 8px;">
+                            <label style="font-size: 13px; font-weight: 500; white-space: nowrap; flex-shrink: 0;">客户端:</label>
+                            <select id="analytics-client" class="input" style="padding: 4px 8px; font-size: 13px;" onchange="loadAnalyticsData()">
+                                <option value="all" selected>全部客户端</option>
+                            </select>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Analytics Cards -->
+                <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 16px; margin-bottom: 20px;">
+                    <div class="card" style="padding: 16px;">
+                        <div style="font-size: 12px; color: var(--text-secondary);">总 Token 消耗</div>
+                        <div id="stat-total-tokens" style="font-size: 24px; font-weight: 700; margin-top: 4px;">0</div>
+                    </div>
+                    <div class="card" style="padding: 16px;">
+                        <div style="font-size: 12px; color: var(--text-secondary);">输入 Token (Prompt)</div>
+                        <div id="stat-prompt-tokens" style="font-size: 24px; font-weight: 700; margin-top: 4px; color: #3b82f6;">0</div>
+                    </div>
+                    <div class="card" style="padding: 16px;">
+                        <div style="font-size: 12px; color: var(--text-secondary);">输出 Token (Completion)</div>
+                        <div id="stat-completion-tokens" style="font-size: 24px; font-weight: 700; margin-top: 4px; color: #10b981;">0</div>
+                    </div>
+                    <div class="card" style="padding: 16px;">
+                        <div style="font-size: 12px; color: var(--text-secondary);">总请求次数</div>
+                        <div id="stat-total-requests" style="font-size: 24px; font-weight: 700; margin-top: 4px;">0</div>
+                    </div>
+                </div>
+
+                <!-- Timeline Chart -->
+                <div class="card" style="margin-bottom: 20px;">
+                    <h3 style="font-size: 14px; margin-bottom: 12px;">Token 消耗趋势</h3>
+                    <div id="analytics-chart-container" style="width: 100%; min-height: 220px; display: flex; align-items: center; justify-content: center;">
+                        <div style="color: var(--text-secondary); font-size: 13px;">暂无 Token 数据</div>
+                    </div>
+                </div>
+
+                <!-- Breakdown Tables -->
+                <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(360px, 1fr)); gap: 16px;">
+                    <div class="card">
+                        <h3 style="font-size: 14px; margin-bottom: 12px;">节点类型消耗分布</h3>
+                        <div id="analytics-breakdown-container">
+                            <div style="color: var(--text-secondary); font-size: 13px;">暂无数据</div>
+                        </div>
+                    </div>
+                    <div class="card">
+                        <h3 style="font-size: 14px; margin-bottom: 12px;">客户端消耗分布</h3>
+                        <div id="analytics-client-breakdown-container">
+                            <div style="color: var(--text-secondary); font-size: 13px;">暂无数据</div>
+                        </div>
+                    </div>
+                    <div class="card">
+                        <h3 style="font-size: 14px; margin-bottom: 12px;">节点消耗分布</h3>
+                        <div id="analytics-endpoint-breakdown-container">
+                            <div style="color: var(--text-secondary); font-size: 13px;">暂无数据</div>
+                        </div>
+                    </div>
+                    <div class="card">
+                        <h3 style="font-size: 14px; margin-bottom: 12px;">模型消耗分布</h3>
+                        <div id="analytics-model-breakdown-container">
+                            <div style="color: var(--text-secondary); font-size: 13px;">暂无数据</div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Detail Breakdown: client + endpoint + model combination -->
+                <div class="card" style="margin-top: 16px;">
+                    <h3 style="font-size: 14px; margin-bottom: 12px;">明细消耗分布（客户端 × 节点 × 模型）</h3>
+                    <div id="analytics-detail-breakdown-container">
+                        <div style="color: var(--text-secondary); font-size: 13px;">暂无数据</div>
+                    </div>
+                </div>
+            </section>
+
+            <!-- Section: Network Proxy (网络代理) -->
+            <section id="section-proxy" class="tab-section" style="display: none;">
+                <div class="section-header">
+                    <div>
+                        <h2>网络代理 (System Proxy)</h2>
+                        <div class="subtitle">配置全局科学上网代理（访问 Grok, OpenAI, Anthropic, Gemini 等国外模型）</div>
+                    </div>
+                </div>
+
+                <div class="card" style="margin-bottom: 20px;">
+                    <h3 style="font-size: 15px; margin-bottom: 16px;">全局代理设置</h3>
+                    <form id="proxy-config-form" onsubmit="saveProxyConfig(event)">
+                        <div style="display: flex; align-items: center; gap: 12px; margin-bottom: 16px;">
+                            <label class="switch">
+                                <input type="checkbox" id="proxy-enabled" checked>
+                                <span class="slider round"></span>
+                            </label>
+                            <span style="font-size: 14px; font-weight: 500;">启用全局出站代理</span>
+                        </div>
+
+                        <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 16px; margin-bottom: 16px;">
+                            <div>
+                                <label style="display: block; font-size: 12px; color: var(--text-secondary); margin-bottom: 4px;">代理协议</label>
+                                <select id="proxy-protocol" class="input" style="width: 100%;">
+                                    <option value="http" selected>HTTP</option>
+                                    <option value="https">HTTPS</option>
+                                    <option value="socks5">SOCKS5</option>
+                                </select>
+                            </div>
+                            <div>
+                                <label style="display: block; font-size: 12px; color: var(--text-secondary); margin-bottom: 4px;">代理主机 / IP</label>
+                                <input type="text" id="proxy-host" class="input" value="127.0.0.1" placeholder="例如: 127.0.0.1 或 proxy.example.com" style="width: 100%;">
+                            </div>
+                            <div>
+                                <label style="display: block; font-size: 12px; color: var(--text-secondary); margin-bottom: 4px;">代理端口</label>
+                                <input type="number" id="proxy-port" class="input" value="7897" placeholder="例如: 7897" style="width: 100%;">
+                            </div>
+                        </div>
+
+                        <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 16px; margin-bottom: 20px;">
+                            <div>
+                                <label style="display: block; font-size: 12px; color: var(--text-secondary); margin-bottom: 4px;">用户名 (可选)</label>
+                                <input type="text" id="proxy-username" class="input" placeholder="无鉴权留空" style="width: 100%;">
+                            </div>
+                            <div>
+                                <label style="display: block; font-size: 12px; color: var(--text-secondary); margin-bottom: 4px;">密码 (可选)</label>
+                                <input type="password" id="proxy-password" class="input" placeholder="无鉴权留空" style="width: 100%;">
+                            </div>
+                        </div>
+
+                        <div style="display: flex; gap: 12px;">
+                            <button type="submit" class="btn btn-primary">保存代理配置</button>
+                            <button type="button" class="btn btn-secondary" onclick="testProxyConnection()">测试连通性</button>
+                        </div>
+                    </form>
+                </div>
+
+                <div id="proxy-test-result" class="card" style="margin-bottom: 20px; display: none;">
+                    <h3 style="font-size: 14px; margin-bottom: 8px;">连通性测试结果</h3>
+                    <div id="proxy-test-content"></div>
+                </div>
+
+                <div class="card">
+                    <h3 style="font-size: 15px; margin-bottom: 12px;">节点代理生效状态</h3>
+                    <div style="font-size: 12px; color: var(--text-secondary); margin-bottom: 12px;">默认情况下，国外模型节点继承全局代理配置。可在单个节点高级设置中覆盖为直连或自定义代理。</div>
+                    <div id="proxy-endpoints-list">
+                        <div style="color: var(--text-secondary); font-size: 13px;">加载中...</div>
+                    </div>
+                </div>
+            </section>
+
+            <section id="section-sync" class="tab-section" style="display: none;">
+                <div class="section-header">
+                    <div>
+                        <h2>跨软件会话同步 (Session Sync)</h2>
+                        <p>在不同 AI 桌面软件（Antigravity、Claude Desktop、Codex）之间无缝共享与恢复历史对话。</p>
+                    </div>
+                    <button class="btn btn-primary" onclick="saveSyncConfig()">
+                        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z"></path><polyline points="17 21 17 13 7 13 7 21"></polyline><polyline points="7 3 7 8 15 8"></polyline></svg>
+                        保存同步设置
+                    </button>
+                </div>
+
+                <div class="usage-guide">
+                    <h3>💡 中央 Skill 架构与软链接管理</h3>
+                    <p>基准 Skill 文件保持单一数据源：<code class="path-pill">~/.agents/skills/session-sync/SKILL.md</code>。</p>
+                    <p>勾选下方软件后，系统会自动创建系统软链接（Symlink）挂载给对应软件，无需重复安装。</p>
+                </div>
+
+                <div style="margin-top: 24px; display: flex; flex-direction: column; gap: 20px;">
+                    <!-- Daemon Engine Control Card -->
+                    <div class="sync-tool-card">
+                        <div>
+                            <div style="display: flex; align-items: center; gap: 10px; margin-bottom: 4px;">
+                                <h3 style="font-size: 15px; font-weight: 600; color: var(--text-primary);">后台跨软件会话监听 (Watcher Daemon)</h3>
+                                <span class="path-pill" id="daemon-status-badge" style="background: var(--input-bg);">⚪ 已关闭</span>
+                            </div>
+                            <p style="font-size: 13px; color: var(--text-secondary);">基于操作系统原生的 FSEvents / Win32 API 零 CPU 占用静默监听落盘增量。</p>
+                        </div>
+                        <label style="display: flex; align-items: center; cursor: pointer; gap: 8px;">
+                            <input type="checkbox" id="sync-enable-toggle" style="width: 18px; height: 18px; cursor: pointer;">
+                            <span style="font-size: 13px; font-weight: 600;">开启服务</span>
+                        </label>
+                    </div>
+
+                    <!-- Date Range Filter Card -->
+                    <div class="model-slots-panel">
+                        <div class="model-slots-header">
+                            <h3>📅 历史会话同步时间范围</h3>
+                            <p>过滤仅在此时间段范围内更新的历史会话（留空表示全量同步）。</p>
+                        </div>
+                        <div style="padding: 16px; display: flex; flex-direction: column; gap: 14px;">
+                            <div style="display: flex; gap: 16px; flex-wrap: wrap; align-items: center;">
+                                <div style="display: flex; flex-direction: column; gap: 4px;">
+                                    <label style="font-size: 12px; font-weight: 600; color: var(--text-secondary);">起始日期 (Start Date)</label>
+                                    <input type="date" id="sync-start-date" class="form-control" style="width: 180px; padding: 6px 12px; font-family: var(--font-sans); background: var(--input-bg); border: 1px solid var(--border-color); color: var(--text-primary); border-radius: var(--radius-md);">
+                                </div>
+                                <div style="display: flex; align-items: center; padding-top: 18px; color: var(--text-secondary); font-weight: 600;">至</div>
+                                <div style="display: flex; flex-direction: column; gap: 4px;">
+                                    <label style="font-size: 12px; font-weight: 600; color: var(--text-secondary);">结束日期 (End Date)</label>
+                                    <input type="date" id="sync-end-date" class="form-control" style="width: 180px; padding: 6px 12px; font-family: var(--font-sans); background: var(--input-bg); border: 1px solid var(--border-color); color: var(--text-primary); border-radius: var(--radius-md);">
+                                </div>
+                            </div>
+
+                            <div style="display: flex; gap: 8px; flex-wrap: wrap; border-top: 1px dashed var(--border-color); padding-top: 12px;">
+                                <span style="font-size: 12px; color: var(--text-secondary); line-height: 24px; margin-right: 4px;">快捷预设：</span>
+                                <button type="button" class="btn" onclick="setDatePreset('today')" style="padding: 4px 12px; font-size: 12px;">今天</button>
+                                <button type="button" class="btn" onclick="setDatePreset('7days')" style="padding: 4px 12px; font-size: 12px;">近 7 天</button>
+                                <button type="button" class="btn" onclick="setDatePreset('30days')" style="padding: 4px 12px; font-size: 12px;">近 30 天</button>
+                                <button type="button" class="btn" onclick="setDatePreset('all')" style="padding: 4px 12px; font-size: 12px; background: var(--input-bg);">全量 (不限)</button>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Summary Mode Card -->
+                    <div class="model-slots-panel">
+                        <div class="model-slots-header">
+                            <h3>🧠 会话摘要生成模式</h3>
+                            <p>选择提炼会话摘要的方式：规则提取（0 额度开销）或使用便宜模型自动生成智能总结。</p>
+                        </div>
+                        <div style="padding: 16px; display: flex; flex-direction: column; gap: 14px;">
+                            <div style="display: flex; gap: 12px; flex-wrap: wrap;">
+                                <div class="mode-card active" id="card-mode-rule" onclick="setSummaryMode('rule')">
+                                    <div class="mode-card-title">
+                                        <span>⚡ 规则提取 (默认)</span>
+                                    </div>
+                                    <div class="mode-card-desc">0 额度开销 · 0 毫秒延迟。从日志中提取关键提问语句。</div>
+                                </div>
+                                <div class="mode-card" id="card-mode-llm" onclick="setSummaryMode('llm')">
+                                    <div class="mode-card-title">
+                                        <span>✨ 大模型智能提炼</span>
+                                    </div>
+                                    <div class="mode-card-desc">后台自动使用小模型提炼最新进展与接续任务。</div>
+                                </div>
+                            </div>
+                            <input type="hidden" id="sync-summary-mode-val" value="rule">
+
+                            <div id="summary-model-container" style="display: none; border-top: 1px dashed var(--border-color); padding-top: 14px;">
+                                <div style="display: flex; flex-direction: column; gap: 6px; max-width: 360px;">
+                                    <label style="font-size: 12px; font-weight: 600; color: var(--text-secondary);">选择用于提炼摘要的目标模型：</label>
+                                    <select id="sync-summary-model" class="form-control" style="padding: 6px 12px; font-family: var(--font-sans); background: var(--input-bg); border: 1px solid var(--border-color); color: var(--text-primary); border-radius: var(--radius-md); font-size: 13px;">
+                                    </select>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                </div>
+            </section>
+
+            <!-- Agent Skills Section -->
+            <section id="section-skills" class="tab-section" style="display: none;">
+                <div class="section-header">
+                    <div>
+                        <h2>预置技能库 (Agent Skills)</h2>
+                        <p>按分类浏览与搜索本地技能；目录中存在即已安装，常用技能置顶，不把上百个 skill 一次性摊开。</p>
+                    </div>
+                    <button class="btn" title="重新扫描 ~/.agents/skills 并刷新列表" onclick="refreshSkillsLibrary(true)">
+                        刷新技能库
+                    </button>
+                </div>
+
+                <div class="usage-guide">
+                    <h3>💡 使用原则</h3>
+                    <p>统一中央目录：<code class="path-pill">~/.agents/skills/</code>。网关托管技能可由网关写入中央目录；本地技能则直接放进同一目录即可被发现。右上角“刷新技能库”会重新扫描各技能目录并刷新列表。</p>
+                </div>
+
+                <div class="skills-toolbar">
+                    <input id="skills-search-input" class="skills-search" type="search" placeholder="搜索技能名、用途、标签..." oninput="onSkillsSearchInput(this.value)" />
+                    <button class="skills-filter-chip" data-scope="all" onclick="setSkillsScope('all')">全部 0</button>
+                    <button class="skills-filter-chip" data-scope="installed" onclick="setSkillsScope('installed')">已安装 0</button>
+                    <button class="skills-filter-chip" data-scope="managed" onclick="setSkillsScope('managed')">网关托管 0</button>
+                    <button class="skills-filter-chip" data-scope="local" onclick="setSkillsScope('local')">本地发现 0</button>
+                    <button class="skills-filter-chip" data-scope="missing" onclick="setSkillsScope('missing')">未安装托管 0</button>
+                                    <button class="skills-filter-chip" data-scope="unified-missing" onclick="setSkillsScope('unified-missing')">未统一到中央 0</button>
+                    <button class="btn btn-primary" id="unify-all-btn" style="padding:4px 12px;font-size:12px;" title="把未统一到中央的 skill 复制到 ~/.agents/skills 并软链其他目录" onclick="unifyAllSkills()">一键统一</button>
+                </div>
+
+                <div id="skills-category-filters" class="skills-filters"></div>
+
+                <div class="skills-layout">
+                    <div id="skills-list" class="skills-list"></div>
+                    <aside id="skills-detail" class="skill-detail">
+                        <div class="skill-detail-empty">从左侧选择一个技能，查看安装状态与说明。</div>
+                    </aside>
+                </div>
+            </section>
+
+            <section id="section-install-history" class="tab-section" style="display: none;">
+                <div class="section-header">
+                    <div>
+                        <h2>安装记录</h2>
+                        <p>通过网关命令行安装的 skill 记录。每条可一键重新执行当时的安装命令。记录文件：<code class="path-pill" id="install-history-filepath"></code></p>
+                    </div>
+                    <button class="btn" onclick="refreshInstallHistory()">刷新</button>
+                </div>
+
+                <div class="usage-guide">
+                    <p><strong>使用方式</strong>：填写安装命令（如 <code>npx some-installer</code>），skill 名可留空——安装完成后会自动扫描本地目录、用新出现的 skill 名补全。命令在网关侧用伪终端交互式执行，支持 npx 的提问式安装。</p>
+                </div>
+
+                <div class="install-form">
+                    <input id="install-cmd" class="install-cmd" placeholder="安装命令，如 npx @scope/installer" />
+                    <input id="install-skill-name" placeholder="skill 名（可选，留空自动推断）" />
+                    <button class="btn btn-primary" onclick="startInstallFromForm()">安装</button>
+                </div>
+
+                <div class="install-terminal-wrap" id="install-terminal-wrap">
+                    <div class="install-terminal-header">
+                        <span id="install-terminal-title">安装终端</span>
+                        <span id="install-terminal-hint" style="color:#f59e0b;font-size:11px;margin-left:8px;flex:1;"></span>
+                        <button class="btn" title="关闭安装终端并终止运行中的进程" onclick="closeInstallTerminal()">关闭</button>
+                    </div>
+                    <div id="xterm-container"></div>
+                </div>
+
+                <div style="font-size:12px;font-weight:600;color:var(--text-secondary);margin-bottom:8px;">安装记录</div>
+                <div id="install-history-list"><div class="skill-detail-empty">暂无安装记录</div></div>
+            </section>
+
+            <!-- Tools Section -->
+            <section id="section-tools" class="tab-section" style="display: none;">
+                <div class="section-header">
+                    <div>
+                        <h2>迷你工具 (Mini Tools)</h2>
+                        <p>实验性迷你工具集合，提供文本向量化、分类评估教学、Antigravity 订阅接入等便捷能力。</p>
+                    </div>
+                </div>
+                <div id="tools-cards" class="tools-groups"></div>
+                <div id="tools-detail"></div>
+            </section>
+
+            <!-- Preset CLI Section -->
+            <section id="section-cli" class="tab-section" style="display: none;">
+                <div class="section-header">
+                    <div>
+                        <h2>本机 CLI (Local CLI)</h2>
+                        <p>扫描 PATH 中已安装的 CLI 工具，查看版本与路径。如需安装新 CLI，请到「安装记录」标签页手动执行。</p>
+                    </div>
+                    <button class="btn" title="重新扫描系统 CLI" onclick="refreshCliLibrary(true)">
+                        刷新 CLI 列表
+                    </button>
+                </div>
+
+                <div class="usage-guide">
+                    <h3>💡 使用说明</h3>
+                    <p>网关扫描 PATH（及 Windows 常见安装目录）中的可执行文件。默认只显示「推荐」CLI（系统规则自动挑出的常用工具）。Git/MinGW 等工具链内部二进制会被硬过滤。若某个工具不在推荐里，请切到「全部」点「设为常用」固定进来；推荐列表里只对你手动固定的项显示「取消常用」。</p>
+                </div>
+
+                <div class="skills-toolbar">
+                    <input id="cli-search-input" class="skills-search" type="search" placeholder="搜索 CLI 名称..." oninput="onCliSearchInput(this.value)" />
+                    <div class="cli-view-toggle" id="cli-view-toggle" role="group" aria-label="CLI 视图切换">
+                        <button type="button" class="btn cli-view-btn is-active" data-view="recommended" onclick="setCliView('recommended')">推荐</button>
+                        <button type="button" class="btn cli-view-btn" data-view="all" onclick="setCliView('all')">全部</button>
+                    </div>
+                    <span class="skills-filter-chip" id="cli-stats-chip">推荐 0 / 全部 0</span>
+                </div>
+
+                <div id="cli-list" class="skills-list"></div>
+            </section>
+
+            <section id="section-cli-install-history" class="tab-section" style="display: none;">
+                <div class="section-header">
+                    <div>
+                        <h2>安装记录</h2>
+                        <p>通过网关命令行安装的 CLI 记录。每条可一键重新执行当时的安装命令。记录文件：<code class="path-pill" id="cli-install-history-filepath"></code></p>
+                    </div>
+                    <button class="btn" onclick="refreshCliInstallHistory()">刷新</button>
+                </div>
+
+                <div class="usage-guide">
+                    <p><strong>使用方式</strong>：填写安装命令（如 <code>npm install -g @anthropic-ai/claude-code</code>），CLI 名可留空——安装完成后会自动用 PATH 新增的可执行文件名补全。命令在网关侧用伪终端交互式执行。</p>
+                </div>
+
+                <div class="install-form">
+                    <input id="cli-install-cmd" class="install-cmd" placeholder="安装命令，如 npm install -g @anthropic-ai/claude-code" />
+                    <input id="cli-install-name" placeholder="CLI 名（可选，留空自动推断）" />
+                    <button class="btn btn-primary" onclick="startCliInstallFromForm()">安装</button>
+                </div>
+
+                <div class="install-terminal-wrap" id="cli-install-terminal-wrap">
+                    <div class="install-terminal-header">
+                        <span id="cli-install-terminal-title">安装终端</span>
+                        <span id="cli-install-terminal-hint" style="color:#f59e0b;font-size:11px;margin-left:8px;flex:1;"></span>
+                        <button class="btn" title="关闭安装终端并终止运行中的进程" onclick="closeCliInstallTerminal()">关闭</button>
+                    </div>
+                    <div id="cli-xterm-container"></div>
+                </div>
+
+                <div style="font-size:12px;font-weight:600;color:var(--text-secondary);margin-bottom:8px;">安装记录</div>
+                <div id="cli-install-history-list"><div class="skill-detail-empty">暂无安装记录</div></div>
+            </section>
+
+            <!-- CLI Scan Sources Section -->
+            <section id="section-cli-sources" class="tab-section" style="display: none;">
+                <div class="section-header">
+                    <div>
+                        <h2>扫描来源</h2>
+                        <p>管理 CLI 扫描的安装来源及其目录。默认包含 uv、npm、curl、homebrew、winget、irm、PATH，可新增自定义来源（如 chocolatey）。</p>
+                    </div>
+                    <div style="display:flex;gap:8px;">
+                        <button class="btn" title="恢复为系统默认来源" onclick="resetCliSources()">恢复默认</button>
+                        <button class="btn" onclick="refreshCliSources()">刷新</button>
+                        <button class="btn btn-primary" onclick="saveCliSources()">保存</button>
+                    </div>
+                </div>
+
+                <div class="usage-guide">
+                    <h3>💡 使用说明</h3>
+                    <p>每个来源包含名称、标签、是否启用、以及一个或多个扫描目录。目录支持 <code>~</code>、环境变量（<code>HOME</code> / <code>%APPDATA%</code>）和通配符 <code>*</code>（如 <code>~/.nvm/versions/node/*/bin</code>）。特殊值 <code>PATH</code> 表示扫描系统 PATH 目录。</p>
+                    <p>来源按列表顺序优先扫描，先扫到的二进制优先归属该来源。例如 uv 来源排在 npm 之前，一个同时被两者安装的 CLI 会标记为 uv。</p>
+                </div>
+
+                <div class="install-form" style="margin-bottom:16px;">
+                    <input id="cli-source-new-name" placeholder="来源名称（如 chocolatey）" style="flex:0 0 180px;" />
+                    <input id="cli-source-new-label" placeholder="标签（如 Chocolatey 安装）" style="flex:0 0 200px;" />
+                    <input id="cli-source-new-dirs" placeholder="目录，多个用分号分隔" style="flex:1;" />
+                    <button class="btn btn-primary" onclick="addCliSourceRow()">新增来源</button>
+                </div>
+
+                <div id="cli-sources-list" class="skills-list"></div>
+            </section>
+
+        </main>
+    </div>
+
+
+    <div class="skill-modal-overlay" id="skill-confirm-modal" onclick="if(event.target===this) closeSkillConfirmModal(false)">
+        <div class="skill-modal" role="dialog" aria-modal="true">
+            <h3 class="skill-modal-title" id="skill-confirm-title">确认操作</h3>
+            <div class="skill-modal-body" id="skill-confirm-body"></div>
+            <div class="skill-modal-actions">
+                <button class="btn" onclick="closeSkillConfirmModal(false)">取消</button>
+                <button class="btn btn-primary" id="skill-confirm-ok" onclick="closeSkillConfirmModal(true)">确定</button>
+            </div>
+        </div>
+    </div>
+
+    <div class="skill-modal-overlay" id="skill-promote-modal" onclick="if(event.target===this) closeSkillPromoteModal()">
+        <div class="skill-modal" role="dialog" aria-modal="true" style="width: min(480px, calc(100vw - 32px));">
+            <h3 class="skill-modal-title">转为网关托管</h3>
+            <div class="skill-modal-body" style="white-space: normal;">
+                <div class="client-create-field">
+                    <label for="skill-promote-name">托管名称</label>
+                    <div style="display:flex;gap:6px;">
+                        <input type="text" id="skill-promote-name" autocomplete="off" style="flex:1;" oninput="updateLeoBtnState()" />
+                        <button class="btn" id="skill-promote-leo-btn" type="button" title="切换 leo- 前缀"
+                            style="padding:0 12px;font-size:12px;font-family:var(--font-mono);flex:0 0 auto;"
+                            onclick="toggleLeoPrefix()">+ leo-</button>
+                    </div>
+                    <div class="client-create-hint" id="skill-promote-name-hint">托管后写入 <code>lib/skills/&lt;名称&gt;/</code> 并加入 catalog，后续可由网关安装分发。仅限字母、数字、连字符、点、下划线。</div>
+                </div>
+                <div class="client-create-field">
+                    <label for="skill-promote-title">显示标题（可选）</label>
+                    <input type="text" id="skill-promote-title" autocomplete="off" placeholder="留空则自动从目录名生成" />
+                </div>
+                <div class="client-create-field">
+                    <label for="skill-promote-summary">简介（可选）</label>
+                    <input type="text" id="skill-promote-summary" autocomplete="off" placeholder="留空则从 SKILL.md description 生成" />
+                </div>
+                <div class="client-create-field">
+                    <label for="skill-promote-category">分类</label>
+                    <select id="skill-promote-category">
+                        <option value="">自动推断</option>
+                        <option value="system">系统</option>
+                        <option value="media">媒体创作</option>
+                        <option value="download">下载采集</option>
+                        <option value="browser">浏览器与登录态</option>
+                        <option value="writing">写作与内容</option>
+                        <option value="research">研究与知识</option>
+                        <option value="workflow">工作流</option>
+                        <option value="development">开发工程</option>
+                        <option value="other">其他</option>
+                    </select>
+                </div>
+            </div>
+            <div class="skill-modal-actions">
+                <button class="btn" onclick="closeSkillPromoteModal()">取消</button>
+                <button class="btn btn-primary" id="skill-promote-ok" onclick="submitSkillPromote()">转为托管</button>
+            </div>
+        </div>
+    </div>
+
+    <div class="skill-modal-overlay" id="client-create-modal" onclick="if(event.target===this) closeClientCreateModal()">
+        <div class="skill-modal" role="dialog" aria-modal="true" style="width: min(480px, calc(100vw - 32px));">
+            <h3 class="skill-modal-title">新建代理节点</h3>
+            <div class="skill-modal-body" style="white-space: normal;">
+                <div class="client-create-field">
+                    <label for="client-create-name">节点标识</label>
+                    <input type="text" id="client-create-name" placeholder="例如 my-agent" autocomplete="off" />
+                    <div class="client-create-hint">用作配置 key 和 URL 路径。仅限字母、数字、连字符，创建后不可修改。</div>
+                </div>
+                <div class="client-create-field">
+                    <label>创建方式</label>
+                    <div class="client-create-mode">
+                        <label class="client-create-mode-option is-selected" id="client-create-mode-empty">
+                            <input type="radio" name="client-create-mode" value="empty" checked />
+                            <span class="client-create-mode-title">空白创建</span>
+                            <span class="client-create-mode-desc">创建一个不含任何节点的代理组，之后自行添加。</span>
+                        </label>
+                        <label class="client-create-mode-option" id="client-create-mode-copy">
+                            <input type="radio" name="client-create-mode" value="copy" />
+                            <span class="client-create-mode-title">从已有节点复制</span>
+                            <span class="client-create-mode-desc">复制选定代理组的全部节点配置和密钥。</span>
+                        </label>
+                    </div>
+                </div>
+                <div class="client-create-copy-config" id="client-create-copy-config">
+                    <div class="client-create-field">
+                        <label for="client-create-source">复制来源</label>
+                        <select id="client-create-source"></select>
+                        <div class="client-create-hint">会复制该代理组下所有节点（含密钥），并生成新的节点 ID。</div>
+                    </div>
+                </div>
+                <div class="client-create-field">
+                    <label for="client-create-protocol">接入协议</label>
+                    <select id="client-create-protocol">
+                        <option value="anthropic">Anthropic Messages 协议</option>
+                        <option value="openai">OpenAI 兼容协议（Chat / Responses）</option>
+                    </select>
+                    <div class="client-create-hint">决定该节点对外暴露的路由与请求格式。从 Codex/DeepTutor 复制时通常选 OpenAI 兼容，其余选 Anthropic。</div>
+                </div>
+            </div>
+            <div class="skill-modal-actions">
+                <button class="btn" onclick="closeClientCreateModal()">取消</button>
+                <button class="btn btn-primary" id="client-create-ok" onclick="submitCreateClient()">创建</button>
+            </div>
+        </div>
+    </div>
+    <div class="toast-container" id="toast-container"></div>
+
+
+    <script src="/desktop/dist/panel.bundle.js"></script>
+</body>
+</html>
