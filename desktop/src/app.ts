@@ -1169,7 +1169,74 @@ window.loadAnalyticsData = async function() {
         renderAnalyticsDetailBreakdown([]);
         showToast(`加载用量统计失败：${error.message || error}`, 'error');
     }
+};;
+
+// --- Analytics tab switching ---
+window.switchAnalyticsTab = function(tabId, btn) {
+    document.querySelectorAll('.analytics-tab-btn').forEach(b => b.classList.remove('active'));
+    if (btn) btn.classList.add('active');
+    document.querySelectorAll('.analytics-tab-panel').forEach(p => {
+        p.style.display = 'none';
+        p.classList.remove('active');
+    });
+    const panel = document.getElementById('analytics-' + tabId + '-breakdown-container');
+    if (panel) {
+        panel.style.display = 'block';
+        panel.classList.add('active');
+    }
 };
+
+// --- Pricing table ---
+window.togglePricingTable = function() {
+    const container = document.getElementById('pricing-table-container');
+    const icon = document.getElementById('pricing-toggle-icon');
+    if (!container) return;
+    if (container.style.display === 'none') {
+        container.style.display = 'block';
+        if (icon) icon.textContent = '收起 ▲';
+        loadPricingTable();
+    } else {
+        container.style.display = 'none';
+        if (icon) icon.textContent = '展开 ▼';
+    }
+};
+
+async function loadPricingTable() {
+    try {
+        const res = await fetch('/v1/analytics/pricing');
+        if (!res.ok) throw new Error('Failed to load pricing');
+        const data = await res.json();
+        const models = data.models || [];
+        if (models.length === 0) {
+            document.getElementById('pricing-table-container').innerHTML = '<div style="color:var(--text-secondary);font-size:13px;padding:8px">暂无价格数据</div>';
+            return;
+        }
+        const rows = models.map(m => {
+            const cur = m.currency === 'cny' ? 'Y' : (m.currency === 'usd' ? '$' : '');
+            const sourceLabel = { custom: '自定义', vendored: '内置CN', openrouter: 'OpenRouter', default: '默认' }[m.source] || m.source;
+            return '<tr>' +
+                '<td>' + escapeHtml(m.model) + '</td>' +
+                '<td>' + escapeHtml(m.vendor || '-') + '</td>' +
+                '<td>' + cur + m.prompt.toFixed(2) + '</td>' +
+                '<td>' + cur + m.completion.toFixed(2) + '</td>' +
+                (m.cache_creation > 0 ? '<td>' + cur + m.cache_creation.toFixed(2) + '</td>' : '<td style="color:var(--text-secondary)">-</td>') +
+                (m.cache_read > 0 ? '<td>' + cur + m.cache_read.toFixed(2) + '</td>' : '<td style="color:var(--text-secondary)">-</td>') +
+                '<td>' + escapeHtml(m.currency || '?') + '</td>' +
+                '<td style="color:var(--text-secondary)">' + sourceLabel + '</td>' +
+                '</tr>';
+        }).join('');
+        document.getElementById('pricing-table-container').innerHTML =
+            '<div style="overflow:auto"><table>' +
+            '<thead><tr><th>模型</th><th>厂商</th><th>输入/1M</th><th>输出/1M</th><th>缓存写入/1M</th><th>缓存读取/1M</th><th>币种</th><th>来源</th></tr></thead>' +
+            '<tbody>' + rows + '</tbody>' +
+            '</table></div>' +
+            (data.stale ? '<div style="font-size:11px;color:var(--text-secondary);margin-top:8px">⚠ 价格缓存已过期（>7天），正在尝试刷新</div>' : '') +
+            (data.vendored_version ? '<div style="font-size:11px;color:var(--text-secondary);margin-top:4px">内置CN价格表版本: ' + data.vendored_version + '</div>' : '');
+    } catch (e) {
+        document.getElementById('pricing-table-container').innerHTML = '<div style="color:var(--text-secondary);font-size:13px;padding:8px">加载价格表失败: ' + escapeHtml(e.message) + '</div>';
+    }
+}
+
 
 async function loadDefaultTemplate() {
     if (!confirm('这会覆盖你当前的所有配置，确定要恢复默认模板吗？')) return;

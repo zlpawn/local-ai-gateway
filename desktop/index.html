@@ -383,42 +383,31 @@ experimental_bearer_token = "dummy"</pre>
                     </div>
                 </div>
 
-                <!-- Breakdown Tables -->
-                <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(360px, 1fr)); gap: 16px;">
-                    <div class="card">
-                        <h3 style="font-size: 14px; margin-bottom: 12px;">节点类型消耗分布</h3>
-                        <div id="analytics-breakdown-container">
-                            <div style="color: var(--text-secondary); font-size: 13px;">暂无数据</div>
-                        </div>
-                    </div>
-                    <div class="card">
-                        <h3 style="font-size: 14px; margin-bottom: 12px;">客户端消耗分布</h3>
-                        <div id="analytics-client-breakdown-container">
-                            <div style="color: var(--text-secondary); font-size: 13px;">暂无数据</div>
-                        </div>
-                    </div>
-                    <div class="card">
-                        <h3 style="font-size: 14px; margin-bottom: 12px;">节点消耗分布</h3>
-                        <div id="analytics-endpoint-breakdown-container">
-                            <div style="color: var(--text-secondary); font-size: 13px;">暂无数据</div>
-                        </div>
-                    </div>
-                    <div class="card">
-                        <h3 style="font-size: 14px; margin-bottom: 12px;">模型消耗分布</h3>
-                        <div id="analytics-model-breakdown-container">
-                            <div style="color: var(--text-secondary); font-size: 13px;">暂无数据</div>
-                        </div>
-                    </div>
-                </div>
+<!-- Breakdown Tables (Tab-switched) -->
+<div class="card" style="margin-bottom: 20px;">
+<div style="display:flex;gap:4px;margin-bottom:16px;border-bottom:1px solid var(--border-color);padding-bottom:0;flex-wrap:wrap">
+<button class="analytics-tab-btn active" onclick="switchAnalyticsTab('breakdown', this)">节点类型</button>
+<button class="analytics-tab-btn" onclick="switchAnalyticsTab('client', this)">客户端</button>
+<button class="analytics-tab-btn" onclick="switchAnalyticsTab('endpoint', this)">节点</button>
+<button class="analytics-tab-btn" onclick="switchAnalyticsTab('model', this)">模型</button>
+<button class="analytics-tab-btn" onclick="switchAnalyticsTab('detail', this)">明细</button>
+</div>
+<div id="analytics-breakdown-container" class="analytics-tab-panel active"></div>
+<div id="analytics-client-breakdown-container" class="analytics-tab-panel" style="display:none"></div>
+<div id="analytics-endpoint-breakdown-container" class="analytics-tab-panel" style="display:none"></div>
+<div id="analytics-model-breakdown-container" class="analytics-tab-panel" style="display:none"></div>
+<div id="analytics-detail-breakdown-container" class="analytics-tab-panel" style="display:none"></div>
+</div>
 
-                <!-- Detail Breakdown: client + endpoint + model combination -->
-                <div class="card" style="margin-top: 16px;">
-                    <h3 style="font-size: 14px; margin-bottom: 12px;">明细消耗分布（客户端 × 节点 × 模型）</h3>
-                    <div id="analytics-detail-breakdown-container">
-                        <div style="color: var(--text-secondary); font-size: 13px;">暂无数据</div>
-                    </div>
-                </div>
-            </section>
+<!-- Model Pricing Table -->
+<div class="card">
+<div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:12px;cursor:pointer" onclick="togglePricingTable()">
+<h3 style="font-size: 14px; margin: 0;">模型价格表</h3>
+<span id="pricing-toggle-icon" style="font-size:12px;color:var(--text-secondary)">展开 ▼</span>
+</div>
+<div id="pricing-table-container" style="display:none;max-height:400px;overflow:auto"></div>
+</div>
+</section>
 
             <!-- Section: Network Proxy (网络代理) -->
             <section id="section-proxy" class="tab-section" style="display: none;">

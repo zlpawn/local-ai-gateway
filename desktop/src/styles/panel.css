@@ -3083,3 +3083,72 @@ input:focus, select:focus {
     color: var(--accent, #2563eb);
     background: rgba(37, 99, 235, 0.08);
 }
+/* Analytics tab buttons */
+.analytics-tab-btn {
+  padding: 8px 14px;
+  font-size: 13px;
+  font-weight: 500;
+  border: none;
+  background: transparent;
+  color: var(--text-secondary);
+  cursor: pointer;
+  border-bottom: 2px solid transparent;
+  transition: all 0.15s;
+  white-space: nowrap;
+}
+.analytics-tab-btn:hover {
+  color: var(--text-primary);
+}
+.analytics-tab-btn.active {
+  color: var(--accent, #2563eb);
+  border-bottom-color: var(--accent, #2563eb);
+}
+
+/* Analytics breakdown tables */
+.analytics-tab-panel table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 13px;
+}
+.analytics-tab-panel th {
+  text-align: left;
+  padding: 8px 10px;
+  border-bottom: 1px solid var(--border-color);
+  font-weight: 600;
+  color: var(--text-secondary);
+  font-size: 12px;
+  white-space: nowrap;
+}
+.analytics-tab-panel td {
+  padding: 9px 10px;
+  border-top: 1px solid var(--border-color);
+}
+.analytics-tab-panel tr:hover td {
+  background: var(--surface-hover);
+}
+
+/* Pricing table */
+#pricing-table-container table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 12px;
+}
+#pricing-table-container th {
+  text-align: left;
+  padding: 6px 8px;
+  border-bottom: 1px solid var(--border-color);
+  font-weight: 600;
+  color: var(--text-secondary);
+  white-space: nowrap;
+  position: sticky;
+  top: 0;
+  background: var(--surface);
+}
+#pricing-table-container td {
+  padding: 6px 8px;
+  border-top: 1px solid var(--border-color);
+  white-space: nowrap;
+}
+#pricing-table-container tr:hover td {
+  background: var(--surface-hover);
+}

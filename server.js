@@ -1682,6 +1682,17 @@ sendJson(res, 200, result);
     return;
   }
 
+  if (reqPath === "/v1/analytics/pricing" && req.method === "GET") {
+    if (!checkLocalAuth(req, res)) return;
+    try {
+      const prices = globalPricingEngine.listPrices();
+      sendJson(res, 200, prices);
+    } catch (error) {
+      sendJson(res, 500, { error: { type: "pricing_failed", message: error.message } });
+    }
+    return;
+  }
+
   if (reqPath === "/v1/cli/discover" && req.method === "GET") {
     if (!checkLocalAuth(req, res)) return;
     try {
