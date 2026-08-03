@@ -1,88 +1,94 @@
-{
-  "name": "@wuhezhizhong/shrimp",
-  "version": "0.0.3",
-  "description": "Shrimp local multi-client AI gateway with agent-native CLI.",
-  "private": false,
-  "license": "MIT",
-  "author": "Shrimp contributors",
-  "type": "module",
-  "bin": {
-    "shrimp": "bin/shrimp.js"
-  },
-  "files": [
-    "bin",
-    "desktop/config-panel.html",
-    "lib",
-    "scripts",
-    "server.js",
-    "gateway.config.example.json",
-    ".env.example",
-    "README.md",
-    "LICENSE"
-  ],
-  "repository": {
-    "type": "git",
-    "url": "git+https://github.com/zlpawn/shrimp.git"
-  },
-  "homepage": "https://github.com/zlpawn/shrimp#readme",
-  "bugs": {
-    "url": "https://github.com/zlpawn/shrimp/issues"
-  },
-  "keywords": [
-    "ai",
-    "gateway",
-    "claude",
-    "codex",
-    "anthropic",
-    "openai",
-    "shrimp",
-    "cli"
-  ],
-  "publishConfig": {
-    "access": "public"
-  },
-  "scripts": {
-    "init": "node scripts/init-config.mjs",
-    "start": "node server.js",
-    "check": "node --check server.js && node --check scripts/gateway.mjs && node --check scripts/init-config.mjs && node --check bin/shrimp.js",
-    "doctor": "node scripts/doctor.mjs",
-    "validate:config": "node scripts/validate-config.mjs",
-    "codex:catalog": "node scripts/codex-catalog.mjs",
-    "codex:catalog:verify": "node scripts/codex-catalog.mjs --verify",
-    "codex:history:dry-run": "node scripts/codex-history-unify.mjs --dry-run",
-    "codex:history:apply": "node scripts/codex-history-unify.mjs --apply",
-    "codex:history:restore": "node scripts/codex-history-unify.mjs --restore",
-    "test:adapters": "node --test tests/integration/basic-routes.test.mjs tests/integration/protocol-adapters.test.mjs",
-    "test:cli": "node --test tests/unit/gateway-service.test.mjs tests/unit/init-config.test.mjs tests/unit/package-release.test.mjs tests/unit/config-panel.test.mjs tests/unit/session-sync.test.mjs tests/integration/gateway-cli.integration.test.mjs && node --test tests/unit/clis/shrimp/*.test.mjs tests/integration/shrimp-cli.integration.test.mjs",
-    "test:sync": "node --test tests/unit/session-sync.test.mjs",
-    "sync:status": "node bin/shrimp.js sync status",
-    "sync:install-skill": "node bin/shrimp.js sync install-skill",
-    "test:codex:unit": "node --test tests/unit/gateway-config-store.test.mjs tests/unit/vision-fallback.test.mjs tests/unit/claude-code-settings.test.mjs tests/unit/codex-model-catalog.test.mjs tests/unit/codex-chat-request-adapter.test.mjs tests/unit/codex-responses-writer.test.mjs tests/unit/codex-chat-response-adapter.test.mjs tests/unit/codex-responses-passthrough.test.mjs tests/unit/codex-official-models.test.mjs tests/unit/codex-hosted-tools-inject.test.mjs tests/unit/web-search.test.mjs",
-    "test:codex:catalog-write": "node --test tests/integration/codex-catalog-write.test.mjs",
-    "test:codex:integration": "node --test tests/integration/codex-gateway.test.mjs",
-    "test:codex:e2e": "node tests/e2e/codex-e2e.mjs",
-    "gateway": "node scripts/gateway.mjs",
-    "gateway:start": "node scripts/gateway.mjs start",
-    "gateway:stop": "node scripts/gateway.mjs stop",
-    "gateway:status": "node scripts/gateway.mjs status",
-    "gateway:restart": "node scripts/gateway.mjs restart",
-    "release:check": "npm run check && npm run test:cli && npm run test:codex:unit && npm run test:adapters && npm run test:codex:catalog-write && npm run test:codex:integration && npm run test:codex:e2e",
-    "prepublishOnly": "npm run release:check",
-    "test:config-panel": "node --test tests/unit/config-panel.test.mjs",
-    "test:shrimp": "node --test tests/unit/clis/shrimp/*.test.mjs tests/integration/shrimp-cli.integration.test.mjs"
-  },
-  "engines": {
-    "node": ">=18"
-  },
-  "dependencies": {
-    "@xterm/addon-fit": "^0.11.0",
-    "@xterm/xterm": "^6.0.0",
-    "https-proxy-agent": "^7.0.6",
-    "node-pty": "^1.1.0",
-    "socks-proxy-agent": "^8.0.5",
-    "ws": "^8.21.1"
-  },
-  "allowScripts": {
-    "node-pty@1.1.0": true
-  }
+﻿{
+    "name":  "@wuhezhizhong/shrimp",
+    "version":  "0.0.3",
+    "description":  "Shrimp local multi-client AI gateway with agent-native CLI.",
+    "private":  false,
+    "license":  "MIT",
+    "author":  "Shrimp contributors",
+    "type":  "module",
+    "bin":  {
+                "shrimp":  "bin/shrimp.js"
+            },
+    "files":  [
+                  "bin",
+                  "desktop/config-panel.html",
+                  "lib",
+                  "scripts",
+                  "server.js",
+                  "gateway.config.example.json",
+                  ".env.example",
+                  "README.md",
+                  "LICENSE"
+              ],
+    "repository":  {
+                       "type":  "git",
+                       "url":  "git+https://github.com/zlpawn/shrimp.git"
+                   },
+    "homepage":  "https://github.com/zlpawn/shrimp#readme",
+    "bugs":  {
+                 "url":  "https://github.com/zlpawn/shrimp/issues"
+             },
+    "keywords":  [
+                     "ai",
+                     "gateway",
+                     "claude",
+                     "codex",
+                     "anthropic",
+                     "openai",
+                     "shrimp",
+                     "cli"
+                 ],
+    "publishConfig":  {
+                          "access":  "public"
+                      },
+    "scripts":  {
+                    "init":  "node scripts/init-config.mjs",
+                    "start":  "node server.js",
+                    "check":  "node --check server.js \u0026\u0026 node --check scripts/gateway.mjs \u0026\u0026 node --check scripts/init-config.mjs \u0026\u0026 node --check bin/shrimp.js",
+                    "doctor":  "node scripts/doctor.mjs",
+                    "validate:config":  "node scripts/validate-config.mjs",
+                    "codex:catalog":  "node scripts/codex-catalog.mjs",
+                    "codex:catalog:verify":  "node scripts/codex-catalog.mjs --verify",
+                    "codex:history:dry-run":  "node scripts/codex-history-unify.mjs --dry-run",
+                    "codex:history:apply":  "node scripts/codex-history-unify.mjs --apply",
+                    "codex:history:restore":  "node scripts/codex-history-unify.mjs --restore",
+                    "test:adapters":  "node --test tests/integration/basic-routes.test.mjs tests/integration/protocol-adapters.test.mjs",
+                    "test:cli":  "node --test tests/unit/gateway-service.test.mjs tests/unit/init-config.test.mjs tests/unit/package-release.test.mjs tests/unit/config-panel.test.mjs tests/unit/session-sync.test.mjs tests/integration/gateway-cli.integration.test.mjs \u0026\u0026 node --test tests/unit/clis/shrimp/*.test.mjs tests/integration/shrimp-cli.integration.test.mjs",
+                    "test:sync":  "node --test tests/unit/session-sync.test.mjs",
+                    "sync:status":  "node bin/shrimp.js sync status",
+                    "sync:install-skill":  "node bin/shrimp.js sync install-skill",
+                    "test:codex:unit":  "node --test tests/unit/gateway-config-store.test.mjs tests/unit/vision-fallback.test.mjs tests/unit/claude-code-settings.test.mjs tests/unit/codex-model-catalog.test.mjs tests/unit/codex-chat-request-adapter.test.mjs tests/unit/codex-responses-writer.test.mjs tests/unit/codex-chat-response-adapter.test.mjs tests/unit/codex-responses-passthrough.test.mjs tests/unit/codex-official-models.test.mjs tests/unit/codex-hosted-tools-inject.test.mjs tests/unit/web-search.test.mjs",
+                    "test:codex:catalog-write":  "node --test tests/integration/codex-catalog-write.test.mjs",
+                    "test:codex:integration":  "node --test tests/integration/codex-gateway.test.mjs",
+                    "test:codex:e2e":  "node tests/e2e/codex-e2e.mjs",
+                    "gateway":  "node scripts/gateway.mjs",
+                    "gateway:start":  "node scripts/gateway.mjs start",
+                    "gateway:stop":  "node scripts/gateway.mjs stop",
+                    "gateway:status":  "node scripts/gateway.mjs status",
+                    "gateway:restart":  "node scripts/gateway.mjs restart",
+                    "release:check":  "npm run check \u0026\u0026 npm run test:cli \u0026\u0026 npm run test:codex:unit \u0026\u0026 npm run test:adapters \u0026\u0026 npm run test:codex:catalog-write \u0026\u0026 npm run test:codex:integration \u0026\u0026 npm run test:codex:e2e",
+                    "prepublishOnly":  "npm run release:check",
+                    "test:config-panel":  "node --test tests/unit/config-panel.test.mjs",
+                    "test:shrimp":  "node --test tests/unit/clis/shrimp/*.test.mjs tests/integration/shrimp-cli.integration.test.mjs",
+                    "build:panel":  "node desktop/esbuild.config.mjs",
+                    "dev:panel":  "node desktop/esbuild.config.mjs --watch"
+                },
+    "engines":  {
+                    "node":  "\u003e=18"
+                },
+    "dependencies":  {
+                         "@xterm/addon-fit":  "^0.11.0",
+                         "@xterm/xterm":  "^6.0.0",
+                         "https-proxy-agent":  "^7.0.6",
+                         "node-pty":  "^1.1.0",
+                         "socks-proxy-agent":  "^8.0.5",
+                         "ws":  "^8.21.1"
+                     },
+    "allowScripts":  {
+                         "node-pty@1.1.0":  true,
+                         "esbuild@0.28.1":  true
+                     },
+    "devDependencies":  {
+                            "esbuild":  "^0.28.1"
+                        }
 }

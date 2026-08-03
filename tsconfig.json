@@ -1,0 +1,18 @@
+﻿{
+  "compilerOptions": {
+    "target": "ES2022",
+    "module": "ESNext",
+    "moduleResolution": "bundler",
+    "strict": false,
+    "noImplicitAny": false,
+    "allowJs": true,
+    "checkJs": false,
+    "outDir": "desktop/dist",
+    "rootDir": "desktop/src",
+    "sourceMap": true,
+    "lib": ["ES2022", "DOM", "DOM.Iterable"],
+    "skipLibCheck": true
+  },
+  "include": ["desktop/src/**/*"],
+  "exclude": ["node_modules", "desktop/dist"]
+}
