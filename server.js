@@ -1396,7 +1396,11 @@ function collectGroupedModelsFromConfig(config) {
         return;
       }
 
+      const managedName = payload.managedName
+        ? String(payload.managedName).trim()
+        : null;
       const result = SkillInstaller.promoteLocalSkillToManaged(skillName, {
+        managedName,
         title: payload.title,
         summary: payload.summary,
         category: payload.category,
