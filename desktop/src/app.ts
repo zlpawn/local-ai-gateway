@@ -1101,7 +1101,7 @@ function renderAnalyticsDetailBreakdown(rows) {
         + '<th style="text-align:right;padding:8px 10px">请求数</th>'
         + '<th style="text-align:right;padding:8px 10px">输入</th>'
         + '<th style="text-align:right;padding:8px 10px">输出</th>'
-        + '<th style="text-align:right;padding:8px 10px">Token</th>'; + '<th style="text-align:right;padding:8px 10px">花费</th>'
+        + '<th style="text-align:right;padding:8px 10px">Token</th>' + '<th style="text-align:right;padding:8px 10px">花费</th>'
     const body = rows.map(row => `<tr>
         <td style="padding:9px 10px;border-top:1px solid var(--border-color)">${escapeHtml(row.client || '-')}</td>
         <td style="padding:9px 10px;border-top:1px solid var(--border-color)">${escapeHtml(row.endpoint_name || '-')}</td>
@@ -1180,7 +1180,15 @@ window.switchAnalyticsTab = function(tabId, btn) {
         p.style.display = 'none';
         p.classList.remove('active');
     });
-    const panel = document.getElementById('analytics-' + tabId + '-breakdown-container');
+    const panelMap = {
+        'breakdown': 'analytics-breakdown-container',
+        'client': 'analytics-client-breakdown-container',
+        'endpoint': 'analytics-endpoint-breakdown-container',
+        'model': 'analytics-model-breakdown-container',
+        'detail': 'analytics-detail-breakdown-container',
+    };
+    const panelId = panelMap[tabId] || ('analytics-' + tabId + '-breakdown-container');
+    const panel = document.getElementById(panelId);
     if (panel) {
         panel.style.display = 'block';
         panel.classList.add('active');
