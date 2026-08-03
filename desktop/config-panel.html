@@ -3486,6 +3486,14 @@ experimental_bearer_token = "dummy"</pre>
                         </div>
                     </div>
                 </div>
+
+                <!-- Detail Breakdown: client + endpoint + model combination -->
+                <div class="card" style="margin-top: 16px;">
+                    <h3 style="font-size: 14px; margin-bottom: 12px;">明细消耗分布（客户端 × 节点 × 模型）</h3>
+                    <div id="analytics-detail-breakdown-container">
+                        <div style="color: var(--text-secondary); font-size: 13px;">暂无数据</div>
+                    </div>
+                </div>
             </section>
 
             <!-- Section: Network Proxy (网络代理) -->
@@ -4979,6 +4987,37 @@ experimental_bearer_token = "dummy"</pre>
             renderAnalyticsBreakdownTable('analytics-model-breakdown-container', rows, 'model', '模型', true);
         }
 
+        function renderAnalyticsDetailBreakdown(rows) {
+            const container = document.getElementById('analytics-detail-breakdown-container');
+            if (!container) return;
+            if (!Array.isArray(rows) || rows.length === 0) {
+                container.innerHTML = '<div style="color:var(--text-secondary);font-size:13px">暂无数据</div>';
+                return;
+            }
+            const heads = '<th style="text-align:left;padding:8px 10px">客户端</th>'
+                + '<th style="text-align:left;padding:8px 10px">节点</th>'
+                + '<th style="text-align:left;padding:8px 10px">类型</th>'
+                + '<th style="text-align:left;padding:8px 10px">模型</th>'
+                + '<th style="text-align:right;padding:8px 10px">请求数</th>'
+                + '<th style="text-align:right;padding:8px 10px">输入</th>'
+                + '<th style="text-align:right;padding:8px 10px">输出</th>'
+                + '<th style="text-align:right;padding:8px 10px">Token</th>';
+            const body = rows.map(row => `<tr>
+                <td style="padding:9px 10px;border-top:1px solid var(--border-color)">${escapeHtml(row.client || '-')}</td>
+                <td style="padding:9px 10px;border-top:1px solid var(--border-color)">${escapeHtml(row.endpoint_name || '-')}</td>
+                <td style="padding:9px 10px;border-top:1px solid var(--border-color)">${escapeHtml(ANALYTICS_PURPOSE_LABELS[row.purpose] || row.purpose || '-')}</td>
+                <td style="padding:9px 10px;border-top:1px solid var(--border-color)">${escapeHtml(row.model || '-')}</td>
+                <td style="padding:9px 10px;border-top:1px solid var(--border-color);text-align:right">${formatUsageNumber(row.requests)}</td>
+                <td style="padding:9px 10px;border-top:1px solid var(--border-color);text-align:right">${formatUsageNumber(row.prompt_tokens)}</td>
+                <td style="padding:9px 10px;border-top:1px solid var(--border-color);text-align:right">${formatUsageNumber(row.completion_tokens)}</td>
+                <td style="padding:9px 10px;border-top:1px solid var(--border-color);text-align:right">${formatUsageNumber(row.total_tokens)}</td>
+            </tr>`).join('');
+            container.innerHTML = `<div style="overflow:auto;max-height:420px"><table style="width:100%;border-collapse:collapse;font-size:13px">
+                <thead><tr>${heads}</tr></thead>
+                <tbody>${body}</tbody>
+            </table></div>`;
+        }
+
         function updateAnalyticsClientOptions(rows, selectedValue) {
             const sel = document.getElementById('analytics-client');
             if (!sel) return;
@@ -5011,6 +5050,7 @@ experimental_bearer_token = "dummy"</pre>
                 renderAnalyticsClientBreakdown(data.client_breakdown || []);
                 renderAnalyticsEndpointBreakdown(data.endpoint_breakdown || []);
                 renderAnalyticsModelBreakdown(data.model_breakdown || []);
+                renderAnalyticsDetailBreakdown(data.detail_breakdown || []);
                 updateAnalyticsClientOptions(data.client_breakdown || [], params.get('client'));
             } catch (error) {
                 renderAnalyticsChart([]);
@@ -5018,6 +5058,7 @@ experimental_bearer_token = "dummy"</pre>
                 renderAnalyticsClientBreakdown([]);
                 renderAnalyticsEndpointBreakdown([]);
                 renderAnalyticsModelBreakdown([]);
+                renderAnalyticsDetailBreakdown([]);
                 showToast(`加载用量统计失败：${error.message || error}`, 'error');
             }
         };
