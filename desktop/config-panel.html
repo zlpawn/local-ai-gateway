@@ -3419,7 +3419,13 @@ experimental_bearer_token = "dummy"</pre>
                                 <option value="embedding">向量节点 (Embedding)</option>
                                 <option value="image_generation">图像生成节点 (Image)</option>
                                 <option value="video_generation">视频生成节点 (Video)</option>
-                                <option value="tts">语音节点 (TTS)</option>
+                                <option value="audio_tts">语音节点 (TTS)</option>
+                            </select>
+                        </div>
+                        <div style="display: flex; align-items: center; gap: 8px;">
+                            <label style="font-size: 13px; font-weight: 500; white-space: nowrap; flex-shrink: 0;">客户端:</label>
+                            <select id="analytics-client" class="input" style="padding: 4px 8px; font-size: 13px;" onchange="loadAnalyticsData()">
+                                <option value="all" selected>全部客户端</option>
                             </select>
                         </div>
                     </div>
@@ -3453,11 +3459,31 @@ experimental_bearer_token = "dummy"</pre>
                     </div>
                 </div>
 
-                <!-- Purpose Breakdown Table -->
-                <div class="card">
-                    <h3 style="font-size: 14px; margin-bottom: 12px;">节点类型消耗分布</h3>
-                    <div id="analytics-breakdown-container">
-                        <div style="color: var(--text-secondary); font-size: 13px;">暂无数据</div>
+                <!-- Breakdown Tables -->
+                <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(360px, 1fr)); gap: 16px;">
+                    <div class="card">
+                        <h3 style="font-size: 14px; margin-bottom: 12px;">节点类型消耗分布</h3>
+                        <div id="analytics-breakdown-container">
+                            <div style="color: var(--text-secondary); font-size: 13px;">暂无数据</div>
+                        </div>
+                    </div>
+                    <div class="card">
+                        <h3 style="font-size: 14px; margin-bottom: 12px;">客户端消耗分布</h3>
+                        <div id="analytics-client-breakdown-container">
+                            <div style="color: var(--text-secondary); font-size: 13px;">暂无数据</div>
+                        </div>
+                    </div>
+                    <div class="card">
+                        <h3 style="font-size: 14px; margin-bottom: 12px;">节点消耗分布</h3>
+                        <div id="analytics-endpoint-breakdown-container">
+                            <div style="color: var(--text-secondary); font-size: 13px;">暂无数据</div>
+                        </div>
+                    </div>
+                    <div class="card">
+                        <h3 style="font-size: 14px; margin-bottom: 12px;">模型消耗分布</h3>
+                        <div id="analytics-model-breakdown-container">
+                            <div style="color: var(--text-secondary); font-size: 13px;">暂无数据</div>
+                        </div>
                     </div>
                 </div>
             </section>
@@ -4282,8 +4308,6 @@ experimental_bearer_token = "dummy"</pre>
             ep.models = Array.isArray(ep.models) ? ep.models : [];
             if (!ep.models.includes(modelId)) ep.models.push(modelId);
             render();
-            if (tabId === 'analytics') loadAnalyticsData();
-            if (tabId === 'proxy') loadProxyConfig();
             // reopen detail
             setTimeout(() => {
                 const card = document.getElementById(`ep-${client}-${index}`);
@@ -4898,29 +4922,72 @@ experimental_bearer_token = "dummy"</pre>
             </svg>`;
         }
 
-        function renderAnalyticsBreakdown(rows) {
-            const container = document.getElementById('analytics-breakdown-container');
+        const ANALYTICS_PURPOSE_LABELS = {
+            chat: '聊天',
+            embedding: '向量',
+            image_generation: '图像生成',
+            video_generation: '视频生成',
+            audio_tts: '语音',
+            tts: '语音',
+            vision_fallback: '视觉兜底',
+            web_search: '联网搜索',
+        };
+
+        function renderAnalyticsBreakdownTable(containerId, rows, nameKey, nameLabel, purposeCol = false) {
+            const container = document.getElementById(containerId);
             if (!container) return;
             if (!Array.isArray(rows) || rows.length === 0) {
                 container.innerHTML = '<div style="color:var(--text-secondary);font-size:13px">暂无数据</div>';
                 return;
             }
-            const labels = {
-                chat: '聊天',
-                embedding: '向量',
-                image_generation: '图像生成',
-                video_generation: '视频生成',
-                audio_tts: '语音',
-                tts: '语音',
-            };
-            container.innerHTML = `<div style="overflow:auto"><table style="width:100%;border-collapse:collapse;font-size:13px">
-                <thead><tr><th style="text-align:left;padding:8px 10px">节点类型</th><th style="text-align:right;padding:8px 10px">请求数</th><th style="text-align:right;padding:8px 10px">Token</th></tr></thead>
-                <tbody>${rows.map(row => `<tr>
-                    <td style="padding:9px 10px;border-top:1px solid var(--border-color)">${escapeHtml(labels[row.purpose] || row.purpose || '其他')}</td>
+            const heads = purposeCol
+                ? `<th style="text-align:left;padding:8px 10px">${escapeHtml(nameLabel)}</th><th style="text-align:left;padding:8px 10px">类型</th><th style="text-align:right;padding:8px 10px">请求数</th><th style="text-align:right;padding:8px 10px">输入</th><th style="text-align:right;padding:8px 10px">输出</th><th style="text-align:right;padding:8px 10px">Token</th>`
+                : `<th style="text-align:left;padding:8px 10px">${escapeHtml(nameLabel)}</th><th style="text-align:right;padding:8px 10px">请求数</th><th style="text-align:right;padding:8px 10px">输入</th><th style="text-align:right;padding:8px 10px">输出</th><th style="text-align:right;padding:8px 10px">Token</th>`;
+            const body = rows.map(row => {
+                const name = escapeHtml(row[nameKey] || '其他');
+                const purposeCell = purposeCol
+                    ? `<td style="padding:9px 10px;border-top:1px solid var(--border-color)">${escapeHtml(ANALYTICS_PURPOSE_LABELS[row.purpose] || row.purpose || '-')}</td>`
+                    : '';
+                return `<tr>
+                    <td style="padding:9px 10px;border-top:1px solid var(--border-color)">${name}</td>
+                    ${purposeCell}
                     <td style="padding:9px 10px;border-top:1px solid var(--border-color);text-align:right">${formatUsageNumber(row.requests)}</td>
+                    <td style="padding:9px 10px;border-top:1px solid var(--border-color);text-align:right">${formatUsageNumber(row.prompt_tokens)}</td>
+                    <td style="padding:9px 10px;border-top:1px solid var(--border-color);text-align:right">${formatUsageNumber(row.completion_tokens)}</td>
                     <td style="padding:9px 10px;border-top:1px solid var(--border-color);text-align:right">${formatUsageNumber(row.total_tokens)}</td>
-                </tr>`).join('')}</tbody>
+                </tr>`;
+            }).join('');
+            container.innerHTML = `<div style="overflow:auto"><table style="width:100%;border-collapse:collapse;font-size:13px">
+                <thead><tr>${heads}</tr></thead>
+                <tbody>${body}</tbody>
             </table></div>`;
+        }
+
+        function renderAnalyticsBreakdown(rows) {
+            renderAnalyticsBreakdownTable('analytics-breakdown-container', rows, 'purpose', '节点类型');
+        }
+
+        function renderAnalyticsClientBreakdown(rows) {
+            renderAnalyticsBreakdownTable('analytics-client-breakdown-container', rows, 'client', '客户端');
+        }
+
+        function renderAnalyticsEndpointBreakdown(rows) {
+            renderAnalyticsBreakdownTable('analytics-endpoint-breakdown-container', rows, 'endpoint_name', '节点', true);
+        }
+
+        function renderAnalyticsModelBreakdown(rows) {
+            renderAnalyticsBreakdownTable('analytics-model-breakdown-container', rows, 'model', '模型', true);
+        }
+
+        function updateAnalyticsClientOptions(rows, selectedValue) {
+            const sel = document.getElementById('analytics-client');
+            if (!sel) return;
+            const known = Object.keys(config?.clients || {});
+            const seen = new Set(rows.map(r => r.client).filter(Boolean));
+            const clients = Array.from(new Set([...known, ...seen])).sort();
+            const cur = selectedValue || sel.value || 'all';
+            sel.innerHTML = '<option value="all"' + (cur === 'all' ? ' selected' : '') + '>全部客户端</option>'
+                + clients.map(c => `<option value="${escapeHtml(c)}"${cur === c ? ' selected' : ''}>${escapeHtml(c)}</option>`).join('');
         }
 
         window.loadAnalyticsData = async function() {
@@ -4928,6 +4995,7 @@ experimental_bearer_token = "dummy"</pre>
                 granularity: document.getElementById('analytics-granularity')?.value || 'hour',
                 range: document.getElementById('analytics-range')?.value || '24h',
                 purpose: document.getElementById('analytics-purpose')?.value || 'all',
+                client: document.getElementById('analytics-client')?.value || 'all',
             });
             try {
                 const res = await fetch(`/v1/analytics/token-usage?${params.toString()}`);
@@ -4940,9 +5008,16 @@ experimental_bearer_token = "dummy"</pre>
                 document.getElementById('stat-total-requests').textContent = formatUsageNumber(summary.total_requests);
                 renderAnalyticsChart(data.timeline || []);
                 renderAnalyticsBreakdown(data.purpose_breakdown || []);
+                renderAnalyticsClientBreakdown(data.client_breakdown || []);
+                renderAnalyticsEndpointBreakdown(data.endpoint_breakdown || []);
+                renderAnalyticsModelBreakdown(data.model_breakdown || []);
+                updateAnalyticsClientOptions(data.client_breakdown || [], params.get('client'));
             } catch (error) {
                 renderAnalyticsChart([]);
                 renderAnalyticsBreakdown([]);
+                renderAnalyticsClientBreakdown([]);
+                renderAnalyticsEndpointBreakdown([]);
+                renderAnalyticsModelBreakdown([]);
                 showToast(`加载用量统计失败：${error.message || error}`, 'error');
             }
         };
