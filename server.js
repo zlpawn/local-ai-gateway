@@ -308,7 +308,7 @@ function attachResponseUsageCapture(req, res) {
   res.once("finish", () => {
     if (recorded || !req.gatewayUsageContext || res.statusCode < 200 || res.statusCode >= 300) return;
     recorded = true;
-    const usage = capture.finish();
+    const usage = req.gatewayUsageContext.fixedUsage || capture.finish();
     if (!usage) return;
     recordRequestTokenUsage({
       ...req.gatewayUsageContext,
@@ -323,6 +323,7 @@ function markRequestTokenUsage(req, {
   endpoint = null,
   purpose = "chat",
   model = "",
+  fixedUsage = null,
 } = {}) {
   const resolvedEndpoint = endpoint || route?.endpoint || route?.config || null;
   req.gatewayUsageContext = {
@@ -333,6 +334,7 @@ function markRequestTokenUsage(req, {
     },
     purpose: resolvedEndpoint?.purpose || purpose,
     model,
+    fixedUsage,
   };
 }
 
@@ -2205,6 +2207,13 @@ async function routeMediaRequest(req, res, context, reqPath) {
     if (typeof selection.provider.generateImage !== "function") {
       return sendMediaCapabilityUnavailable(res, selection.endpoint, "image generation");
     }
+    markRequestTokenUsage(req, {
+      context,
+      endpoint: selection.endpoint,
+      purpose: "image_generation",
+      model: body.model || selection.endpoint.models?.[0] || "",
+      fixedUsage: { prompt_tokens: 0, completion_tokens: 0, total_tokens: 0 },
+    });
     const requestAbort = bindRequestAbort(req, res);
     try {
       const result = await selection.provider.generateImage(body, mediaProviderContext(req, selection.endpoint, requestAbort.signal));
@@ -2231,6 +2240,13 @@ async function routeMediaRequest(req, res, context, reqPath) {
     if (typeof selection.provider.createVideoTask !== "function") {
       return sendMediaCapabilityUnavailable(res, selection.endpoint, "video generation");
     }
+    markRequestTokenUsage(req, {
+      context,
+      endpoint: selection.endpoint,
+      purpose: "video_generation",
+      model: body.model || selection.endpoint.models?.[0] || "",
+      fixedUsage: { prompt_tokens: 0, completion_tokens: 0, total_tokens: 0 },
+    });
     const requestAbort = bindRequestAbort(req, res);
     try {
       const result = await selection.provider.createVideoTask(body, mediaProviderContext(req, selection.endpoint, requestAbort.signal));
@@ -2288,6 +2304,13 @@ async function routeMediaRequest(req, res, context, reqPath) {
     if (typeof selection.provider.synthesizeSpeech !== "function") {
       return sendMediaCapabilityUnavailable(res, selection.endpoint, "speech synthesis");
     }
+    markRequestTokenUsage(req, {
+      context,
+      endpoint: selection.endpoint,
+      purpose: "audio_tts",
+      model: body.model || selection.endpoint.models?.[0] || "",
+      fixedUsage: { prompt_tokens: 0, completion_tokens: 0, total_tokens: 0 },
+    });
     const requestAbort = bindRequestAbort(req, res);
     try {
       const result = await selection.provider.synthesizeSpeech(body, mediaProviderContext(req, selection.endpoint, requestAbort.signal));
