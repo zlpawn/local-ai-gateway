@@ -858,10 +858,12 @@ async function route(req, res) {
     return;
   }
 
+  const reqPath = context.path;
+
   // --- Static assets for modularized config panel ---
-  if (reqPath.startsWith("/desktop/dist/") && req.method === "GET") {
+  if (url.pathname.startsWith("/desktop/dist/") && req.method === "GET") {
     const distRoot = path.join(PROJECT_ROOT, "desktop", "dist");
-    const filePath = path.resolve(path.join(PROJECT_ROOT, reqPath));
+    const filePath = path.resolve(path.join(PROJECT_ROOT, url.pathname));
     if (!filePath.startsWith(distRoot + path.sep)) {
       sendJson(res, 403, { error: "forbidden" });
       return;
@@ -881,7 +883,6 @@ async function route(req, res) {
     return;
   }
 
-  const reqPath = context.path;
 
   if ((reqPath === "/" || reqPath === "/config") && req.method === "GET") {
     const htmlPath = path.join(PROJECT_ROOT, "desktop", "index.html");
