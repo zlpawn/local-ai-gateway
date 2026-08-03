@@ -1047,7 +1047,7 @@ function renderAnalyticsBreakdownTable(containerId, rows, nameKey, nameLabel, pu
         return;
     }
     const heads = purposeCol
-        ? `<th style="text-align:left;padding:8px 10px">${escapeHtml(nameLabel)}</th><th style="text-align:left;padding:8px 10px">类型</th><th style="text-align:right;padding:8px 10px">请求数</th><th style="text-align:right;padding:8px 10px">输入</th><th style="text-align:right;padding:8px 10px">输出</th><th style="text-align:right;padding:8px 10px">Token</th>`
+        ? `<th style="text-align:left;padding:8px 10px">${escapeHtml(nameLabel)}</th><th style="text-align:left;padding:8px 10px">类型</th><th style="text-align:right;padding:8px 10px">请求数</th><th style="text-align:right;padding:8px 10px">输入</th><th style="text-align:right;padding:8px 10px">输出</th><th style="text-align:right;padding:8px 10px">Token</th><th style="text-align:right;padding:8px 10px">Cost</th>`
         : `<th style="text-align:left;padding:8px 10px">${escapeHtml(nameLabel)}</th><th style="text-align:right;padding:8px 10px">请求数</th><th style="text-align:right;padding:8px 10px">输入</th><th style="text-align:right;padding:8px 10px">输出</th><th style="text-align:right;padding:8px 10px">Token</th>`;
     const body = rows.map(row => {
         const rawName = row[nameKey] || '其他';
@@ -1062,6 +1062,7 @@ function renderAnalyticsBreakdownTable(containerId, rows, nameKey, nameLabel, pu
             <td style="padding:9px 10px;border-top:1px solid var(--border-color);text-align:right">${formatUsageNumber(row.prompt_tokens)}</td>
             <td style="padding:9px 10px;border-top:1px solid var(--border-color);text-align:right">${formatUsageNumber(row.completion_tokens)}</td>
             <td style="padding:9px 10px;border-top:1px solid var(--border-color);text-align:right">${formatUsageNumber(row.total_tokens)}</td>
+        <td style="padding:9px 10px;border-top:1px solid var(--border-color);text-align:right">${row.cost_usd ? `${Number(row.cost_usd).toFixed(4)}` : '-'}</td>
         </tr>`;
     }).join('');
     container.innerHTML = `<div style="overflow:auto"><table style="width:100%;border-collapse:collapse;font-size:13px">
@@ -1144,6 +1145,14 @@ window.loadAnalyticsData = async function() {
         document.getElementById('stat-prompt-tokens').textContent = formatUsageNumber(summary.prompt_tokens);
         document.getElementById('stat-completion-tokens').textContent = formatUsageNumber(summary.completion_tokens);
         document.getElementById('stat-total-requests').textContent = formatUsageNumber(summary.total_requests);
+        document.getElementById('stat-cost-usd').textContent = '$' + Number(summary.cost_usd || 0).toFixed(4);
+        document.getElementById('stat-cost-cny').textContent = 'Y' + Number(summary.cost_cny_equivalent || 0).toFixed(2);
+        const fxInfo = data.fx || {};
+        const fxSub = fxInfo.source === 'api' ? `Rate $${fxInfo.usd_to_cny?.toFixed(2)} - updated ${new Date(fxInfo.updated_at || 0).toLocaleTimeString('zh-CN', {hour:'2-digit',minute:'2-digit'})}` : (fxInfo.source === 'cached' ? `Rate $${fxInfo.usd_to_cny?.toFixed(2)} (cached)` : 'Rate 7.25 (default)');
+        const usdSub = document.getElementById('stat-cost-usd-sub');
+        const cnySub = document.getElementById('stat-cost-cny-sub');
+        if (usdSub) usdSub.textContent = fxSub;
+        if (cnySub) cnySub.textContent = fxSub;
         renderAnalyticsChart(data.timeline || []);
         renderAnalyticsBreakdown(data.purpose_breakdown || []);
         renderAnalyticsClientBreakdown(data.client_breakdown || []);

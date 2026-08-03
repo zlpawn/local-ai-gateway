@@ -71,6 +71,8 @@ import {
 import { syncClaudeCodeSettings } from "./lib/config/claude-code-settings.mjs";
 import { createModelDiscoveryService } from "./lib/models/discovery-service.mjs";
 import { createTokenTracker } from "./lib/analytics/token-tracker.mjs";
+import { createModelPricingEngine } from "./lib/analytics/model-pricing.mjs";
+import { createFxRateService } from "./lib/analytics/fx-rate.mjs";
 import { createResponseUsageCapture } from "./lib/analytics/response-usage-capture.mjs";
 import {
   buildProxyUrl,
@@ -1669,8 +1671,11 @@ function collectGroupedModelsFromConfig(config) {
       const client = String(url.searchParams.get("client") || "all");
       const model = String(url.searchParams.get("model") || "all");
 
-      const result = globalTokenTracker.queryUsage({ granularity, range, purpose, client, model });
-      sendJson(res, 200, result);
+const result = globalTokenTracker.queryUsage({ granularity, range, purpose, client, model });
+const fxRate = globalFxRateService.getRate();
+result.summary.cost_cny_equivalent = Number(result.summary.cost_usd || 0) * fxRate.usd_to_cny;
+result.fx = { usd_to_cny: fxRate.usd_to_cny, source: fxRate.source, updated_at: fxRate.updated_at };
+sendJson(res, 200, result);
     } catch (error) {
       sendJson(res, 500, { error: { type: "analytics_failed", message: error.message } });
     }
@@ -6097,6 +6102,12 @@ const globalTokenTracker = createTokenTracker({
       || path.join(path.dirname(GATEWAY_CONFIG_FILE), "gateway.db"),
   ),
 });
+
+const globalPricingEngine = createModelPricingEngine({
+  configDir: path.dirname(GATEWAY_CONFIG_FILE),
+  customPrices: GATEWAY_CONFIG.custom_prices || [],
+});
+const globalFxRateService = createFxRateService();
 
 const CODEX_MODELS_TTL_MS = intEnv("CODEX_MODELS_TTL_MS", 300_000);
 const CODEX_MODELS_LIVE_TIMEOUT_MS = intEnv("CODEX_MODELS_LIVE_TIMEOUT_MS", 2_500);

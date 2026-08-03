@@ -1,0 +1,130 @@
+{
+  "version": "2026-08-03",
+  "models": {
+    "glm-5.2": {
+      "currency": "cny",
+      "prompt": 2.0,
+      "completion": 8.0,
+      "vendor": "zhipu"
+    },
+    "glm-5.2-ag": {
+      "currency": "cny",
+      "prompt": 2.0,
+      "completion": 8.0,
+      "vendor": "zhipu"
+    },
+    "deepseek-v4-pro": {
+      "currency": "cny",
+      "prompt": 2.0,
+      "completion": 8.0,
+      "cache_read": 0.5,
+      "vendor": "deepseek"
+    },
+    "minimax-m3": {
+      "currency": "cny",
+      "prompt": 10.0,
+      "completion": 10.0,
+      "vendor": "minimax"
+    },
+    "kimi-k3": {
+      "currency": "cny",
+      "prompt": 12.0,
+      "completion": 12.0,
+      "vendor": "moonshot"
+    },
+    "doubao-seed-2.0-pro": {
+      "currency": "cny",
+      "prompt": 4.0,
+      "completion": 16.0,
+      "cache_creation": 5.0,
+      "cache_read": 1.0,
+      "vendor": "volcengine"
+    },
+    "grok-4.5": {
+      "currency": "usd",
+      "prompt": 5.0,
+      "completion": 15.0,
+      "vendor": "xai"
+    },
+    "gpt-5.3": {
+      "currency": "usd",
+      "prompt": 5.0,
+      "completion": 15.0,
+      "vendor": "openai"
+    },
+    "claude-opus-5": {
+      "currency": "usd",
+      "prompt": 15.0,
+      "completion": 75.0,
+      "cache_creation": 18.75,
+      "cache_read": 1.5,
+      "vendor": "anthropic"
+    },
+    "claude-opus-4-8": {
+      "currency": "usd",
+      "prompt": 15.0,
+      "completion": 75.0,
+      "cache_creation": 18.75,
+      "cache_read": 1.5,
+      "vendor": "anthropic"
+    },
+    "claude-opus-4-8-max": {
+      "currency": "usd",
+      "prompt": 15.0,
+      "completion": 75.0,
+      "cache_creation": 18.75,
+      "cache_read": 1.5,
+      "vendor": "anthropic"
+    },
+    "claude-opus-4-7-max": {
+      "currency": "usd",
+      "prompt": 15.0,
+      "completion": 75.0,
+      "cache_creation": 18.75,
+      "cache_read": 1.5,
+      "vendor": "anthropic"
+    },
+    "claude-fable-5": {
+      "currency": "usd",
+      "prompt": 3.0,
+      "completion": 15.0,
+      "cache_creation": 3.75,
+      "cache_read": 0.3,
+      "vendor": "anthropic"
+    },
+    "claude-sonnet-4-6": {
+      "currency": "usd",
+      "prompt": 3.0,
+      "completion": 15.0,
+      "cache_creation": 3.75,
+      "cache_read": 0.3,
+      "vendor": "anthropic"
+    },
+    "claude-haiku-4-5": {
+      "currency": "usd",
+      "prompt": 0.8,
+      "completion": 4.0,
+      "cache_creation": 1.0,
+      "cache_read": 0.08,
+      "vendor": "anthropic"
+    },
+    "gemini-3.6-flash-high": {
+      "currency": "usd",
+      "prompt": 1.25,
+      "completion": 5.0,
+      "vendor": "google"
+    },
+    "gemini-3.6-flash-medium": {
+      "currency": "usd",
+      "prompt": 0.625,
+      "completion": 2.5,
+      "vendor": "google"
+    },
+    "gemini-3.6-flash-low": {
+      "currency": "usd",
+      "prompt": 0.3125,
+      "completion": 1.25,
+      "vendor": "google"
+    }
+  }
+}
