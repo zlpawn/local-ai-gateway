@@ -3854,6 +3854,51 @@ experimental_bearer_token = "dummy"</pre>
         </div>
     </div>
 
+    <div class="skill-modal-overlay" id="skill-promote-modal" onclick="if(event.target===this) closeSkillPromoteModal()">
+        <div class="skill-modal" role="dialog" aria-modal="true" style="width: min(480px, calc(100vw - 32px));">
+            <h3 class="skill-modal-title">转为网关托管</h3>
+            <div class="skill-modal-body" style="white-space: normal;">
+                <div class="client-create-field">
+                    <label for="skill-promote-name">托管名称</label>
+                    <div style="display:flex;gap:6px;">
+                        <input type="text" id="skill-promote-name" autocomplete="off" style="flex:1;" oninput="updateLeoBtnState()" />
+                        <button class="btn" id="skill-promote-leo-btn" type="button" title="切换 leo- 前缀"
+                            style="padding:0 12px;font-size:12px;font-family:var(--font-mono);flex:0 0 auto;"
+                            onclick="toggleLeoPrefix()">+ leo-</button>
+                    </div>
+                    <div class="client-create-hint" id="skill-promote-name-hint">托管后写入 <code>lib/skills/&lt;名称&gt;/</code> 并加入 catalog，后续可由网关安装分发。仅限字母、数字、连字符、点、下划线。</div>
+                </div>
+                <div class="client-create-field">
+                    <label for="skill-promote-title">显示标题（可选）</label>
+                    <input type="text" id="skill-promote-title" autocomplete="off" placeholder="留空则自动从目录名生成" />
+                </div>
+                <div class="client-create-field">
+                    <label for="skill-promote-summary">简介（可选）</label>
+                    <input type="text" id="skill-promote-summary" autocomplete="off" placeholder="留空则从 SKILL.md description 生成" />
+                </div>
+                <div class="client-create-field">
+                    <label for="skill-promote-category">分类</label>
+                    <select id="skill-promote-category">
+                        <option value="">自动推断</option>
+                        <option value="system">系统</option>
+                        <option value="media">媒体创作</option>
+                        <option value="download">下载采集</option>
+                        <option value="browser">浏览器与登录态</option>
+                        <option value="writing">写作与内容</option>
+                        <option value="research">研究与知识</option>
+                        <option value="workflow">工作流</option>
+                        <option value="development">开发工程</option>
+                        <option value="other">其他</option>
+                    </select>
+                </div>
+            </div>
+            <div class="skill-modal-actions">
+                <button class="btn" onclick="closeSkillPromoteModal()">取消</button>
+                <button class="btn btn-primary" id="skill-promote-ok" onclick="submitSkillPromote()">转为托管</button>
+            </div>
+        </div>
+    </div>
+
     <div class="skill-modal-overlay" id="client-create-modal" onclick="if(event.target===this) closeClientCreateModal()">
         <div class="skill-modal" role="dialog" aria-modal="true" style="width: min(480px, calc(100vw - 32px));">
             <h3 class="skill-modal-title">新建代理节点</h3>
@@ -6170,30 +6215,100 @@ experimental_bearer_token = "dummy"</pre>
             if (resolver) resolver(ok);
         };
 
+        let skillPromoteResolver = null;
+        let skillPromoteOriginalName = '';
+
         window.promoteLocalSkillToManaged = async function(skillName) {
             const name = String(skillName || '').trim();
             if (!name) return false;
-            const ok = await showSkillConfirmModal(
-                '转为网关托管',
-                `确认把本地 skill「${name}」转成网关托管？\n\n会写入项目托管源目录 <code>lib/skills/${escapeHtml(name)}/</code>，并加入 <code>managed-catalog.json</code>，后续可像 leo-grok-imagine / session-sync 一样由网关安装分发。`
-            );
-            if (!ok) return false;
+            skillPromoteOriginalName = name;
+            document.getElementById('skill-promote-name').value = name;
+            document.getElementById('skill-promote-title').value = '';
+            document.getElementById('skill-promote-summary').value = '';
+            document.getElementById('skill-promote-category').value = '';
+            updateLeoBtnState();
+            const overlay = document.getElementById('skill-promote-modal');
+            overlay.classList.add('open');
+            setTimeout(() => document.getElementById('skill-promote-name').focus(), 100);
+            return new Promise((resolve) => { skillPromoteResolver = resolve; });
+        };
+
+        function updateLeoBtnState() {
+            const input = document.getElementById('skill-promote-name');
+            const btn = document.getElementById('skill-promote-leo-btn');
+            const val = String(input.value || '').trim();
+            if (val.startsWith('leo-')) {
+                btn.textContent = 'leo- ✓';
+                btn.classList.add('btn-primary');
+            } else {
+                btn.textContent = '+ leo-';
+                btn.classList.remove('btn-primary');
+            }
+        }
+
+        window.toggleLeoPrefix = function() {
+            const input = document.getElementById('skill-promote-name');
+            let val = String(input.value || '').trim();
+            if (val.startsWith('leo-')) {
+                val = val.slice(4);
+            } else {
+                val = 'leo-' + val;
+            }
+            input.value = val;
+            updateLeoBtnState();
+        };
+
+        window.closeSkillPromoteModal = function() {
+            const overlay = document.getElementById('skill-promote-modal');
+            overlay.classList.remove('open');
+            const resolver = skillPromoteResolver;
+            skillPromoteResolver = null;
+            if (resolver) resolver(false);
+        };
+
+        window.submitSkillPromote = async function() {
+            const managedName = String(document.getElementById('skill-promote-name').value || '').trim();
+            if (!managedName) { showToast('请填写托管名称', 'danger'); return; }
+            if (!/^[a-zA-Z0-9][a-zA-Z0-9._-]{0,120}$/.test(managedName)) {
+                showToast('名称仅限字母、数字、连字符、点、下划线', 'danger');
+                return;
+            }
+            const title = document.getElementById('skill-promote-title').value.trim();
+            const summary = document.getElementById('skill-promote-summary').value.trim();
+            const category = document.getElementById('skill-promote-category').value;
+            const isRename = managedName !== skillPromoteOriginalName;
+
+            const overlay = document.getElementById('skill-promote-modal');
+            overlay.classList.remove('open');
+
             try {
                 const res = await fetch('/v1/skills/promote', {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ skill: name }),
+                    body: JSON.stringify({
+                        skill: skillPromoteOriginalName,
+                        managedName,
+                        title: title || undefined,
+                        summary: summary || undefined,
+                        category: category || undefined,
+                    }),
                 });
                 const data = await res.json();
                 if (!data.success) throw new Error(data.error || '转换失败');
-                skillsLibraryState.selectedSkill = name;
+                skillsLibraryState.selectedSkill = managedName;
                 await refreshSkillsLibrary(true);
-                showToast(`已将 ${name} 转为网关托管`, 'success');
-                return true;
+                showToast(isRename
+                    ? `已将 ${skillPromoteOriginalName} 转为网关托管（${managedName}）`
+                    : `已将 ${managedName} 转为网关托管`, 'success');
+                const resolver = skillPromoteResolver;
+                skillPromoteResolver = null;
+                if (resolver) resolver(true);
             } catch (err) {
                 showToast(`转换失败: ${err.message}`, 'danger');
                 await refreshSkillsLibrary(true);
-                return false;
+                const resolver = skillPromoteResolver;
+                skillPromoteResolver = null;
+                if (resolver) resolver(false);
             }
         };
 
