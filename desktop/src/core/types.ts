@@ -1,4 +1,4 @@
-﻿export interface AppConfig {
+export interface AppConfig {
   server: { host: string; port: number };
   clients: Record<string, ClientConfig>;
   codex_model_catalog?: { path?: string; path_posix?: string };

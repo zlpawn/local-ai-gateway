@@ -5901,16 +5901,23 @@ function recordRequestTokenUsage(opts = {}) {
   try {
     const ep = opts.endpoint || {};
     const usage = opts.usage || {};
+    const model = opts.model || ep.upstream_model || "unknown";
+    const price = globalPricingEngine.resolvePrice(model);
+    const fxRate = globalFxRateService.getRate();
     globalTokenTracker.recordUsage({
       timestamp: Date.now(),
       client: opts.client || ep.client || "unknown",
       endpoint_id: ep.id || "ep_unknown",
       endpoint_name: ep.name || ep.id || "unknown",
       purpose: opts.purpose || ep.purpose || "chat",
-      model: opts.model || ep.upstream_model || "unknown",
+      model,
       prompt_tokens: usage.prompt_tokens || usage.input_tokens || 0,
       completion_tokens: usage.completion_tokens || usage.output_tokens || 0,
       total_tokens: usage.total_tokens || ((usage.prompt_tokens || usage.input_tokens || 0) + (usage.completion_tokens || usage.output_tokens || 0)),
+      cache_creation_tokens: usage.cache_creation_tokens || 0,
+      cache_read_tokens: usage.cache_read_tokens || 0,
+      price,
+      fxRate,
     });
   } catch {}
 }

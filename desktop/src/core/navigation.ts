@@ -1,4 +1,4 @@
-﻿import { state } from "./state";
+import { state } from "./state";
 import { render } from "./render";
 
 type TabHooks = { onEnter?: () => void; onLeave?: () => void };

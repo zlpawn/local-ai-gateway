@@ -1,4 +1,4 @@
-﻿import type { AppConfig, AnalyticsResponse } from "./types";
+import type { AppConfig, AnalyticsResponse } from "./types";
 
 export async function getConfig(): Promise<AppConfig | null> {
   try {

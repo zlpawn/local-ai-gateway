@@ -1,4 +1,4 @@
-﻿import { escapeHtml } from "./core/dom";
+import { escapeHtml } from "./core/dom";
 import { showToast } from "./core/ui";
 import { getConfig, loadSyncStatus, fetchJson } from "./core/api";
 

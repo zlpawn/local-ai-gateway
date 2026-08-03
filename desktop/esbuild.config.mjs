@@ -1,4 +1,4 @@
-﻿import esbuild from "esbuild";
+import esbuild from "esbuild";
 import { existsSync, mkdirSync } from "node:fs";
 import path from "node:path";
 

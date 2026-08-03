@@ -1,4 +1,4 @@
-﻿import test from "node:test";
+import test from "node:test";
 import assert from "node:assert/strict";
 import { createModelPricingEngine } from "../../lib/analytics/model-pricing.mjs";
 

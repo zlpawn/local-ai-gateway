@@ -1,4 +1,4 @@
-﻿import type { AppConfig, Selection, ToolsView } from "./types";
+import type { AppConfig, Selection, ToolsView } from "./types";
 
 export const state = {
   config: {
