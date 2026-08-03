@@ -1,0 +1,4 @@
+interface:
+  display_name: "职场嘴替表情包助手"
+  short_description: "按表达意图搜索并下载中文表情包。"
+  default_prompt: "帮我找几个适合职场回复的表情包并下载。"
