@@ -1111,8 +1111,8 @@ function renderAnalyticsDetailBreakdown(rows) {
         <td style="padding:9px 10px;border-top:1px solid var(--border-color);text-align:right">${formatUsageNumber(row.prompt_tokens)}</td>
         <td style="padding:9px 10px;border-top:1px solid var(--border-color);text-align:right">${formatUsageNumber(row.completion_tokens)}</td>
         <td style="padding:9px 10px;border-top:1px solid var(--border-color);text-align:right">${formatUsageNumber(row.total_tokens)}</td>
-    </tr>`).join('');
         ${row.cost_usd ? `<td style="padding:9px 10px;border-top:1px solid var(--border-color);text-align:right">${row.native_currency === 'cny' ? 'Y' : '$'}${Number(row.cost_usd).toFixed(4)}</td>` : '<td style="padding:9px 10px;border-top:1px solid var(--border-color);text-align:right;color:var(--text-secondary)">-</td>'}
+    </tr>`).join('');
     container.innerHTML = `<div style="overflow:auto;max-height:420px"><table style="width:100%;border-collapse:collapse;font-size:13px">
         <thead><tr>${heads}</tr></thead>
         <tbody>${body}</tbody>
