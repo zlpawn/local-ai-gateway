@@ -1,4 +1,4 @@
-import { escapeHtml } from "./core/dom";
+﻿import { escapeHtml } from "./core/dom";
 import { showToast } from "./core/ui";
 import { getConfig, loadSyncStatus, fetchJson } from "./core/api";
 
@@ -1047,8 +1047,8 @@ function renderAnalyticsBreakdownTable(containerId, rows, nameKey, nameLabel, pu
         return;
     }
     const heads = purposeCol
-        ? `<th style="text-align:left;padding:8px 10px">${escapeHtml(nameLabel)}</th><th style="text-align:left;padding:8px 10px">类型</th><th style="text-align:right;padding:8px 10px">请求数</th><th style="text-align:right;padding:8px 10px">输入</th><th style="text-align:right;padding:8px 10px">输出</th><th style="text-align:right;padding:8px 10px">Token</th><th style="text-align:right;padding:8px 10px">Cost</th>`
-        : `<th style="text-align:left;padding:8px 10px">${escapeHtml(nameLabel)}</th><th style="text-align:right;padding:8px 10px">请求数</th><th style="text-align:right;padding:8px 10px">输入</th><th style="text-align:right;padding:8px 10px">输出</th><th style="text-align:right;padding:8px 10px">Token</th>`;
+        ? `<th style="text-align:left;padding:8px 10px">${escapeHtml(nameLabel)}</th><th style="text-align:left;padding:8px 10px">类型</th><th style="text-align:right;padding:8px 10px">请求数</th><th style="text-align:right;padding:8px 10px">输入</th><th style="text-align:right;padding:8px 10px">输出</th><th style="text-align:right;padding:8px 10px">Token</th><th style="text-align:right;padding:8px 10px">花费</th>`
+        : `<th style="text-align:left;padding:8px 10px">${escapeHtml(nameLabel)}</th><th style="text-align:right;padding:8px 10px">请求数</th><th style="text-align:right;padding:8px 10px">输入</th><th style="text-align:right;padding:8px 10px">输出</th><th style="text-align:right;padding:8px 10px">Token</th><th style="text-align:right;padding:8px 10px">花费</th>`;
     const body = rows.map(row => {
         const rawName = row[nameKey] || '其他';
         const name = escapeHtml(nameKey === 'purpose' ? (ANALYTICS_PURPOSE_LABELS[rawName] || rawName) : rawName);
@@ -1101,7 +1101,7 @@ function renderAnalyticsDetailBreakdown(rows) {
         + '<th style="text-align:right;padding:8px 10px">请求数</th>'
         + '<th style="text-align:right;padding:8px 10px">输入</th>'
         + '<th style="text-align:right;padding:8px 10px">输出</th>'
-        + '<th style="text-align:right;padding:8px 10px">Token</th>';
+        + '<th style="text-align:right;padding:8px 10px">Token</th>'; + '<th style="text-align:right;padding:8px 10px">花费</th>'
     const body = rows.map(row => `<tr>
         <td style="padding:9px 10px;border-top:1px solid var(--border-color)">${escapeHtml(row.client || '-')}</td>
         <td style="padding:9px 10px;border-top:1px solid var(--border-color)">${escapeHtml(row.endpoint_name || '-')}</td>
@@ -1112,6 +1112,7 @@ function renderAnalyticsDetailBreakdown(rows) {
         <td style="padding:9px 10px;border-top:1px solid var(--border-color);text-align:right">${formatUsageNumber(row.completion_tokens)}</td>
         <td style="padding:9px 10px;border-top:1px solid var(--border-color);text-align:right">${formatUsageNumber(row.total_tokens)}</td>
     </tr>`).join('');
+        ${row.cost_usd ? `<td style="padding:9px 10px;border-top:1px solid var(--border-color);text-align:right">${row.native_currency === 'cny' ? 'Y' : '$'}${Number(row.cost_usd).toFixed(4)}</td>` : '<td style="padding:9px 10px;border-top:1px solid var(--border-color);text-align:right;color:var(--text-secondary)">-</td>'}
     container.innerHTML = `<div style="overflow:auto;max-height:420px"><table style="width:100%;border-collapse:collapse;font-size:13px">
         <thead><tr>${heads}</tr></thead>
         <tbody>${body}</tbody>
@@ -1203,7 +1204,7 @@ window.togglePricingTable = function() {
 
 async function loadPricingTable() {
     try {
-        const res = await fetch('/v1/analytics/pricing');
+        const res = await fetch('/v1/analytics/pricing?configured_only=1');
         if (!res.ok) throw new Error('Failed to load pricing');
         const data = await res.json();
         const models = data.models || [];
@@ -1213,7 +1214,7 @@ async function loadPricingTable() {
         }
         const rows = models.map(m => {
             const cur = m.currency === 'cny' ? 'Y' : (m.currency === 'usd' ? '$' : '');
-            const sourceLabel = { custom: '自定义', vendored: '内置CN', openrouter: 'OpenRouter', default: '默认' }[m.source] || m.source;
+            const sourceLabel = { custom: '自定义', vendored: '内置CN', litellm: 'litellm', default: '默认' }[m.source] || m.source;
             return '<tr>' +
                 '<td>' + escapeHtml(m.model) + '</td>' +
                 '<td>' + escapeHtml(m.vendor || '-') + '</td>' +

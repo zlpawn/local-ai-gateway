@@ -1686,6 +1686,17 @@ sendJson(res, 200, result);
     if (!checkLocalAuth(req, res)) return;
     try {
       const prices = globalPricingEngine.listPrices();
+      const configuredOnly = url.searchParams.get("configured_only") === "1";
+      if (configuredOnly) {
+        const configured = new Set();
+        for (const client of Object.values(GATEWAY_CONFIG.clients || {})) {
+          for (const ep of (client.endpoints || [])) {
+            for (const m of (ep.models || [])) configured.add(m.toLowerCase());
+            for (const m of Object.keys(ep.model_mapping || {})) configured.add(m.toLowerCase());
+          }
+        }
+        prices.models = prices.models.filter(m => configured.has(m.model.toLowerCase()));
+      }
       sendJson(res, 200, prices);
     } catch (error) {
       sendJson(res, 500, { error: { type: "pricing_failed", message: error.message } });
