@@ -2895,6 +2895,11 @@ function createEndpointSummaryHTML(client, index, ep) {
                     ${isMedia ? `<span class="badge badge-default">${escapeHtml(mediaPurpose?.groupTitle || '媒体')}</span>` : ''}
                     ${ep.is_default ? '<span class="badge badge-default">默认</span>' : ''}
                     ${isDisabled ? '<span class="badge" style="background: var(--input-bg); color: var(--text-secondary);">已禁用</span>' : ''}
+                    ${(isWebSearch || (isMedia ? !isMediaSubscription : (ep.type !== 'antigravity' && ep.type !== 'codex-subscription')))
+                        ? (ep.has_api_key
+                            ? '<span class="badge badge-key-configured" title="已配置密钥"><svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M21 2l-2 2m-7.61 7.61a5.5 5.5 0 1 1-7.778 7.778 5.5 5.5 0 0 1 7.778-7.778zm0 0L15.5 7.5m0 0l3 3L22 7l-3-3m-3.5 3.5L19 4"></path></svg>已配置</span>'
+                            : '<span class="badge badge-key-missing" title="未配置密钥"><svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M21 2l-2 2m-7.61 7.61a5.5 5.5 0 1 1-7.778 7.778 5.5 5.5 0 0 1 7.778-7.778zm0 0L15.5 7.5m0 0l3 3L22 7l-3-3m-3.5 3.5L19 4"></path></svg>未配置</span>')
+                        : ''}
                 </div>
                 <div class="node-card-row">
                     <span class="mono" title="${escapeHtml(isWebSearch ? (ep.provider || 'tavily') : (isMedia ? mediaProviderBaseUrl(ep) : (ep.base_url || '')))}">${isWebSearch ? escapeHtml(ep.provider || 'tavily') : url}</span>
@@ -3063,7 +3068,7 @@ function createEndpointDetailHTML(client, index, ep) {
                     `}
                     ${(isWebSearch || (isMedia ? !isMediaSubscription : (ep.type !== 'antigravity' && ep.type !== 'codex-subscription'))) ? `
                     <div class="form-group full">
-                        <label>${isWebSearch ? 'Tavily API Key' : '密钥 (API Key)'} ${ep.has_api_key ? '· 已配置' : '· 未配置'}</label>
+                        <label>${isWebSearch ? 'Tavily API Key' : '密钥 (API Key)'} <span class="key-status ${ep.has_api_key ? 'key-status-set' : 'key-status-unset'}">${ep.has_api_key ? '已配置' : '未配置'}</span></label>
                         <div class="password-input-wrapper">
                             <input class="mono" type="password" id="api-key-${client}-${index}" value="" placeholder="${ep.has_api_key ? '留空表示保留现有密钥' : (isWebSearch ? 'tvly-... 或 env:TAVILY_API_KEY' : '输入密钥或 env:变量名')}" onchange="updateEndpoint('${client}', ${index}, 'api_key', this.value)">
                             <button type="button" class="password-toggle-btn" onclick="togglePasswordVisibility('${client}', ${index}, 'api-key-${client}-${index}')" title="${ep.has_api_key ? '查看已保存密钥' : '显示/隐藏密钥'}">
