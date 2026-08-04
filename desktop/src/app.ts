@@ -2843,6 +2843,7 @@ function createEndpointSummaryHTML(client, index, ep) {
     const isMedia = isMediaEndpoint(ep);
     const mediaPurpose = mediaPurposeDefinition(ep.purpose);
     const mediaProvider = mediaProviderDefinition(ep.provider);
+    const isMediaSubscription = isMedia && mediaProvider.subscription;
     const isCapabilityNode = isVisionFallback || isWebSearch || isEmbedding || isMedia;
     const isDisabled = ep.enabled === false;
     const name = escapeHtml(ep.name || `节点 ${index + 1}`);
