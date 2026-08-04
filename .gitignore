@@ -62,4 +62,5 @@ antigravity-signatures.json
 antigravity-signatures.*.json
 
 gateway.db*
+media-history.json
 model_prices_cache.json

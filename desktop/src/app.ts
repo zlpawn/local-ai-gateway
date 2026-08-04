@@ -4870,7 +4870,9 @@ function renderWebSearchResult() {
 }
 
 window.runWebSearch = async function() {
-    const query = webSearchState.query.trim();
+    const queryEl = document.getElementById('web-search-query');
+    const query = String(queryEl?.value || '').trim();
+    webSearchState.query = query;
     if (!query) { webSearchState.error = '请输入查询词'; renderWebSearchDetail(); return; }
     if (!webSearchState.endpointId) { webSearchState.error = '请选择搜索节点'; renderWebSearchDetail(); return; }
     webSearchState.loading = true;
