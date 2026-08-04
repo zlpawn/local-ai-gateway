@@ -2484,9 +2484,16 @@ function sendMediaCapabilityUnavailable(res, endpoint, capability) {
 }
 
 function mediaProviderContext(req, endpoint, signal) {
+  const proxyUrl = configuredOutboundProxyUrl(endpoint) || officialCodexProxyUrl();
+  const fetchImpl = (url, init = {}) => {
+    // Loopback and already-proxied URLs go direct.
+    if (isLoopbackUrl(url)) return fetch(url, init);
+    return fetchWithOptionalProxy(url, { ...init, proxyUrl });
+  };
   return {
     endpoint,
     signal,
+    fetchImpl,
     getApiKey: (targetEndpoint) => resolveMediaApiKey(req, targetEndpoint || endpoint),
   };
 }
