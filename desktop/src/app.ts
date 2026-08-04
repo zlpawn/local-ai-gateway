@@ -4732,7 +4732,7 @@ function renderWebSearchHistoryHtml(entries) {
 window.viewWebSearchHistory = function(historyId) {
     const url = mediaHistoryPreviewUrl(historyId);
     if (!url) { showToast('该历史记录无关联文件', 'danger'); return; }
-    window.open(url, '_blank');
+    window.open(url, 'Shrimp');
 };
 
 window.renderWebSearchDetail = function() {
@@ -4972,7 +4972,7 @@ window.renderImageGenDetail = function() {
                 <div class="media-gen-form-group"><label>画面比例</label>
                     ${aspectSelect}</div>
                 <div class="media-gen-form-group"><label>参考图片路径（逗号或换行分隔）</label>
-                    <textarea class="media-gen-form-control" rows="3" placeholder="C:\\images\\reference.png" oninput="imageGenState.imagePaths=this.value">${escapeHtml(imageGenState.imagePaths)}</textarea></div>
+                    <textarea id="image-gen-paths" class="media-gen-form-control" rows="3" placeholder="C:\\images\\reference.png" oninput="imageGenState.imagePaths=this.value">${escapeHtml(imageGenState.imagePaths)}</textarea></div>
                 <div class="media-gen-notice">参考图路径会按 <code>image_paths</code> 提交给本地网关读取。浏览器不会直接读取任意本地路径；请确认路径对运行网关的本机账户可访问。</div>
                 ${imageGenState.referenceNotice ? '<div class="media-gen-notice">' + escapeHtml(imageGenState.referenceNotice) + '</div>' : ''}
                 <button class="btn btn-primary" onclick="runImageGeneration()" ${imageGenState.loading || !endpoints.length ? 'disabled' : ''}>${imageGenState.loading ? '生成中...' : '生成图片'}</button>
@@ -5031,6 +5031,10 @@ function renderImageGenResult() {
 }
 
 window.runImageGeneration = async function() {
+    const promptEl = document.getElementById('image-gen-prompt');
+    imageGenState.prompt = String(promptEl?.value || '');
+    const pathsEl = document.getElementById('image-gen-paths');
+    imageGenState.imagePaths = String(pathsEl?.value || '');
     const prompt = imageGenState.prompt.trim();
     if (!prompt) { imageGenState.error = '请输入提示词'; renderImageGenDetail(); return; }
     if (!imageGenState.endpointId) { imageGenState.error = '请选择图片生成节点'; renderImageGenDetail(); return; }
@@ -5152,9 +5156,9 @@ window.renderVideoGenDetail = function() {
                 <div class="media-gen-form-group"><label>画面比例</label>
                     ${aspectSelect}</div>
                 <div class="media-gen-form-group"><label>时长（秒）</label>
-                    <input type="number" class="media-gen-form-control" min="3" max="15" value="${videoGenState.duration}" onchange="videoGenState.duration=Number(this.value)"></div>
+                    <input type="number" id="video-gen-duration" class="media-gen-form-control" min="3" max="15" value="${videoGenState.duration}" onchange="videoGenState.duration=Number(this.value)"></div>
                 <div class="media-gen-form-group"><label>参考图片路径（逗号或换行分隔，可选）</label>
-                    <textarea class="media-gen-form-control" rows="3" placeholder="C:\\images\\first_frame.png" oninput="videoGenState.imagePaths=this.value">${escapeHtml(videoGenState.imagePaths)}</textarea></div>
+                    <textarea id="video-gen-paths" class="media-gen-form-control" rows="3" placeholder="C:\\images\\first_frame.png" oninput="videoGenState.imagePaths=this.value">${escapeHtml(videoGenState.imagePaths)}</textarea></div>
                 <div class="media-gen-notice">参考图路径会按 <code>image_paths</code> 提交给本地网关读取。浏览器不会直接读取任意本地路径；请确认路径对运行网关的本机账户可访问。</div>
                 ${videoGenState.referenceNotice ? '<div class="media-gen-notice">' + escapeHtml(videoGenState.referenceNotice) + '</div>' : ''}
                 <button class="btn btn-primary" onclick="runVideoGeneration()" ${videoGenState.loading || !endpoints.length ? 'disabled' : ''}>${videoGenState.loading ? '提交中...' : '生成视频'}</button>
@@ -5221,6 +5225,12 @@ function renderVideoGenResult() {
 }
 
 window.runVideoGeneration = async function() {
+    const promptEl = document.getElementById('video-gen-prompt');
+    videoGenState.prompt = String(promptEl?.value || '');
+    const pathsEl = document.getElementById('video-gen-paths');
+    videoGenState.imagePaths = String(pathsEl?.value || '');
+    const durEl = document.getElementById('video-gen-duration');
+    if (durEl) videoGenState.duration = Number(durEl.value) || videoGenState.duration;
     const prompt = videoGenState.prompt.trim();
     if (!prompt) { videoGenState.error = '请输入提示词'; renderVideoGenDetail(); return; }
     if (!videoGenState.endpointId) { videoGenState.error = '请选择视频生成节点'; renderVideoGenDetail(); return; }
@@ -5426,6 +5436,8 @@ function renderTtsGenResult() {
 }
 
 window.runTtsGeneration = async function() {
+    const textEl = document.getElementById('tts-gen-text');
+    ttsGenState.text = String(textEl?.value || '');
     const text = ttsGenState.text.trim();
     if (!text) { ttsGenState.error = '请输入待合成文本'; renderTtsGenDetail(); return; }
     if (!ttsGenState.endpointId) { ttsGenState.error = '请选择 TTS 节点'; renderTtsGenDetail(); return; }
