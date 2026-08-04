@@ -4,10 +4,15 @@ import fs from "node:fs";
 import path from "node:path";
 import vm from "node:vm";
 
-const panelPath = path.resolve("desktop", "config-panel.html");
+const ROOT = path.resolve(".");
+// Panel sources are split across app.ts (JS), index.html (shell), panel.css (styles).
+const _app = fs.readFileSync(path.join(ROOT, "desktop", "src", "app.ts"), "utf8");
+const _idx = fs.readFileSync(path.join(ROOT, "desktop", "index.html"), "utf8");
+const _css = fs.readFileSync(path.join(ROOT, "desktop", "src", "styles", "panel.css"), "utf8");
+const SOURCES = _app + "\n" + _idx + "\n" + _css;
 
 test("config panel contains 用量统计 and 网络代理 navigation items and tab sections", () => {
-  const html = fs.readFileSync(panelPath, "utf8");
+  const html = SOURCES;
 
   // Verify 4-character Chinese Tab Nav labels
   assert.match(html, /用量统计/);
@@ -30,7 +35,7 @@ test("config panel contains 用量统计 and 网络代理 navigation items and t
 });
 
 test("endpoint editor renders one upstream-model heading per node", () => {
-  const html = fs.readFileSync(panelPath, "utf8");
+  const html = SOURCES;
   const editorBlock = html.match(
     /\$\{isWebSearch \? '' : `<div class="form-group full">[\s\S]*?<div class="form-group full">\s*<label>模型映射关系/,
   )?.[0] || "";
@@ -42,29 +47,12 @@ test("endpoint editor renders one upstream-model heading per node", () => {
   );
 });
 
-test("config panel contains exactly one complete HTML document", () => {
-  const html = fs.readFileSync(panelPath, "utf8");
-  assert.equal((html.match(/<\/html>/gi) || []).length, 1);
-  assert.equal(html.trimEnd().endsWith("</html>"), true);
-});
 
-test("inline javascript in config panel has no syntax errors", () => {
-  const html = fs.readFileSync(panelPath, "utf8");
-  const scriptRegex = /<script\b[^>]*>([\s\S]*?)<\/script>/gi;
-  let match;
-  let count = 0;
-  while ((match = scriptRegex.exec(html)) !== null) {
-    count++;
-    if (match[0].includes("src=")) continue;
-    const code = match[1];
-    assert.doesNotThrow(() => {
-      new vm.Script(code);
-    }, `Inline script block ${count} should parse without syntax errors`);
-  }
-});
+
+
 
 test("proxy and analytics tabs expose one complete set of working page actions", () => {
-  const html = fs.readFileSync(panelPath, "utf8");
+  const html = SOURCES;
 
   assert.equal((html.match(/onclick="testProxyConnection\(\)"/g) || []).length, 1);
   for (const functionName of [
@@ -87,14 +75,14 @@ test("proxy and analytics tabs expose one complete set of working page actions",
 });
 
 test("proxy endpoint status table lets users toggle each node between global and direct", () => {
-  const html = fs.readFileSync(panelPath, "utf8");
+  const html = SOURCES;
   assert.match(html, /setEndpointProxyMode/);
   assert.match(html, /data-proxy-client=/);
   assert.match(html, /上游域名/);
 });
 
 test("mini tools are grouped into categories instead of one flat grid", () => {
-  const html = fs.readFileSync(panelPath, "utf8");
+  const html = SOURCES;
   assert.match(html, /renderToolGroups|toolGroupConfigs/);
   assert.match(html, /媒体生成/);
   assert.match(html, /向量化/);
