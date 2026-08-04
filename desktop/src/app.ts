@@ -207,6 +207,22 @@ function mediaPresetModels(provider, purpose) {
     return MEDIA_PRESET_MODELS[provider]?.[purpose] || [];
 }
 
+const MEDIA_PRESET_VOICES = {
+    'huoshan-agentplan': [
+        { value: 'zh_female_qingxin', label: '清新女声' },
+        { value: 'zh_male_wennuanshizhong', label: '温暖男声' },
+        { value: 'zh_female_wanwanxiaohe', label: '湾湾小何' },
+        { value: 'zh_female_shaoergushi', label: '少儿故事' },
+        { value: 'zh_male_leidi', label: '雷迪' },
+        { value: 'en_male_rm_emo', label: '英文情感男声' },
+        { value: 'en_female_rm_emo', label: '英文情感女声' },
+    ],
+};
+
+function mediaPresetVoices(provider) {
+    return MEDIA_PRESET_VOICES[provider] || [];
+}
+
 function mediaPurposeDefinition(purpose) {
     return MEDIA_ENDPOINT_PURPOSES.find(item => item.purpose === purpose);
 }
@@ -5391,21 +5407,18 @@ window.renderTtsGenDetail = function() {
     const resultHtml = renderTtsGenResult();
     const historyHtml = ttsGenState.historyLoading ? '<div class="media-gen-tip">正在加载历史...</div>' : renderMediaHistoryHtml(ttsGenState.history, 'tts');
 
-    const voices = [
-        { value: 'zh_female_qingxin', label: '清新女声 (zh_female_qingxin)' },
-        { value: 'zh_male_wennuanshizhong', label: '温暖男声 (zh_male_wennuanshizhong)' },
-        { value: 'zh_female_wanwanxiaohe', label: '湾湾小何 (zh_female_wanwanxiaohe)' },
-        { value: 'zh_female_shaoergushi', label: '少儿故事 (zh_female_shaoergushi)' },
-        { value: 'zh_male_leidi', label: '雷迪 (zh_male_leidi)' },
-        { value: 'en_male_rm_emo', label: '英文情感男声 (en_male_rm_emo)' },
-        { value: 'en_female_rm_emo', label: '英文情感女声 (en_female_rm_emo)' }
-    ];
-    const voiceSelect = renderUiSelectHtml({
-        id: 'tts-gen-voice',
-        value: ttsGenState.voice,
-        options: voices,
-        onChange: (value) => { ttsGenState.voice = value; },
-    });
+    const selectedTtsEndpoint = endpoints.find(ep => ep.id === ttsGenState.endpointId) || endpoints[0] || null;
+    const ttsProvider = selectedTtsEndpoint?.provider || '';
+    const voices = mediaPresetVoices(ttsProvider).map(v => ({ value: v.value, label: v.label + ' (' + v.value + ')' }));
+    if (voices.length && !voices.some(v => v.value === ttsGenState.voice)) ttsGenState.voice = voices[0].value;
+    const voiceSelect = voices.length
+        ? renderUiSelectHtml({
+            id: 'tts-gen-voice',
+            value: ttsGenState.voice,
+            options: voices,
+            onChange: (value) => { ttsGenState.voice = value; },
+        })
+        : '<input type="text" id="tts-gen-voice" class="media-gen-form-control" placeholder="输入音色 ID，如 zh_female_qingxin" value="' + escapeHtml(ttsGenState.voice) + '" oninput="ttsGenState.voice=this.value">';
     const encodings = ['mp3', 'wav', 'ogg_opus', 'pcm'];
     const encodingSelect = renderUiSelectHtml({
         id: 'tts-gen-encoding',
@@ -5435,7 +5448,7 @@ window.renderTtsGenDetail = function() {
                 <div class="media-gen-form-group"><label>语速倍率（0.5 - 2.0）</label>
                     <input type="range" class="media-gen-form-control" min="0.5" max="2.0" step="0.1" value="${ttsGenState.speedRatio}" onchange="ttsGenState.speedRatio=Number(this.value); document.getElementById('tts-speed-value').textContent=this.value+'x'" style="width:100%;">
                     <span class="media-gen-tip" id="tts-speed-value">${ttsGenState.speedRatio}x</span></div>
-                <div class="media-gen-tip"><strong>音色说明：</strong>zh_female_qingxin 适合通用播报；zh_male_wennuanshizhong 适合叙事；zh_female_wanwanxiaohe 适合活泼内容；en_male_rm_emo / en_female_rm_emo 适合英文情感朗读。</div>
+                <div class="media-gen-tip"><strong>音色说明：</strong>${voices.length ? '音色列表按当前节点提供商（' + escapeHtml(ttsProvider) + '）动态展示。' : '当前提供商（' + escapeHtml(ttsProvider || '未知') + '）未预设音色列表，请在上方输入音色 ID。'}</div>
                 <button class="btn btn-primary" onclick="runTtsGeneration()" ${ttsGenState.loading || !endpoints.length ? 'disabled' : ''}>${ttsGenState.loading ? '合成中...' : '合成语音'}</button>
             </div>
             <div class="media-gen-panel"><h3>结果</h3>${resultHtml}<h3 style="margin-top:18px;">本地历史</h3>${historyHtml}</div>
