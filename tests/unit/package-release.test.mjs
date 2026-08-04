@@ -32,7 +32,8 @@ test("public package attribution does not expose a local user alias", async () =
 test("npm package no longer ships Electron desktop shell artifacts", async () => {
   const pkg = JSON.parse(await readFile(path.join(projectRoot, "package.json"), "utf8"));
 
-  assert.ok(pkg.files.includes("desktop/config-panel.html"));
+  assert.ok(pkg.files.includes("desktop/index.html"));
+  assert.ok(pkg.files.includes("desktop/dist"));
   assert.ok(!pkg.files.includes("desktop/main.mjs"));
   assert.ok(!pkg.files.includes("desktop/lib/gateway-control.mjs"));
   assert.ok(!pkg.files.includes("desktop/lib/desktop-smoke.mjs"));

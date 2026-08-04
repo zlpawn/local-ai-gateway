@@ -1062,7 +1062,7 @@ function renderAnalyticsBreakdownTable(containerId, rows, nameKey, nameLabel, pu
             <td style="padding:9px 10px;border-top:1px solid var(--border-color);text-align:right">${formatUsageNumber(row.prompt_tokens)}</td>
             <td style="padding:9px 10px;border-top:1px solid var(--border-color);text-align:right">${formatUsageNumber(row.completion_tokens)}</td>
             <td style="padding:9px 10px;border-top:1px solid var(--border-color);text-align:right">${formatUsageNumber(row.total_tokens)}</td>
-        <td style="padding:9px 10px;border-top:1px solid var(--border-color);text-align:right">${row.cost_usd ? `${Number(row.cost_usd).toFixed(4)}` : '-'}</td>
+        <td style="padding:9px 10px;border-top:1px solid var(--border-color);text-align:right">${row.cost_usd ? `${row.native_currency === 'cny' ? '¥' : '$'}${Number(row.cost_usd).toFixed(4)}` : '-'}</td>
         </tr>`;
     }).join('');
     container.innerHTML = `<div style="overflow:auto"><table style="width:100%;border-collapse:collapse;font-size:13px">
@@ -1111,7 +1111,7 @@ function renderAnalyticsDetailBreakdown(rows) {
         <td style="padding:9px 10px;border-top:1px solid var(--border-color);text-align:right">${formatUsageNumber(row.prompt_tokens)}</td>
         <td style="padding:9px 10px;border-top:1px solid var(--border-color);text-align:right">${formatUsageNumber(row.completion_tokens)}</td>
         <td style="padding:9px 10px;border-top:1px solid var(--border-color);text-align:right">${formatUsageNumber(row.total_tokens)}</td>
-        ${row.cost_usd ? `<td style="padding:9px 10px;border-top:1px solid var(--border-color);text-align:right">${row.native_currency === 'cny' ? 'Y' : '$'}${Number(row.cost_usd).toFixed(4)}</td>` : '<td style="padding:9px 10px;border-top:1px solid var(--border-color);text-align:right;color:var(--text-secondary)">-</td>'}
+        ${row.cost_usd ? `<td style="padding:9px 10px;border-top:1px solid var(--border-color);text-align:right">${row.native_currency === 'cny' ? '¥' : '$'}${Number(row.cost_usd).toFixed(4)}</td>` : '<td style="padding:9px 10px;border-top:1px solid var(--border-color);text-align:right;color:var(--text-secondary)">-</td>'}
     </tr>`).join('');
     container.innerHTML = `<div style="overflow:auto;max-height:420px"><table style="width:100%;border-collapse:collapse;font-size:13px">
         <thead><tr>${heads}</tr></thead>
@@ -1147,7 +1147,7 @@ window.loadAnalyticsData = async function() {
         document.getElementById('stat-completion-tokens').textContent = formatUsageNumber(summary.completion_tokens);
         document.getElementById('stat-total-requests').textContent = formatUsageNumber(summary.total_requests);
         document.getElementById('stat-cost-usd').textContent = '$' + Number(summary.cost_usd || 0).toFixed(4);
-        document.getElementById('stat-cost-cny').textContent = 'Y' + Number(summary.cost_cny_equivalent || 0).toFixed(2);
+        document.getElementById('stat-cost-cny').textContent = '¥' + Number(summary.cost_cny_equivalent || 0).toFixed(2);
         const fxInfo = data.fx || {};
         const fxSub = fxInfo.source === 'api' ? `Rate $${fxInfo.usd_to_cny?.toFixed(2)} - updated ${new Date(fxInfo.updated_at || 0).toLocaleTimeString('zh-CN', {hour:'2-digit',minute:'2-digit'})}` : (fxInfo.source === 'cached' ? `Rate $${fxInfo.usd_to_cny?.toFixed(2)} (cached)` : 'Rate 7.25 (default)');
         const usdSub = document.getElementById('stat-cost-usd-sub');
@@ -1221,7 +1221,7 @@ async function loadPricingTable() {
             return;
         }
         const rows = models.map(m => {
-            const cur = m.currency === 'cny' ? 'Y' : (m.currency === 'usd' ? '$' : '');
+            const cur = m.currency === 'cny' ? '¥' : (m.currency === 'usd' ? '$' : '');
             const sourceLabel = { custom: '自定义', vendored: '内置CN', litellm: 'litellm', default: '默认' }[m.source] || m.source;
             return '<tr>' +
                 '<td>' + escapeHtml(m.model) + '</td>' +
@@ -5335,7 +5335,8 @@ window.copyEmbedVector = function(label) {
 
 window.addEventListener('load', () => {
     const hash = window.location.hash.replace('#', '');
-    if (hash === 'code' || hash === 'desktop' || hash === 'codex' || hash === 'sync' || hash === 'skills' || hash === 'install-history' || hash === 'tools') {
+    const knownTabs = ['code','desktop','codex','deeptutor','analytics','proxy','sync','skills','install-history','tools','cli','cli-install-history','cli-sources'];
+    if (knownTabs.includes(hash) || isCustomClient(hash)) {
         switchTab(hash);
     }
 });

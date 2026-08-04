@@ -1,4 +1,4 @@
-﻿import http from "node:http";
+import http from "node:http";
 import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
@@ -71,7 +71,7 @@ import {
 import { syncClaudeCodeSettings } from "./lib/config/claude-code-settings.mjs";
 import { createModelDiscoveryService } from "./lib/models/discovery-service.mjs";
 import { createTokenTracker } from "./lib/analytics/token-tracker.mjs";
-import { createModelPricingEngine } from "./lib/analytics/model-pricing.mjs";
+import { createModelPricingEngine, normalizeModelName } from "./lib/analytics/model-pricing.mjs";
 import { createFxRateService } from "./lib/analytics/fx-rate.mjs";
 import { createResponseUsageCapture } from "./lib/analytics/response-usage-capture.mjs";
 import {
@@ -1691,8 +1691,8 @@ sendJson(res, 200, result);
         const configured = new Set();
         for (const client of Object.values(GATEWAY_CONFIG.clients || {})) {
           for (const ep of (client.endpoints || [])) {
-            for (const m of (ep.models || [])) configured.add(m.toLowerCase());
-            for (const m of Object.keys(ep.model_mapping || {})) configured.add(m.toLowerCase());
+            for (const m of (ep.models || [])) configured.add(normalizeModelName(m));
+            for (const m of Object.keys(ep.model_mapping || {})) configured.add(normalizeModelName(m));
           }
         }
         prices.models = prices.models.filter(m => configured.has(m.model.toLowerCase()));
@@ -9639,6 +9639,9 @@ function reloadGatewayConfig({ reloadFiles = true } = {}) {
     GATEWAY_CONFIG = GATEWAY_STATE.config;
     GATEWAY_SECRETS = GATEWAY_STATE.secrets;
   }
+  // Refresh custom prices so runtime config changes take effect immediately.
+  globalPricingEngine?.updateCustomPrices(GATEWAY_CONFIG.custom_prices || []);
+
   CLAUDE_CODE_MODEL_ROUTES = buildClaudeCodeModelRoutes(
     GATEWAY_CONFIG.clients?.code?.endpoints || [],
   );

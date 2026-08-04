@@ -1542,7 +1542,8 @@ input:focus, select:focus {
 }
 
 .toast.success { border-left: 3px solid var(--success); }
-.toast.error { border-left: 3px solid var(--danger); }
+.toast.error,
+.toast.danger { border-left: 3px solid var(--danger); }
 
 .toast svg {
     width: 18px;
@@ -1550,7 +1551,8 @@ input:focus, select:focus {
 }
 
 .toast.success svg { color: var(--success); }
-.toast.error svg { color: var(--danger); }
+.toast.error svg,
+.toast.danger svg { color: var(--danger); }
 
 @keyframes toastEnter {
     to { transform: translateY(0) scale(1); opacity: 1; }
