@@ -5409,7 +5409,7 @@ window.renderTtsGenDetail = function() {
 
     const selectedTtsEndpoint = endpoints.find(ep => ep.id === ttsGenState.endpointId) || endpoints[0] || null;
     const ttsProvider = selectedTtsEndpoint?.provider || '';
-    const voices = mediaPresetVoices(ttsProvider).map(v => ({ value: v.value, label: v.label + ' (' + v.value + ')' }));
+    const voices = mediaPresetVoices(ttsProvider).map(v => ({ value: v.value, label: v.label }));
     if (voices.length && !voices.some(v => v.value === ttsGenState.voice)) ttsGenState.voice = voices[0].value;
     const voiceSelect = voices.length
         ? renderUiSelectHtml({
