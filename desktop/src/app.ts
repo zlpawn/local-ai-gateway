@@ -4729,10 +4729,50 @@ function renderWebSearchHistoryHtml(entries) {
     }).join('') + '</div>';
 }
 
-window.viewWebSearchHistory = function(historyId) {
+window.viewWebSearchHistory = async function(historyId) {
     const url = mediaHistoryPreviewUrl(historyId);
     if (!url) { showToast('该历史记录无关联文件', 'danger'); return; }
-    window.open(url, 'Shrimp');
+    let data = null;
+    try {
+        const res = await fetch(url);
+        data = await res.json();
+    } catch (err) {
+        showToast('加载搜索结果失败: ' + (err.message || err), 'danger');
+        return;
+    }
+    const query = escapeHtml(data.query || '未记录查询词');
+    const provider = escapeHtml(data.provider || '');
+    const answer = data.answer ? '<div class="ws-answer"><strong>摘要：</strong>' + escapeHtml(data.answer) + '</div>' : '';
+    const results = Array.isArray(data.results) ? data.results : [];
+    const listHtml = results.length ? results.map((item, i) => {
+        const title = escapeHtml(item.title || '(无标题)');
+        const link = item.url ? escapeHtml(item.url) : '';
+        const snippet = item.snippet ? '<div class="ws-snippet">' + escapeHtml(item.snippet) + '</div>' : '';
+        return '<div class="ws-item"><div class="ws-title">' + (link ? '<a href="' + link + '" target="_blank" rel="noopener noreferrer">' + (i+1) + '. ' + title + '</a>' : (i+1) + '. ' + title) + '</div>' + (link ? '<div class="ws-url">' + link + '</div>' : '') + snippet + '</div>';
+    }).join('') : '<div class="ws-empty">未找到相关结果。</div>';
+    const html = '<!DOCTYPE html><html lang="zh-CN"><head><meta charset="utf-8"><title>Shrimp</title><style>'
+        + 'body{font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif;max-width:900px;margin:24px auto;padding:0 20px;color:#222;background:#fafafa}'
+        + 'h1{font-size:18px;margin:0 0 4px}'
+        + '.ws-meta{color:#888;font-size:12px;margin-bottom:16px}'
+        + '.ws-answer{background:#fff;border:1px solid #e0e0e0;border-radius:8px;padding:12px 16px;margin-bottom:16px;font-size:14px;line-height:1.6}'
+        + '.ws-item{background:#fff;border:1px solid #e0e0e0;border-radius:8px;padding:10px 14px;margin-bottom:10px}'
+        + '.ws-title{font-size:14px;font-weight:600}'
+        + '.ws-title a{color:#1a73e8;text-decoration:none}'
+        + '.ws-title a:hover{text-decoration:underline}'
+        + '.ws-url{font-size:11px;color:#888;word-break:break-all;margin-top:2px}'
+        + '.ws-snippet{font-size:13px;color:#555;margin-top:6px;line-height:1.5}'
+        + '.ws-empty{color:#888;padding:20px;text-align:center}'
+        + '</style></head><body>'
+        + '<h1>Shrimp · 联网搜索结果</h1>'
+        + '<div class="ws-meta">查询词：' + query + (provider ? ' · 服务商：' + provider : '') + '</div>'
+        + answer
+        + '<div class="ws-list">' + listHtml + '</div>'
+        + '</body></html>';
+    const w = window.open('', 'Shrimp');
+    if (!w) { showToast('弹窗被浏览器拦截，请允许后重试', 'danger'); return; }
+    w.document.open();
+    w.document.write(html);
+    w.document.close();
 };
 
 window.renderWebSearchDetail = function() {
