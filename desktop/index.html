@@ -586,14 +586,34 @@ experimental_bearer_token = "dummy"</pre>
                         <h2>预置技能库 (Agent Skills)</h2>
                         <p>按分类浏览与搜索本地技能；目录中存在即已安装，常用技能置顶，不把上百个 skill 一次性摊开。</p>
                     </div>
-                    <button class="btn" title="重新扫描 ~/.agents/skills 并刷新列表" onclick="refreshSkillsLibrary(true)">
-                        刷新技能库
-                    </button>
+                    <div style="display:flex;gap:8px;align-items:center;">
+                        <button class="btn" id="consolidate-toggle-btn" style="padding:4px 12px;font-size:12px;" onclick="toggleConsolidatePanel()">收拢与分发</button>
+                        <button class="btn" id="batch-toggle-btn" style="padding:4px 12px;font-size:12px;" onclick="toggleBatchMode()">批量操作</button>
+                        <button class="btn" title="重新扫描 ~/.agents/skills 并刷新列表" onclick="refreshSkillsLibrary(true)">刷新技能库</button>
+                    </div>
                 </div>
 
                 <div class="usage-guide">
                     <h3>💡 使用原则</h3>
                     <p>统一中央目录：<code class="path-pill">~/.agents/skills/</code>。网关托管技能可由网关写入中央目录；本地技能则直接放进同一目录即可被发现。右上角“刷新技能库”会重新扫描各技能目录并刷新列表。</p>
+                </div>
+
+                <div class="consolidate-panel" id="consolidate-panel" style="display:none;">
+                    <span class="panel-label">收拢与分发</span>
+                    <label><input type="checkbox" id="consolidate-claude" checked /> Claude Code</label>
+                    <label><input type="checkbox" id="consolidate-antigravity" checked /> Antigravity</label>
+                    <label><input type="checkbox" id="consolidate-3p" /> Claude Desktop 3P</label>
+                    <button class="btn btn-primary" style="padding:4px 12px;font-size:12px;" onclick="runConsolidate()">执行收拢与分发</button>
+                    <span style="font-size:11px;color:var(--text-secondary);">收拢散落的真实目录到中央，再按勾选的客户端创建/清理软链</span>
+                </div>
+
+                <div class="skills-batch-bar" id="skills-batch-bar" style="display:none;">
+                    <span class="batch-count" id="batch-count">已选 0 个</span>
+                    <button class="btn" style="padding:4px 10px;font-size:12px;" onclick="selectAllSkills()">全选</button>
+                    <button class="btn" style="padding:4px 10px;font-size:12px;" onclick="clearBatchSelection()">清空</button>
+                    <button class="btn" style="padding:4px 10px;font-size:12px;" onclick="batchUnlinkSelected()">取消链接</button>
+                    <button class="btn" style="padding:4px 10px;font-size:12px;color:#ef4444;border-color:#ef4444;" onclick="batchDeleteSelected()">删除</button>
+                    <button class="btn" style="padding:4px 10px;font-size:12px;" onclick="toggleBatchMode()">退出批量</button>
                 </div>
 
                 <div class="skills-toolbar">
@@ -604,7 +624,6 @@ experimental_bearer_token = "dummy"</pre>
                     <button class="skills-filter-chip" data-scope="local" onclick="setSkillsScope('local')">本地发现 0</button>
                     <button class="skills-filter-chip" data-scope="missing" onclick="setSkillsScope('missing')">未安装托管 0</button>
                                     <button class="skills-filter-chip" data-scope="unified-missing" onclick="setSkillsScope('unified-missing')">未统一到中央 0</button>
-                    <button class="btn btn-primary" id="unify-all-btn" style="padding:4px 12px;font-size:12px;" title="把未统一到中央的 skill 复制到 ~/.agents/skills 并软链其他目录" onclick="unifyAllSkills()">一键统一</button>
                 </div>
 
                 <div id="skills-category-filters" class="skills-filters"></div>

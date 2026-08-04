@@ -438,6 +438,63 @@
             opacity: 1;
         }
 
+        .skills-batch-bar {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            padding: 8px 12px;
+            background: var(--input-bg);
+            border: 1px solid var(--border-color);
+            border-radius: var(--radius-md);
+            margin-bottom: 10px;
+            font-size: 13px;
+        }
+        .skills-batch-bar .batch-count {
+            font-weight: 600;
+            color: var(--text-primary);
+            margin-right: auto;
+        }
+        .skill-card-checkbox {
+            width: 18px;
+            height: 18px;
+            flex: 0 0 auto;
+            cursor: pointer;
+            margin-right: 4px;
+            accent-color: #3b82f6;
+        }
+        .skill-card.batch-mode {
+            cursor: default;
+        }
+        .consolidate-panel {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            padding: 10px 14px;
+            background: var(--input-bg);
+            border: 1px solid var(--border-color);
+            border-radius: var(--radius-md);
+            margin-bottom: 10px;
+            flex-wrap: wrap;
+        }
+        .consolidate-panel label {
+            display: flex;
+            align-items: center;
+            gap: 5px;
+            font-size: 13px;
+            color: var(--text-primary);
+            cursor: pointer;
+            white-space: nowrap;
+        }
+        .consolidate-panel label input[type="checkbox"] {
+            accent-color: #3b82f6;
+        }
+        .consolidate-panel .panel-label {
+            font-size: 12px;
+            font-weight: 600;
+            color: var(--text-secondary);
+            margin-right: 4px;
+        }
+
         .btn-danger {
             background: transparent;
             color: var(--text-secondary);
@@ -3691,7 +3748,25 @@ experimental_bearer_token = "dummy"</pre>
                     <button class="skills-filter-chip" data-scope="local" onclick="setSkillsScope('local')">本地发现 0</button>
                     <button class="skills-filter-chip" data-scope="missing" onclick="setSkillsScope('missing')">未安装托管 0</button>
                                     <button class="skills-filter-chip" data-scope="unified-missing" onclick="setSkillsScope('unified-missing')">未统一到中央 0</button>
-                    <button class="btn btn-primary" id="unify-all-btn" style="padding:4px 12px;font-size:12px;" title="把未统一到中央的 skill 复制到 ~/.agents/skills 并软链其他目录" onclick="unifyAllSkills()">一键统一</button>
+                    <button class="btn" id="batch-toggle-btn" style="padding:4px 12px;font-size:12px;" onclick="toggleBatchMode()">批量操作</button>
+                </div>
+
+                <div class="consolidate-panel" id="consolidate-panel">
+                    <span class="panel-label">收拢与分发</span>
+                    <label><input type="checkbox" id="consolidate-claude" checked /> Claude Code</label>
+                    <label><input type="checkbox" id="consolidate-antigravity" checked /> Antigravity</label>
+                    <label><input type="checkbox" id="consolidate-3p" /> Claude Desktop 3P</label>
+                    <button class="btn btn-primary" style="padding:4px 12px;font-size:12px;" onclick="runConsolidate()">执行收拢与分发</button>
+                    <span style="font-size:11px;color:var(--text-secondary);">收拢散落的真实目录到中央，再按勾选的客户端创建/清理软链</span>
+                </div>
+
+                <div class="skills-batch-bar" id="skills-batch-bar" style="display:none;">
+                    <span class="batch-count" id="batch-count">已选 0 个</span>
+                    <button class="btn" style="padding:4px 10px;font-size:12px;" onclick="selectAllSkills()">全选</button>
+                    <button class="btn" style="padding:4px 10px;font-size:12px;" onclick="clearBatchSelection()">清空</button>
+                    <button class="btn" style="padding:4px 10px;font-size:12px;" onclick="batchUnlinkSelected()">取消链接</button>
+                    <button class="btn btn-danger" style="padding:4px 10px;font-size:12px;color:#ef4444;border-color:#ef4444;" onclick="batchDeleteSelected()">删除</button>
+                    <button class="btn" style="padding:4px 10px;font-size:12px;" onclick="toggleBatchMode()">退出批量</button>
                 </div>
 
                 <div id="skills-category-filters" class="skills-filters"></div>
@@ -5326,6 +5401,136 @@ experimental_bearer_token = "dummy"</pre>
             }
         };
 
+        // ===== Skills: consolidate + dispatch =====
+        window.runConsolidate = async function() {
+            const targets = {
+                claude: document.getElementById('consolidate-claude').checked,
+                antigravity: document.getElementById('consolidate-antigravity').checked,
+                claudeDesktop3p: document.getElementById('consolidate-3p').checked,
+            };
+            if (!targets.claude && !targets.antigravity && !targets.claudeDesktop3p) {
+                showToast('请至少选择一个客户端目录', 'danger');
+                return;
+            }
+            const clientNames = Object.entries(targets).filter(([,v]) => v).map(([k]) => k).join(', ');
+            const ok = await showSkillConfirmModal(
+                '收拢与分发',
+                '将执行以下操作：\n\n1. 收拢：把散落在各客户端目录的真实副本统一到中央目录\n2. 分发：为选中的客户端（' + escapeHtml(clientNames) + '）创建软链\n3. 清理：为未选中的客户端移除软链（保留真实目录）\n\n确认执行？'
+            );
+            if (!ok) return;
+            try {
+                const res = await fetch('/v1/skills/consolidate', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ targets }),
+                });
+                const data = await res.json();
+                if (!data.success) throw new Error(data.error || '失败');
+                await refreshSkillsLibrary(true);
+                const parts = [];
+                if (data.unified) parts.push('收拢 ' + data.unified);
+                if (data.linked) parts.push('分发 ' + data.linked);
+                if (data.unlinked) parts.push('清理 ' + data.unlinked);
+                const errs = (data.unifyErrors || []).length + (data.dispatchErrors || []).length;
+                showToast(parts.join(' / ') + (errs ? ' / 失败 ' + errs : ''), errs ? 'danger' : 'success');
+            } catch (err) {
+                showToast('收拢与分发失败: ' + err.message, 'danger');
+            }
+        };
+
+        // ===== Skills: batch mode =====
+        window.toggleBatchMode = function() {
+            skillsLibraryState.batchMode = !skillsLibraryState.batchMode;
+            if (!skillsLibraryState.batchMode) {
+                skillsLibraryState.batchSelected.clear();
+            }
+            document.getElementById('skills-batch-bar').style.display = skillsLibraryState.batchMode ? '' : 'none';
+            document.getElementById('batch-toggle-btn').classList.toggle('btn-primary', skillsLibraryState.batchMode);
+            renderSkillsList();
+            updateBatchCount();
+        };
+
+        window.toggleBatchSelect = function(name, checked) {
+            if (checked) {
+                skillsLibraryState.batchSelected.add(name);
+            } else {
+                skillsLibraryState.batchSelected.delete(name);
+            }
+            updateBatchCount();
+            renderSkillsList();
+        };
+
+        window.selectAllSkills = function() {
+            const skills = skillsLibraryState.skills || [];
+            for (const s of skills) {
+                skillsLibraryState.batchSelected.add(s.name);
+            }
+            renderSkillsList();
+            updateBatchCount();
+        };
+
+        window.clearBatchSelection = function() {
+            skillsLibraryState.batchSelected.clear();
+            renderSkillsList();
+            updateBatchCount();
+        };
+
+        function updateBatchCount() {
+            const el = document.getElementById('batch-count');
+            if (el) el.textContent = '已选 ' + skillsLibraryState.batchSelected.size + ' 个';
+        }
+
+        window.batchDeleteSelected = async function() {
+            const names = [...skillsLibraryState.batchSelected];
+            if (!names.length) { showToast('请先选择技能', 'danger'); return; }
+            const ok = await showSkillConfirmModal(
+                '批量删除',
+                '确认删除以下 ' + names.length + ' 个技能？\n\n将从中央目录删除，清理所有客户端软链，托管技能还会从 catalog 移除。\n\n' + names.map(n => '<code>' + escapeHtml(n) + '</code>').join(' ')
+            );
+            if (!ok) return;
+            try {
+                const res = await fetch('/v1/skills/batch-delete', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ skills: names }),
+                });
+                const data = await res.json();
+                if (!data.success) throw new Error(data.error || '失败');
+                skillsLibraryState.batchSelected.clear();
+                await refreshSkillsLibrary(true);
+                const failed = (data.results || []).filter(r => r.error).length;
+                const done = (data.results || []).filter(r => r.deleted).length;
+                showToast('删除完成：' + done + ' 个' + (failed ? ' / 失败 ' + failed : ''), failed ? 'danger' : 'success');
+            } catch (err) {
+                showToast('批量删除失败: ' + err.message, 'danger');
+            }
+        };
+
+        window.batchUnlinkSelected = async function() {
+            const names = [...skillsLibraryState.batchSelected];
+            if (!names.length) { showToast('请先选择技能', 'danger'); return; }
+            const ok = await showSkillConfirmModal(
+                '批量取消链接',
+                '确认取消以下 ' + names.length + ' 个技能在所有客户端的链接？\n\n中央目录内容保留，仅移除客户端目录的软链/副本。\n\n' + names.map(n => '<code>' + escapeHtml(n) + '</code>').join(' ')
+            );
+            if (!ok) return;
+            try {
+                const res = await fetch('/v1/skills/batch-unlink', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ skills: names }),
+                });
+                const data = await res.json();
+                if (!data.success) throw new Error(data.error || '失败');
+                await refreshSkillsLibrary(true);
+                const failed = (data.results || []).filter(r => r.error).length;
+                const done = (data.results || []).filter(r => r.unlinked && r.unlinked.length).length;
+                showToast('取消链接完成：' + done + ' 个' + (failed ? ' / 失败 ' + failed : ''), failed ? 'danger' : 'success');
+            } catch (err) {
+                showToast('批量取消链接失败: ' + err.message, 'danger');
+            }
+        };
+
         // ===== Skills: install history (gateway-driven installs) =====
         let xtermTerm = null;
         let xtermFit = null;
@@ -5944,6 +6149,8 @@ experimental_bearer_token = "dummy"</pre>
             category: "all",
             scope: "all",
             selectedSkill: "leo-grok-imagine",
+            batchMode: false,
+            batchSelected: new Set(),
             stats: { total: 0, installed: 0, managed: 0, local: 0, missing: 0, filtered: 0 },
             categories: [],
             skills: [],
@@ -6009,10 +6216,19 @@ experimental_bearer_token = "dummy"</pre>
             }
             host.innerHTML = skills.map((skill) => {
                 const active = skill.name === skillsLibraryState.selectedSkill;
+                const batchClass = skillsLibraryState.batchMode ? ' batch-mode' : '';
+                const checked = skillsLibraryState.batchSelected.has(skill.name);
+                const checkbox = skillsLibraryState.batchMode
+                    ? `<input type="checkbox" class="skill-card-checkbox" ${checked ? 'checked' : ''} onclick="event.stopPropagation()" onchange="toggleBatchSelect('${escapeHtml(skill.name)}', this.checked)" />`
+                    : '';
+                const clickHandler = skillsLibraryState.batchMode
+                    ? `onclick="toggleBatchSelect('${escapeHtml(skill.name)}', !skillsLibraryState.batchSelected.has('${escapeHtml(skill.name)}'))"`
+                    : `onclick="selectSkill('${escapeHtml(skill.name)}')"`;
                 return `
-                    <article class="skill-card ${active ? 'active' : ''}" onclick="selectSkill('${escapeHtml(skill.name)}')">
+                    <article class="skill-card ${active ? 'active' : ''}${batchClass}" ${clickHandler}>
                         <div class="skill-card-top">
                             <div class="skill-card-title">
+                                ${checkbox}
                                 <div class="skill-card-icon">${escapeHtml(skill.icon || '🧩')}</div>
                                 <div class="skill-card-title-row">
                                     <span class="skill-card-name">${escapeHtml(skill.title || skill.name)}</span>

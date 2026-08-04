@@ -1548,6 +1548,64 @@ function collectGroupedModelsFromConfig(config) {
     return;
   }
 
+  // --- Skills: consolidate + dispatch (gather to central, distribute symlinks) ---
+  if (reqPath === "/v1/skills/consolidate" && req.method === "POST") {
+    if (!checkLocalAuth(req, res)) return;
+    try {
+      const payload = JSON.parse(await readText(req) || "{}");
+      const targets = {
+        claude: Boolean(payload.targets?.claude),
+        antigravity: Boolean(payload.targets?.antigravity),
+        claudeDesktop3p: Boolean(payload.targets?.claudeDesktop3p),
+      };
+      const result = SkillInstaller.consolidateAndDispatch({ targets });
+      sendJson(res, 200, {
+        success: true,
+        ...result,
+        skillLibrary: SkillInstaller.buildLibrarySnapshot({}),
+      });
+    } catch (err) {
+      sendJson(res, 500, { error: err.message || String(err) });
+    }
+    return;
+  }
+
+  // --- Skills: batch delete from central + client dirs ---
+  if (reqPath === "/v1/skills/batch-delete" && req.method === "POST") {
+    if (!checkLocalAuth(req, res)) return;
+    try {
+      const payload = JSON.parse(await readText(req) || "{}");
+      const names = Array.isArray(payload.skills) ? payload.skills : [];
+      const result = SkillInstaller.batchDeleteSkills(names);
+      sendJson(res, 200, {
+        success: true,
+        ...result,
+        skillLibrary: SkillInstaller.buildLibrarySnapshot({}),
+      });
+    } catch (err) {
+      sendJson(res, 500, { error: err.message || String(err) });
+    }
+    return;
+  }
+
+  // --- Skills: batch unlink from client dirs (keep central) ---
+  if (reqPath === "/v1/skills/batch-unlink" && req.method === "POST") {
+    if (!checkLocalAuth(req, res)) return;
+    try {
+      const payload = JSON.parse(await readText(req) || "{}");
+      const names = Array.isArray(payload.skills) ? payload.skills : [];
+      const result = SkillInstaller.batchUnlinkSkills(names);
+      sendJson(res, 200, {
+        success: true,
+        ...result,
+        skillLibrary: SkillInstaller.buildLibrarySnapshot({}),
+      });
+    } catch (err) {
+      sendJson(res, 500, { error: err.message || String(err) });
+    }
+    return;
+  }
+
   // --- Skills: install history (gateway-driven installs) ---
   if (reqPath === "/v1/skills/install-history" && req.method === "GET") {
     if (!checkLocalAuth(req, res)) return;

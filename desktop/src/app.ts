@@ -1464,6 +1464,147 @@ window.unifyAllSkills = async function() {
     }
 };
 
+// ===== Skills: consolidate + dispatch =====
+window.runConsolidate = async function() {
+    const targets = {
+        claude: (document.getElementById('consolidate-claude') as HTMLInputElement)?.checked,
+        antigravity: (document.getElementById('consolidate-antigravity') as HTMLInputElement)?.checked,
+        claudeDesktop3p: (document.getElementById('consolidate-3p') as HTMLInputElement)?.checked,
+    };
+    if (!targets.claude && !targets.antigravity && !targets.claudeDesktop3p) {
+        showToast('请至少选择一个客户端目录', 'error');
+        return;
+    }
+    const clientNames = Object.entries(targets).filter(([,v]) => v).map(([k]) => k).join(', ');
+    const ok = await showSkillConfirmModal(
+        '收拢与分发',
+        '将执行以下操作：\n\n1. 收拢：把散落在各客户端目录的真实副本统一到中央目录\n2. 分发：为选中的客户端（' + escapeHtml(clientNames) + '）创建软链\n3. 清理：为未选中的客户端移除软链（保留真实目录）\n\n确认执行？'
+    );
+    if (!ok) return;
+    try {
+        const res = await fetch('/v1/skills/consolidate', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ targets }),
+        });
+        const data = await res.json();
+        if (!data.success) throw new Error(data.error || '失败');
+        await refreshSkillsLibrary(true);
+        const parts: string[] = [];
+        if (data.unified) parts.push('收拢 ' + data.unified);
+        if (data.linked) parts.push('分发 ' + data.linked);
+        if (data.unlinked) parts.push('清理 ' + data.unlinked);
+        const errs = (data.unifyErrors || []).length + (data.dispatchErrors || []).length;
+        showToast(parts.join(' / ') + (errs ? ' / 失败 ' + errs : ''), errs ? 'error' : 'success');
+    } catch (err: any) {
+        showToast('收拢与分发失败: ' + err.message, 'error');
+    }
+};
+
+// ===== Skills: batch mode =====
+window.toggleConsolidatePanel = function() {
+    const panel = document.getElementById('consolidate-panel');
+    const btn = document.getElementById('consolidate-toggle-btn');
+    if (!panel || !btn) return;
+    const isOpen = panel.style.display !== 'none';
+    panel.style.display = isOpen ? 'none' : '';
+    btn.classList.toggle('is-active', !isOpen);
+};
+
+window.toggleBatchMode = function() {
+    skillsLibraryState.batchMode = !skillsLibraryState.batchMode;
+    if (!skillsLibraryState.batchMode) {
+        skillsLibraryState.batchSelected.clear();
+    }
+    const bar = document.getElementById('skills-batch-bar');
+    if (bar) bar.style.display = skillsLibraryState.batchMode ? '' : 'none';
+    const btn = document.getElementById('batch-toggle-btn');
+    if (btn) btn.classList.toggle('is-active', skillsLibraryState.batchMode);
+    renderSkillsList();
+    updateBatchCount();
+};
+
+window.toggleBatchSelect = function(name: string, checked: boolean) {
+    if (checked) {
+        skillsLibraryState.batchSelected.add(name);
+    } else {
+        skillsLibraryState.batchSelected.delete(name);
+    }
+    updateBatchCount();
+    renderSkillsList();
+};
+
+window.selectAllSkills = function() {
+    const skills = skillsLibraryState.skills || [];
+    for (const s of skills) {
+        skillsLibraryState.batchSelected.add(s.name);
+    }
+    renderSkillsList();
+    updateBatchCount();
+};
+
+window.clearBatchSelection = function() {
+    skillsLibraryState.batchSelected.clear();
+    renderSkillsList();
+    updateBatchCount();
+};
+
+function updateBatchCount() {
+    const el = document.getElementById('batch-count');
+    if (el) el.textContent = '已选 ' + skillsLibraryState.batchSelected.size + ' 个';
+}
+
+window.batchDeleteSelected = async function() {
+    const names = [...skillsLibraryState.batchSelected];
+    if (!names.length) { showToast('请先选择技能', 'error'); return; }
+    const ok = await showSkillConfirmModal(
+        '批量删除',
+        '确认删除以下 ' + names.length + ' 个技能？\n\n将从中央目录删除，清理所有客户端软链，托管技能还会从 catalog 移除。\n\n' + names.map(n => '<code>' + escapeHtml(n) + '</code>').join(' ')
+    );
+    if (!ok) return;
+    try {
+        const res = await fetch('/v1/skills/batch-delete', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ skills: names }),
+        });
+        const data = await res.json();
+        if (!data.success) throw new Error(data.error || '失败');
+        skillsLibraryState.batchSelected.clear();
+        await refreshSkillsLibrary(true);
+        const failed = (data.results || []).filter((r: any) => r.error).length;
+        const done = (data.results || []).filter((r: any) => r.deleted).length;
+        showToast('删除完成：' + done + ' 个' + (failed ? ' / 失败 ' + failed : ''), failed ? 'error' : 'success');
+    } catch (err: any) {
+        showToast('批量删除失败: ' + err.message, 'error');
+    }
+};
+
+window.batchUnlinkSelected = async function() {
+    const names = [...skillsLibraryState.batchSelected];
+    if (!names.length) { showToast('请先选择技能', 'error'); return; }
+    const ok = await showSkillConfirmModal(
+        '批量取消链接',
+        '确认取消以下 ' + names.length + ' 个技能在所有客户端的链接？\n\n中央目录内容保留，仅移除客户端目录的软链/副本。\n\n' + names.map(n => '<code>' + escapeHtml(n) + '</code>').join(' ')
+    );
+    if (!ok) return;
+    try {
+        const res = await fetch('/v1/skills/batch-unlink', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ skills: names }),
+        });
+        const data = await res.json();
+        if (!data.success) throw new Error(data.error || '失败');
+        await refreshSkillsLibrary(true);
+        const failed = (data.results || []).filter((r: any) => r.error).length;
+        const done = (data.results || []).filter((r: any) => r.unlinked && r.unlinked.length).length;
+        showToast('取消链接完成：' + done + ' 个' + (failed ? ' / 失败 ' + failed : ''), failed ? 'error' : 'success');
+    } catch (err: any) {
+        showToast('批量取消链接失败: ' + err.message, 'error');
+    }
+};
+
 // ===== Skills: install history (gateway-driven installs) =====
 let xtermTerm = null;
 let xtermFit = null;
@@ -2082,6 +2223,8 @@ let skillsLibraryState = {
     category: "all",
     scope: "all",
     selectedSkill: "leo-grok-imagine",
+    batchMode: false,
+    batchSelected: new Set<string>(),
     stats: { total: 0, installed: 0, managed: 0, local: 0, missing: 0, filtered: 0 },
     categories: [],
     skills: [],
@@ -2147,10 +2290,19 @@ function renderSkillsList() {
     }
     host.innerHTML = skills.map((skill) => {
         const active = skill.name === skillsLibraryState.selectedSkill;
+        const batchClass = skillsLibraryState.batchMode ? ' batch-mode' : '';
+        const checked = skillsLibraryState.batchSelected.has(skill.name);
+        const checkbox = skillsLibraryState.batchMode
+            ? `<input type="checkbox" class="skill-card-checkbox" ${checked ? 'checked' : ''} onclick="event.stopPropagation()" onchange="toggleBatchSelect('${escapeHtml(skill.name)}', this.checked)" />`
+            : '';
+        const clickHandler = skillsLibraryState.batchMode
+            ? `onclick="toggleBatchSelect('${escapeHtml(skill.name)}', !skillsLibraryState.batchSelected.has('${escapeHtml(skill.name)}'))"`
+            : `onclick="selectSkill('${escapeHtml(skill.name)}')"`;
         return `
-            <article class="skill-card ${active ? 'active' : ''}" onclick="selectSkill('${escapeHtml(skill.name)}')">
+            <article class="skill-card ${active ? 'active' : ''}${batchClass}" ${clickHandler}>
                 <div class="skill-card-top">
                     <div class="skill-card-title">
+                        ${checkbox}
                         <div class="skill-card-icon">${escapeHtml(skill.icon || '🧩')}</div>
                         <div class="skill-card-title-row">
                             <span class="skill-card-name">${escapeHtml(skill.title || skill.name)}</span>
@@ -2289,7 +2441,7 @@ async function refreshSkillsLibrary(force = false) {
     }
 }
 
-function onSkillsSearchInput(value) {
+window.onSkillsSearchInput = function(value) {
     skillsLibraryState.query = value || '';
     if (skillsSearchTimer) clearTimeout(skillsSearchTimer);
     skillsSearchTimer = setTimeout(() => {
@@ -3279,6 +3431,17 @@ window.closeEndpointDetail = function() {
 };
 
 window.switchTab = function(tabId) {
+    // If clicking the skills parent item while already on the skills tab,
+    // toggle the nav group open/closed instead of re-switching.
+    if (tabId === 'skills') {
+        const skillsSection = document.getElementById('section-skills');
+        const navItem = document.querySelector('.nav-item[href="#skills"]');
+        if (skillsSection && skillsSection.style.display !== 'none' && navItem && navItem.classList.contains('active')) {
+            const g = document.getElementById('nav-skills-group');
+            if (g) g.classList.toggle('open');
+            return;
+        }
+    }
     // Custom agent-node names share one section; route them there but remember
     // which custom client is focused so render() can show its detail view.
     const sectionId = isCustomClient(tabId) ? 'custom-clients' : tabId;

@@ -431,6 +431,71 @@ body {
     opacity: 1;
 }
 
+.skills-batch-bar {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding: 0 4px 14px;
+    background: transparent;
+    border: none;
+    margin: 0 0 12px;
+    font-size: 13px;
+}
+.skills-batch-bar .batch-count {
+    font-weight: 600;
+    color: var(--text-primary);
+    margin-right: auto;
+}
+.skill-card-checkbox {
+    width: 18px;
+    height: 18px;
+    flex: 0 0 auto;
+    cursor: pointer;
+    margin-right: 4px;
+    accent-color: #3b82f6;
+}
+.skill-card.batch-mode {
+    cursor: default;
+}
+.consolidate-panel {
+    display: flex;
+    align-items: center;
+    gap: 14px;
+    padding: 0 4px 14px;
+    background: transparent;
+    border: none;
+    margin: 0 0 12px;
+    flex-wrap: wrap;
+}
+.consolidate-panel label {
+    display: flex;
+    align-items: center;
+    gap: 5px;
+    font-size: 13px;
+    color: var(--text-primary);
+    cursor: pointer;
+    white-space: nowrap;
+}
+.consolidate-panel label input[type="checkbox"] {
+    accent-color: #3b82f6;
+}
+.consolidate-panel .panel-label {
+    font-size: 12px;
+    font-weight: 600;
+    color: var(--text-secondary);
+    margin-right: 4px;
+}
+
+.section-header .btn.is-active {
+    background: var(--text-primary);
+    color: var(--bg-color);
+    border-color: var(--text-primary);
+    font-weight: 600;
+}
+.section-header .btn.is-active:hover:not(:disabled) {
+    opacity: 0.85;
+}
+
 .btn-danger {
     background: transparent;
     color: var(--text-secondary);
