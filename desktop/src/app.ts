@@ -2441,7 +2441,7 @@ async function refreshSkillsLibrary(force = false) {
     }
 }
 
-function onSkillsSearchInput(value) {
+window.onSkillsSearchInput = function(value) {
     skillsLibraryState.query = value || '';
     if (skillsSearchTimer) clearTimeout(skillsSearchTimer);
     skillsSearchTimer = setTimeout(() => {
