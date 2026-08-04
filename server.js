@@ -106,6 +106,8 @@ import {
   runGatewayWebSearchChatLoop,
   runGatewayWebSearchResponsesLoop,
   withoutStreamFlag,
+  selectWebSearchEndpoint,
+  getWebSearchProvider,
 } from "./lib/web-search/index.mjs";
 import { shouldRetryUpstreamResponse } from "./lib/upstream-retry.mjs";
 import {
@@ -900,6 +902,12 @@ async function route(req, res) {
   if (reqPath.startsWith("/v1/media/")) {
     if (!checkLocalAuth(req, res)) return;
     await routeMediaRequest(req, res, context, reqPath);
+    return;
+  }
+
+  if (reqPath === "/v1/web-search" && req.method === "POST") {
+    if (!checkLocalAuth(req, res)) return;
+    await routeWebSearchRequest(req, res, context);
     return;
   }
 
@@ -2484,6 +2492,90 @@ function mediaProviderContext(req, endpoint, signal) {
 }
 
 
+async function routeWebSearchRequest(req, res, context) {
+  let body;
+  try {
+    body = JSON.parse(await readText(req) || "{}");
+  } catch {
+    throw httpError(400, "Invalid JSON request body.");
+  }
+  const query = String(body.query || "").trim();
+  if (!query) {
+    sendJson(res, 400, { error: { type: "invalid_request", message: "Missing search query." } });
+    return;
+  }
+  const endpoints = GATEWAY_CONFIG.clients?.[context.client]?.endpoints || [];
+  const endpointId = body.endpoint_id ? String(body.endpoint_id) : "";
+  let candidateEndpoints = endpoints.filter((ep) => ep?.purpose === "web_search" && ep.enabled !== false);
+  if (endpointId) candidateEndpoints = candidateEndpoints.filter((ep) => ep.id === endpointId);
+  const selected = selectWebSearchEndpoint(candidateEndpoints, { secrets: GATEWAY_SECRETS, env: process.env });
+  if (!selected) {
+    sendJson(res, 404, {
+      error: {
+        type: "web_search_endpoint_not_found",
+        message: `No web_search endpoint${endpointId ? ` '${endpointId}'` : ""} is configured for client '${context.client}'.`,
+      },
+    });
+    return;
+  }
+  const requestAbort = bindRequestAbort(req, res);
+  try {
+    const result = await selected.adapter.search({
+      query,
+      max_results: body.max_results,
+      time_range: body.time_range,
+      options: selected.options || {},
+      apiKey: selected.apiKey,
+      signal: requestAbort.signal,
+    });
+    const persisted = await persistWebSearchResult({ result, body: { ...body, query }, endpoint: selected.endpoint });
+    sendJson(res, 200, {
+      ok: result.ok !== false && !result.error,
+      provider: selected.providerId,
+      query: result.query || query,
+      answer: result.answer || null,
+      results: Array.isArray(result.results) ? result.results : [],
+      error: result.error || null,
+      ...persisted,
+    });
+  } catch (error) {
+    recordMediaFailure({
+      type: "web_search",
+      error,
+      body: { ...body, query },
+      endpoint: selected.endpoint,
+    });
+    throw error;
+  } finally {
+    requestAbort.dispose();
+  }
+}
+
+async function persistWebSearchResult({ result, body, endpoint }) {
+  const filename = generateSemanticFilename(body.query || "web_search", "json", "search");
+  const filePath = path.join(ensureOutputDir("web_search"), filename);
+  const payload = {
+    query: result.query || body.query,
+    provider: result.provider,
+    answer: result.answer || null,
+    results: Array.isArray(result.results) ? result.results : [],
+    error: result.error || null,
+    ok: result.ok !== false && !result.error,
+  };
+  fs.writeFileSync(filePath, JSON.stringify(payload, null, 2) + "\n", { mode: 0o600 });
+  const entry = addHistoryEntry(mediaDataDir(), {
+    media_type: "web_search",
+    endpoint_name: endpoint.name || endpoint.id,
+    provider: endpoint.provider,
+    model: "",
+    prompt: body.query || "",
+    file_path: filePath,
+    file_size: fs.statSync(filePath).size,
+    status: "completed",
+  });
+  return { file_path: filePath, filePath, history_id: entry.id, historyId: entry.id };
+}
+
 async function listAntigravityModels(endpoint = null) {
   // Real desktop path from language_server.log:
   // POST https://daily-cloudcode-pa.googleapis.com/v1internal:fetchAvailableModels
@@ -2747,6 +2839,7 @@ const MEDIA_FILE_CONTENT_TYPES = new Map([
   [".wav", "audio/wav"],
   [".ogg", "audio/ogg"],
   [".m4a", "audio/mp4"],
+  [".json", "application/json; charset=utf-8"],
 ]);
 
 function sendMediaHistoryFile(res, historyId) {

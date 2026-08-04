@@ -3249,3 +3249,39 @@ input:focus, select:focus {
 #pricing-table-container tr:hover td {
   background: var(--surface-hover);
 }
+
+/* Web search mini-tool */
+.web-search-results {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+.web-search-result-item {
+  padding: 8px 10px;
+  border: 1px solid var(--border-color);
+  border-radius: 6px;
+  background: var(--surface);
+}
+.web-search-result-title {
+  font-weight: 600;
+  font-size: 13px;
+}
+.web-search-result-title a {
+  color: var(--accent-color, #4f9cf9);
+  text-decoration: none;
+}
+.web-search-result-title a:hover {
+  text-decoration: underline;
+}
+.web-search-result-url {
+  font-size: 11px;
+  color: var(--text-secondary);
+  word-break: break-all;
+  margin-top: 2px;
+}
+.web-search-result-snippet {
+  font-size: 12px;
+  color: var(--text-secondary);
+  margin-top: 4px;
+  line-height: 1.5;
+}

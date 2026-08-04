@@ -133,10 +133,24 @@ const ttsGenState = {
     historyLoading: false,
     historyLoaded: false
 };
+const webSearchState = {
+    client: 'codex',
+    endpointId: '',
+    query: '',
+    maxResults: 5,
+    timeRange: '',
+    result: null,
+    loading: false,
+    error: '',
+    history: [],
+    historyLoading: false,
+    historyLoaded: false
+};
 const MEDIA_HISTORY_PATHS = {
     image: '/v1/media/history?media_type=image',
     video: '/v1/media/history?media_type=video',
-    tts: '/v1/media/history?media_type=tts'
+    tts: '/v1/media/history?media_type=tts',
+    web_search: '/v1/media/history?media_type=web_search'
 };
 // Tools register their own state/render pair, so history actions stay media-type neutral.
 const MEDIA_HISTORY_TOOL_REGISTRY = new Map();
@@ -3544,6 +3558,7 @@ const toolGroupConfigs = [
     { title: '向量化', tools: ['embedding'] },
     { title: '订阅接入', tools: ['antigravity-subscribe', 'codex-subscribe'] },
     { title: '模型配置', tools: ['claude-model-catalog'] },
+    { title: '联网搜索', tools: ['web-search'] },
     { title: '其他', tools: ['classification-metrics'] },
 ];
 
@@ -3556,6 +3571,7 @@ function toolDefs() {
         'antigravity-subscribe': { name: '接入 Antigravity 订阅', desc: '从本机提取 OAuth 凭据，登录 Google 订阅账号，让网关使用 Antigravity 的 Gemini 模型。', icon: '<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"></path><path d="M9 12l2 2 4-4"></path></svg>' },
         'codex-subscribe': { name: '接入 Codex 订阅', desc: '读取本机 Codex/ChatGPT 登录态，把官方模型做成可给 Claude Desktop / DeepTutor 使用的节点。', icon: '<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"></circle><path d="M8 12h8"></path><path d="M12 8v8"></path></svg>' },
         'claude-model-catalog': { name: 'Claude 模型列表', desc: '维护 Claude Desktop 映射原模型候选项：内置官方名 + 用户自定义。', icon: '<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 8V4H8"></path><rect x="4" y="8" width="16" height="12" rx="2"></rect><path d="M2 14h2"></path><path d="M20 14h2"></path><path d="M15 13v2"></path><path d="M9 13v2"></path></svg>' },
+        'web-search': { name: '联网搜索', desc: '使用已配置的 web_search 节点，输入查询词、选择结果数量与时间范围，实时检索网页并查看本地搜索历史。', icon: '<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"></circle><path d="M2 12h20"></path><path d="M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z"></path></svg>' },
         'classification-metrics': { name: '分类评估实验室', desc: '讲清 TP/FP/FN/TN，以及准确率、精准率、召回率，并用你的数据现场计算。', icon: '<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="7" height="7"></rect><rect x="14" y="3" width="7" height="7"></rect><rect x="14" y="14" width="7" height="7"></rect><rect x="3" y="14" width="7" height="7"></rect></svg>' },
     };
 }
@@ -3594,6 +3610,7 @@ window.openTool = function(toolId) {
     if (toolId === 'image-gen') renderImageGenDetail();
     else if (toolId === 'video-gen') renderVideoGenDetail();
     else if (toolId === 'tts-gen') renderTtsGenDetail();
+    else if (toolId === 'web-search') renderWebSearchDetail();
     else if (toolId === 'claude-model-catalog') renderClaudeModelCatalogDetail();
     else if (toolId === 'classification-metrics') renderClassificationMetricsDetail();
     else if (toolId === 'antigravity-subscribe') renderAntigravitySubscribeDetail();
@@ -4694,6 +4711,191 @@ window.saveClaudeModelCatalog = async function() {
     if (ok) showToast('Claude 模型列表已保存', 'success');
 };
 
+function renderWebSearchHistoryHtml(entries) {
+    if (!entries.length) return '<div class="media-gen-tip">暂无本地搜索历史。</div>';
+    return '<div class="media-gen-history">' + entries.map(entry => {
+        const query = entry.prompt || '未记录查询词';
+        const timestamp = entry.timestamp ? new Date(entry.timestamp).toLocaleString('zh-CN', { hour12: false }) : '';
+        const provider = entry.provider || '';
+        return '<div class="media-gen-history-item" style="align-items:flex-start;">' +
+            '<div style="flex:1;min-width:0;">' +
+            '<div class="media-gen-history-prompt">' + escapeHtml(query) + '</div>' +
+            '<div class="media-gen-history-meta">' + escapeHtml(timestamp + (provider ? ' · ' + provider : '')) + '</div>' +
+            '</div>' +
+            '<div style="display:flex;gap:6px;">' +
+            (entry.file_path ? '<button class="btn" style="padding:4px 8px;font-size:11px;" onclick="viewWebSearchHistory(' + escapeHtml(JSON.stringify(entry.id)) + ')">查看</button>' : '') +
+            '<button class="btn" style="padding:4px 8px;font-size:11px;" onclick="deleteMediaHistoryEntry(' + escapeHtml(JSON.stringify('web_search')) + ', ' + escapeHtml(JSON.stringify(entry.id)) + ')">删除</button>' +
+            '</div></div>';
+    }).join('') + '</div>';
+}
+
+window.viewWebSearchHistory = function(historyId) {
+    const url = mediaHistoryPreviewUrl(historyId);
+    if (!url) { showToast('该历史记录无关联文件', 'danger'); return; }
+    window.open(url, '_blank');
+};
+
+window.renderWebSearchDetail = function() {
+    const cards = document.getElementById('tools-cards');
+    const detail = document.getElementById('tools-detail');
+    if (!cards || !detail) return;
+    cards.style.display = 'none';
+    toolsView = 'web-search';
+
+    const endpoints = getMediaEndpoints(webSearchState.client, 'web_search');
+    const selectedEndpoint = endpoints.find(ep => ep.id === webSearchState.endpointId) || endpoints[0] || null;
+    if (selectedEndpoint && webSearchState.endpointId !== selectedEndpoint.id) {
+        webSearchState.endpointId = selectedEndpoint.id;
+    }
+    const clients = Object.keys(config.clients || {});
+    const clientSelect = renderUiSelectHtml({
+        id: 'web-search-client',
+        value: webSearchState.client,
+        options: clients.map(client => ({ value: client, label: clientDisplayName(client) })),
+        placeholder: '选择 Client',
+        onChange: (value) => onWebSearchClientChange(value),
+    });
+    const endpointSelect = renderUiSelectHtml({
+        id: 'web-search-endpoint',
+        value: webSearchState.endpointId || '',
+        options: endpoints.length
+            ? endpoints.map(ep => ({ value: ep.id, label: ep.name || ep.id, description: ep.provider || '' }))
+            : [{ value: '', label: '无可用节点' }],
+        disabled: !endpoints.length,
+        placeholder: '无可用节点',
+        onChange: (value) => onWebSearchEndpointChange(value),
+    });
+    const maxSelect = renderUiSelectHtml({
+        id: 'web-search-max',
+        value: String(webSearchState.maxResults),
+        options: ['3','5','8','10'].map(n => ({ value: n, label: n + ' 条' })),
+        onChange: (value) => { webSearchState.maxResults = Number(value); },
+    });
+    const timeSelect = renderUiSelectHtml({
+        id: 'web-search-time',
+        value: webSearchState.timeRange,
+        options: [
+            { value: '', label: '不限时间' },
+            { value: 'day', label: '最近一天' },
+            { value: 'week', label: '最近一周' },
+            { value: 'month', label: '最近一月' },
+            { value: 'year', label: '最近一年' },
+        ],
+        onChange: (value) => { webSearchState.timeRange = value; },
+    });
+    const noNodeHint = endpoints.length === 0 ? '<div class="media-gen-error">该 client 没有已启用的联网搜索节点。请到代理节点添加 purpose=web_search 的节点。</div>' : '';
+    const resultHtml = renderWebSearchResult();
+    const historyHtml = webSearchState.historyLoading ? '<div class="media-gen-tip">正在加载历史...</div>' : renderWebSearchHistoryHtml(webSearchState.history);
+
+    detail.innerHTML = `
+        <button class="tools-detail-back" onclick="backToToolsCards()">返回工具列表</button>
+        <div class="media-gen-layout">
+            <div class="media-gen-panel">
+                <h3>联网搜索</h3>
+                ${noNodeHint}
+                <div class="media-gen-form-group"><label>Client</label>
+                    ${clientSelect}</div>
+                <div class="media-gen-form-group"><label>搜索节点</label>
+                    ${endpointSelect}</div>
+                <div class="media-gen-form-group"><label>结果数量</label>
+                    ${maxSelect}</div>
+                <div class="media-gen-form-group"><label>时间范围</label>
+                    ${timeSelect}</div>
+                <div class="media-gen-form-group"><label>查询词</label>
+                    <textarea id="web-search-query" class="media-gen-form-control media-gen-textarea" placeholder="输入要搜索的关键词或问题" oninput="webSearchState.query=this.value">${escapeHtml(webSearchState.query)}</textarea></div>
+                <div class="media-gen-tags">
+                    ${['最新资讯','技术文档','行业趋势','价格查询','科普解释'].map(tag => '<button type="button" class="media-gen-tag" onclick="applyWebSearchSuggestion(\'' + tag + '\')">' + tag + '</button>').join('')}
+                </div>
+                <div class="media-gen-tip"><strong>提示：</strong>查询词尽量具体，可加上时间或地域限定。结果来自已配置的 web_search 节点（如 Tavily），搜索结果会保存为本地 JSON 文件供后续查看。</div>
+                <button class="btn btn-primary" onclick="runWebSearch()" ${webSearchState.loading || !endpoints.length ? 'disabled' : ''}>${webSearchState.loading ? '搜索中...' : '执行搜索'}</button>
+            </div>
+            <div class="media-gen-panel"><h3>结果</h3>${resultHtml}<h3 style="margin-top:18px;">本地历史</h3>${historyHtml}</div>
+        </div>`;
+    if (!webSearchState.historyLoading && !webSearchState.historyLoaded) loadMediaHistory('web_search');
+};
+
+window.onWebSearchClientChange = function(client) {
+    webSearchState.client = client;
+    webSearchState.endpointId = '';
+    webSearchState.result = null;
+    webSearchState.error = '';
+    webSearchState.history = [];
+    webSearchState.historyLoaded = false;
+    renderWebSearchDetail();
+};
+
+window.onWebSearchEndpointChange = function(endpointId) {
+    webSearchState.endpointId = endpointId;
+    webSearchState.result = null;
+    webSearchState.error = '';
+    renderWebSearchDetail();
+};
+
+window.applyWebSearchSuggestion = function(tag) {
+    const suggestions = {
+        '最新资讯': '2026 最新科技资讯',
+        '技术文档': 'React 19 新特性 官方文档',
+        '行业趋势': 'AI 编程工具 行业趋势 2026',
+        '价格查询': 'RTX 5090 显卡 价格',
+        '科普解释': '量子计算 原理 科普',
+    };
+    webSearchState.query = suggestions[tag] || webSearchState.query;
+    renderWebSearchDetail();
+};
+
+function renderWebSearchResult() {
+    if (webSearchState.loading) return '<div class="media-gen-tip">正在请求搜索服务，请保持此页面打开。</div>';
+    if (webSearchState.error) return '<div class="media-gen-error">' + escapeHtml(webSearchState.error) + '</div>';
+    if (!webSearchState.result) return '<div class="media-gen-tip">搜索完成后会显示结果摘要与链接列表。</div>';
+    const r = webSearchState.result;
+    const parts = [];
+    if (r.answer) parts.push('<div class="media-gen-tip" style="margin:0 0 10px;"><strong>摘要：</strong>' + escapeHtml(r.answer) + '</div>');
+    const results = Array.isArray(r.results) ? r.results : [];
+    if (!results.length) { parts.push('<div class="media-gen-tip">未找到相关结果。</div>'); }
+    else {
+        parts.push('<div class="web-search-results">' + results.map((item, i) => {
+            const title = item.title || '(无标题)';
+            const url = item.url || '';
+            const snippet = item.snippet || '';
+            return '<div class="web-search-result-item">' +
+                '<div class="web-search-result-title"><a href="' + escapeHtml(url) + '" target="_blank" rel="noopener noreferrer">' + (i+1) + '. ' + escapeHtml(title) + '</a></div>' +
+                (url ? '<div class="web-search-result-url">' + escapeHtml(url) + '</div>' : '') +
+                (snippet ? '<div class="web-search-result-snippet">' + escapeHtml(snippet) + '</div>' : '') +
+                '</div>';
+        }).join('') + '</div>');
+    }
+    const historyId = r.history_id || r.historyId || '';
+    if (historyId) parts.push('<div class="media-gen-actions"><span class="media-gen-tip" style="margin:0;">历史 ID: ' + escapeHtml(historyId) + '</span></div>');
+    return parts.join('');
+}
+
+window.runWebSearch = async function() {
+    const query = webSearchState.query.trim();
+    if (!query) { webSearchState.error = '请输入查询词'; renderWebSearchDetail(); return; }
+    if (!webSearchState.endpointId) { webSearchState.error = '请选择搜索节点'; renderWebSearchDetail(); return; }
+    webSearchState.loading = true;
+    webSearchState.error = '';
+    webSearchState.result = null;
+    renderWebSearchDetail();
+    try {
+        const res = await fetch('/v1/web-search', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json', 'X-Gateway-Client': webSearchState.client },
+            body: JSON.stringify({ endpoint_id: webSearchState.endpointId, query, max_results: webSearchState.maxResults, time_range: webSearchState.timeRange || undefined })
+        });
+        const json = await res.json();
+        if (!res.ok) throw new Error(json?.error?.message || '搜索失败 (' + res.status + ')');
+        webSearchState.result = json;
+        await loadMediaHistory('web_search');
+    } catch (err) {
+        webSearchState.error = err.message || String(err);
+    } finally {
+        webSearchState.loading = false;
+        if (toolsView === 'web-search') renderWebSearchDetail();
+    }
+};
+
+
 window.renderImageGenDetail = function() {
     const cards = document.getElementById('tools-cards');
     const detail = document.getElementById('tools-detail');
@@ -5250,6 +5452,7 @@ window.runTtsGeneration = async function() {
 
 registerMediaHistoryTool('video', 'video-gen', videoGenState, () => renderVideoGenDetail());
 registerMediaHistoryTool('tts', 'tts-gen', ttsGenState, () => renderTtsGenDetail());
+registerMediaHistoryTool('web_search', 'web-search', webSearchState, () => renderWebSearchDetail());
 
 window.renderToolsDetail = function() {
     if (toolsView === 'classification-metrics') {

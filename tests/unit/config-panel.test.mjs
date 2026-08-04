@@ -387,6 +387,22 @@ test("image generation mini-tool sends media request and renders local history",
   assert.match(firstDocument, /主体\/风格\/构图\/光影\/约束/);
 });
 
+test("web search mini-tool sends search request and renders local history", async () => {
+  const html = await readSources();
+  const firstDocument = html;
+  assert.match(firstDocument, /'web-search':/);
+  assert.match(firstDocument, /toolId === 'web-search'/);
+  assert.match(firstDocument, /const webSearchState\s*=\s*\{/);
+  assert.match(firstDocument, /window\.renderWebSearchDetail\s*=\s*function/);
+  assert.match(firstDocument, /window\.runWebSearch\s*=\s*async function/);
+  assert.match(firstDocument, /\/v1\/web-search/);
+  assert.match(firstDocument, /\/v1\/media\/history\?media_type=web_search/);
+  assert.match(firstDocument, /registerMediaHistoryTool\('web_search'/);
+  assert.match(firstDocument, /file_path/);
+  assert.match(firstDocument, /history_id/);
+  assert.match(firstDocument, /historyLoaded/);
+});
+
 test("image generation mini-tool keeps executable DOM action arguments safe", async () => {
   const html = await readSources();
   const firstDocument = html;

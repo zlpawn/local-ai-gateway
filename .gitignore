@@ -49,6 +49,7 @@ codeg-*
 # Generated media outputs
 images/
 videos/
+web_search/
 
 
 # Local 8788 test gateway instance
