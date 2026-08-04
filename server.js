@@ -2337,12 +2337,14 @@ async function routeMediaRequest(req, res, context, reqPath) {
     });
     const requestAbort = bindRequestAbort(req, res);
     try {
-      const result = await selection.provider.generateImage(body, mediaProviderContext(req, selection.endpoint, requestAbort.signal));
+      const mediaCtx = mediaProviderContext(req, selection.endpoint, requestAbort.signal);
+      const result = await selection.provider.generateImage(body, mediaCtx);
       const persisted = await persistMediaResult({
         type: "image",
         result,
         body,
         endpoint: selection.endpoint,
+        fetchImpl: mediaCtx.fetchImpl,
       });
       sendJson(res, 200, { ...mediaResultResponse(result), ...persisted });
     } catch (error) {
@@ -2396,9 +2398,10 @@ async function routeMediaRequest(req, res, context, reqPath) {
     }
     const requestAbort = bindRequestAbort(req, res);
     try {
-      const result = await provider.pollVideoTask(taskId, mediaProviderContext(req, task.endpoint, requestAbort.signal));
+      const mediaCtx = mediaProviderContext(req, task.endpoint, requestAbort.signal);
+      const result = await provider.pollVideoTask(taskId, mediaCtx);
       if (result.status === "succeeded") {
-        const persisted = await persistMediaResult({ type: "video", result, body: task.body, endpoint: task.endpoint, taskId });
+        const persisted = await persistMediaResult({ type: "video", result, body: task.body, endpoint: task.endpoint, taskId, fetchImpl: mediaCtx.fetchImpl });
         MEDIA_VIDEO_TASKS.delete(taskId);
         sendJson(res, 200, { status: "succeeded", task_id: taskId, taskId, ...persisted });
       } else {
@@ -2434,8 +2437,9 @@ async function routeMediaRequest(req, res, context, reqPath) {
     });
     const requestAbort = bindRequestAbort(req, res);
     try {
-      const result = await selection.provider.synthesizeSpeech(body, mediaProviderContext(req, selection.endpoint, requestAbort.signal));
-      const persisted = await persistMediaResult({ type: "tts", result, body, endpoint: selection.endpoint });
+      const mediaCtx = mediaProviderContext(req, selection.endpoint, requestAbort.signal);
+      const result = await selection.provider.synthesizeSpeech(body, mediaCtx);
+      const persisted = await persistMediaResult({ type: "tts", result, body, endpoint: selection.endpoint, fetchImpl: mediaCtx.fetchImpl });
       sendJson(res, 200, { ...mediaResultResponse(result), ...persisted });
     } catch (error) {
       recordMediaFailure({ type: "tts", error, body, endpoint: selection.endpoint });
@@ -2895,7 +2899,7 @@ function mediaResultResponse(result) {
   };
 }
 
-async function persistMediaResult({ type, result, body, endpoint, taskId = null }) {
+async function persistMediaResult({ type, result, body, endpoint, taskId = null, fetchImpl = null }) {
   const source = result.url || result.videoUrl || "";
   const extension = normalizeMediaExtension(
     type === "image" ? (body.output_format || "png") : type === "video" ? "mp4" : (result.format || body.encoding || "mp3"),
@@ -2907,7 +2911,7 @@ async function persistMediaResult({ type, result, body, endpoint, taskId = null 
   else if (result.b64Json) buffer = Buffer.from(result.b64Json, "base64");
   else if (result.b64Audio) buffer = Buffer.from(result.b64Audio, "base64");
   if (buffer) fs.writeFileSync(filePath, buffer);
-  else if (source) await downloadMediaFile(source, filePath);
+  else if (source) await downloadMediaFile(source, filePath, fetchImpl);
   else throw new Error(`Media ${type} result did not contain downloadable content.`);
   const entry = addHistoryEntry(mediaDataDir(), {
     media_type: type,
