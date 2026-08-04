@@ -241,6 +241,7 @@ function clientDisplayName(client) {
 }
 
 const endpointModelDiscoveryState = new Map();
+let suppressModelSuggestFocus = false;
 const BUILTIN_CLAUDE_OFFICIAL_MODELS = [
     'claude-opus-4-8',
     'claude-opus-4-7',
@@ -375,11 +376,13 @@ function updateDiscoveryMeta(client, endpointId) {
       + (notice ? ` · ${notice}` : '');
 }
 
-function renderDiscoverySuggestions(client, endpointId) {
+window.renderDiscoverySuggestions = function(client, endpointId) {
     const list = document.getElementById(`model-discovery-list-${client}-${endpointId}`);
     if (!list) return;
+    list.parentElement?.classList.add('is-open');
     const state = getDiscoveryState(client, endpointId);
-    const q = String(document.getElementById(`input-models-${client}-${getEndpointIndex(client, endpointId)}`)?.value || '').trim().toLowerCase();
+    const index = getEndpointIndex(client, endpointId);
+    const q = String(document.getElementById(`input-models-${client}-${index}`)?.value || '').trim().toLowerCase();
     const models = state.models.filter((m) => !q || String(m.id || '').toLowerCase().includes(q) || String(m.name || '').toLowerCase().includes(q) || String(m.domain || '').toLowerCase().includes(q));
     if (!models.length) {
         list.innerHTML = `<div class="ui-select-empty">${state.loading ? '加载中...' : '无匹配模型'}</div>`;
@@ -394,7 +397,7 @@ function renderDiscoverySuggestions(client, endpointId) {
         const domainBadge = m.domain
             ? `<span class="model-domain-badge">${escapeHtml(m.domain)}</span>`
             : '';
-        return `<button type="button" class="model-suggest-item" title="${id}" onclick="addDiscoveredUpstreamModel('${client}', '${escapeHtml(endpointId)}', ${JSON.stringify(String(m.id || ''))})"><span>${displayText}</span>${domainBadge}</button>`;
+        return `<button type="button" class="model-suggest-item" onmousedown="event.preventDefault()" title="${id}" onclick="selectModelForInput('${client}', ${index}, '${escapeHtml(m.id || m.name || '')}')"><span>${displayText}</span>${domainBadge}</button>`;
     }).join('');
 }
 
@@ -402,6 +405,16 @@ function getEndpointIndex(client, endpointId) {
     const eps = config.clients?.[client]?.endpoints || [];
     return eps.findIndex((ep) => ep.id === endpointId);
 }
+
+window.selectModelForInput = function(client, index, modelId) {
+    const input = document.getElementById(`input-models-${client}-${index}`);
+    if (input) {
+        input.value = modelId;
+        suppressModelSuggestFocus = true;
+        input.focus();
+    }
+    document.querySelectorAll('.model-suggest-wrap.is-open').forEach((el) => el.classList.remove('is-open'));
+};
 
 window.refreshEndpointModels = function(client, endpointId) {
     fetchEndpointModels(client, endpointId, { refresh: true });
@@ -422,6 +435,10 @@ window.addDiscoveredUpstreamModel = function(client, endpointId, modelId) {
 };
 
 window.openModelSuggest = function(client, endpointId, which) {
+    if (suppressModelSuggestFocus) {
+        suppressModelSuggestFocus = false;
+        return;
+    }
     document.querySelectorAll('.model-suggest-wrap.is-open').forEach((el) => el.classList.remove('is-open'));
     const wrap = document.getElementById(`model-suggest-${which}-${client}-${endpointId}`);
     if (wrap) wrap.classList.add('is-open');
@@ -440,9 +457,10 @@ window.openModelSuggest = function(client, endpointId, which) {
     if (which === 'map-source') renderMappingSourceSuggestions(client, endpointId);
 };
 
-function renderMappingTargetSuggestions(client, endpointId) {
+window.renderMappingTargetSuggestions = function(client, endpointId) {
     const list = document.getElementById(`map-target-list-${client}-${endpointId}`);
     if (!list) return;
+    list.parentElement?.classList.add('is-open');
     const state = getDiscoveryState(client, endpointId);
     const index = getEndpointIndex(client, endpointId);
     const q = String(document.getElementById(`input-mapping-up-${client}-${index}`)?.value || '').trim().toLowerCase();
@@ -457,14 +475,15 @@ function renderMappingTargetSuggestions(client, endpointId) {
             const domainBadge = m.domain
                 ? `<span class="model-domain-badge">${escapeHtml(m.domain)}</span>`
                 : '';
-            return `<button type="button" class="model-suggest-item" title="${id}" onclick="fillMappingField('${client}', ${index}, 'up', ${JSON.stringify(String(m.id || ''))})"><span>${displayText}</span>${domainBadge}</button>`;
+            return `<button type="button" class="model-suggest-item" onmousedown="event.preventDefault()" title="${id}" onclick="fillMappingField('${client}', ${index}, 'up', '${escapeHtml(m.id || m.name || '')}')"><span>${displayText}</span>${domainBadge}</button>`;
         }).join('')
         : `<div class="ui-select-empty">${state.loading ? '加载中...' : '无匹配上游模型'}</div>`;
 }
 
-function renderMappingSourceSuggestions(client, endpointId) {
+window.renderMappingSourceSuggestions = function(client, endpointId) {
     const list = document.getElementById(`map-source-list-${client}-${endpointId}`);
     if (!list) return;
+    list.parentElement?.classList.add('is-open');
     const index = getEndpointIndex(client, endpointId);
     const q = String(document.getElementById(`input-mapping-req-${client}-${index}`)?.value || '').trim();
     // Desktop source suggestions are global across all Claude Desktop chat nodes.
@@ -472,14 +491,18 @@ function renderMappingSourceSuggestions(client, endpointId) {
         ? availableClaudeDesktopMappingSources(q)
         : mergeClaudeOfficialModelsLocal().filter((id) => !q || id.toLowerCase().includes(q.toLowerCase()));
     list.innerHTML = models.length
-        ? models.map((id) => `<button type="button" class="model-suggest-item" onclick="fillMappingField('${client}', ${index}, 'req', ${JSON.stringify(id)})">${escapeHtml(id)}</button>`).join('')
+        ? models.map((id) => `<button type="button" class="model-suggest-item" onmousedown="event.preventDefault()" onclick="fillMappingField('${client}', ${index}, 'req', '${escapeHtml(id)}')">${escapeHtml(id)}</button>`).join('')
         : `<div class="ui-select-empty">${client === 'desktop' ? '没有剩余可映射的 Claude 官方模型' : '无匹配 Claude 模型'}</div>`;
 }
 
 window.fillMappingField = function(client, index, side, value) {
     const id = side === 'req' ? `input-mapping-req-${client}-${index}` : `input-mapping-up-${client}-${index}`;
     const input = document.getElementById(id);
-    if (input) input.value = value;
+    if (input) {
+        input.value = value;
+        suppressModelSuggestFocus = true;
+        input.focus();
+    }
     document.querySelectorAll('.model-suggest-wrap.is-open').forEach((el) => el.classList.remove('is-open'));
 };
 

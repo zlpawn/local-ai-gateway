@@ -1,7 +1,8 @@
 /**
- * Web config panel regression tests.
+ * Config panel regression tests.
  *
- * These cover desktop/config-panel.html and must stay after Electron shell removal.
+ * These cover the live UI sources: desktop/src/app.ts (JS, esbuild-bundled),
+ * desktop/index.html (HTML shell), and desktop/src/styles/panel.css (styles).
  */
 import test from "node:test";
 import assert from "node:assert/strict";
@@ -11,11 +12,23 @@ import vm from "node:vm";
 
 const ROOT = path.resolve(".");
 
+// The panel is split across three live sources after the Electron shell removal:
+// app.ts (JS, bundled by esbuild), index.html (HTML shell), panel.css (styles).
+// Tests read them together so assertions can match content wherever it lives.
+let _sourcesCache = null;
+async function readSources() {
+  if (_sourcesCache) return _sourcesCache;
+  const [app, idx, css] = await Promise.all([
+    readFile(path.join(ROOT, "desktop", "src", "app.ts"), "utf8"),
+    readFile(path.join(ROOT, "desktop", "index.html"), "utf8"),
+    readFile(path.join(ROOT, "desktop", "src", "styles", "panel.css"), "utf8"),
+  ]);
+  _sourcesCache = app + "\n" + idx + "\n" + css;
+  return _sourcesCache;
+}
+
 test("config panel exposes Codex tools, reasoning, and image capabilities", async () => {
-  const html = await readFile(
-    path.join(ROOT, "desktop", "config-panel.html"),
-    "utf8",
-  );
+  const html = await readSources();
   assert.match(html, /Codex 能力/);
   assert.match(html, /capabilities-input-image/);
   assert.match(html, /capabilities-reasoning/);
@@ -24,7 +37,7 @@ test("config panel exposes Codex tools, reasoning, and image capabilities", asyn
 });
 
 test("Codex capability controls and active navigation use compact product styling", async () => {
-  const html = await readFile(path.join(ROOT, "desktop", "config-panel.html"), "utf8");
+  const html = await readSources();
   assert.match(html, /\.nav-item\.active\s*\{[^}]*box-shadow:\s*inset 2px 0 0/s);
   assert.match(html, /\.capability-options\s*\{[^}]*grid-template-columns:\s*repeat\(3,\s*minmax\(0,\s*1fr\)\)/s);
   assert.match(html, /\.capability-option\s*\{[^}]*display:\s*flex[^}]*align-items:\s*center/s);
@@ -35,7 +48,7 @@ test("Codex capability controls and active navigation use compact product stylin
 });
 
 test("config panel supports stable endpoint ids, secret status, exposure, and conflict suggestions", async () => {
-  const html = await readFile(path.join(ROOT, "desktop", "config-panel.html"), "utf8");
+  const html = await readSources();
   assert.match(html, /crypto\.randomUUID\(\)/);
   assert.match(html, /readonly[^>]*endpoint-id|endpoint-id[^>]*readonly/);
   assert.match(html, /has_api_key/);
@@ -49,7 +62,7 @@ test("config panel supports stable endpoint ids, secret status, exposure, and co
 });
 
 test("Codex endpoint editor offers Anthropic Messages protocol and auth selection", async () => {
-  const html = await readFile(path.join(ROOT, "desktop", "config-panel.html"), "utf8");
+  const html = await readSources();
   assert.match(html, /Anthropic Messages 协议/);
   assert.match(
     html,
@@ -61,7 +74,7 @@ test("Codex endpoint editor offers Anthropic Messages protocol and auth selectio
 });
 
 test("endpoint detail provides an explicit manual save action", async () => {
-  const html = await readFile(path.join(ROOT, "desktop", "config-panel.html"), "utf8");
+  const html = await readSources();
   assert.match(html, /id="save-node-\$\{client\}-\$\{index\}"/);
   assert.match(html, /onclick="saveNode\('\$\{client\}', \$\{index\}\)"/);
   assert.match(html, /window\.saveNode\s*=\s*async function/);
@@ -69,7 +82,7 @@ test("endpoint detail provides an explicit manual save action", async () => {
 });
 
 test("each client can add capability nodes from the grouped node menu", async () => {
-  const html = await readFile(path.join(ROOT, "desktop", "config-panel.html"), "utf8");
+  const html = await readSources();
   assert.match(html, /data-client="code"/);
   assert.match(html, /data-client="desktop"/);
   assert.match(html, /data-client="codex"/);
@@ -92,7 +105,7 @@ test("each client can add capability nodes from the grouped node menu", async ()
 });
 
 test("endpoint list renders chat and capability nodes in separate groups", async () => {
-  const html = await readFile(path.join(ROOT, "desktop", "config-panel.html"), "utf8");
+  const html = await readSources();
   assert.match(html, /function createEndpointGroupsHTML/);
   assert.match(html, /title:\s*'聊天模型'/);
   assert.match(html, /title:\s*'视觉兜底'/);
@@ -103,9 +116,9 @@ test("endpoint list renders chat and capability nodes in separate groups", async
 });
 
 test("new embedding node starts without preset models or task-level options", async () => {
-  const html = await readFile(path.join(ROOT, "desktop", "config-panel.html"), "utf8");
+  const html = await readSources();
   const addEmbeddingSource = html.match(
-    /window\.addEmbeddingEndpoint = function\(client\) \{[\s\S]*?\n        \}/,
+    /window\.addEmbeddingEndpoint = function\(client\) \{[\s\S]*?\n\}/,
   )?.[0] || "";
 
   assert.match(html, /输出维度（可选，留空使用模型默认值）/);
@@ -120,7 +133,7 @@ test("new embedding node starts without preset models or task-level options", as
 });
 
 test("section header actions stay compact and wrap cleanly on narrow screens", async () => {
-  const html = await readFile(path.join(ROOT, "desktop", "config-panel.html"), "utf8");
+  const html = await readSources();
   assert.match(html, /\.section-header-actions\s*\{[^}]*flex:\s*0 0 auto/s);
   assert.match(html, /\.section-header-actions \.btn\s*\{[^}]*white-space:\s*nowrap/s);
   assert.match(html, /\.add-node-popover\s*\{[^}]*width:\s*292px/s);
@@ -133,7 +146,7 @@ test("section header actions stay compact and wrap cleanly on narrow screens", a
 });
 
 test("each upstream model exposes vision capability and context window dropdowns", async () => {
-  const html = await readFile(path.join(ROOT, "desktop", "config-panel.html"), "utf8");
+  const html = await readSources();
   assert.match(html, /updateModelImageCapability/);
   assert.match(html, /支持视觉/);
   assert.match(html, /不支持视觉/);
@@ -146,7 +159,7 @@ test("each upstream model exposes vision capability and context window dropdowns
 });
 
 test("global and card save actions preserve the active client context", async () => {
-  const html = await readFile(path.join(ROOT, "desktop", "config-panel.html"), "utf8");
+  const html = await readSources();
   assert.match(html, /id="save-btn"/);
   assert.match(html, /onclick="saveCurrentConfig\(\)"/);
   assert.match(html, /let activeClient = 'code'/);
@@ -163,7 +176,7 @@ test("global and card save actions preserve the active client context", async ()
 });
 
 test("Claude Code config exposes four default-endpoint model slot selectors", async () => {
-  const html = await readFile(path.join(ROOT, "desktop", "config-panel.html"), "utf8");
+  const html = await readSources();
   assert.match(html, /Claude Code 快捷模型/);
   assert.match(html, /\.model-slots-panel\s*\{/);
   assert.match(html, /\.model-slots-grid\s*\{[^}]*grid-template-columns:\s*repeat\(4,\s*minmax\(0,\s*1fr\)\)/s);
@@ -178,9 +191,9 @@ test("Claude Code config exposes four default-endpoint model slot selectors", as
 });
 
 test("Claude Code default chat endpoint excludes every capability purpose", async () => {
-  const html = await readFile(path.join(ROOT, "desktop", "config-panel.html"), "utf8");
+  const html = await readSources();
   const source = html.match(
-    /function getClaudeCodeDefaultEndpoint\(\) \{[\s\S]*?\n        \}/,
+    /function getClaudeCodeDefaultEndpoint\(\) \{[\s\S]*?\n\}/,
   )?.[0] || "";
 
   assert.match(html, /function isCapabilityEndpointPurpose\(purpose\)/);
@@ -188,7 +201,7 @@ test("Claude Code default chat endpoint excludes every capability purpose", asyn
 });
 
 test("Claude Code and Desktop guides describe automatic sync and restart only", async () => {
-  const html = await readFile(path.join(ROOT, "desktop", "config-panel.html"), "utf8");
+  const html = await readSources();
   const codeSection = html.match(/<section id="section-code"[\s\S]*?<\/section>/)?.[0] || "";
   const desktopSection = html.match(/<section id="section-desktop"[\s\S]*?<\/section>/)?.[0] || "";
 
@@ -202,7 +215,7 @@ test("Claude Code and Desktop guides describe automatic sync and restart only", 
 });
 
 test("endpoint cards expose a compact model visibility switch outside the detail form", async () => {
-  const html = await readFile(path.join(ROOT, "desktop", "config-panel.html"), "utf8");
+  const html = await readSources();
   assert.match(html, /\.detail-actions\s*\{[^}]*display:\s*flex[^}]*flex-wrap:\s*nowrap/s);
   assert.match(html, /class="detail-actions"/);
   assert.match(html, /class="node-card-switch"/);
@@ -240,12 +253,9 @@ test("Codex capability updates preserve unrelated fields and do not copy secrets
   };
   const otherClient = structuredClone(config.clients.code);
   const otherEndpoint = structuredClone(config.clients.codex.endpoints[1]);
-  const html = await readFile(
-    path.join(ROOT, "desktop", "config-panel.html"),
-    "utf8",
-  );
+  const html = await readSources();
   const updateSource = html.match(
-    /window\.updateCodexCapability = function\(client, index, capability, enabled\) \{[\s\S]*?\n        \}/,
+    /window\.updateCodexCapability = function\(client, index, capability, enabled\) \{[\s\S]*?\n\}/,
   )?.[0];
   assert.equal(typeof updateSource, "string");
   const context = {
@@ -270,7 +280,7 @@ test("Codex capability updates preserve unrelated fields and do not copy secrets
   assert.equal(config.clients.codex.endpoints[0].api_key, sentinel);
   assert.equal(JSON.stringify(config).split(sentinel).length - 1, 1);
 });
-const readHtml = () => readFile(path.join(ROOT, "desktop", "config-panel.html"), "utf8");
+const readHtml = () => readSources();
 
 
 
@@ -342,14 +352,14 @@ test("CLI scan sources sub-tab and management endpoints exist", async () => {
 });
 
 test("tools tab nav item and section exist alongside skills", async () => {
-  const html = await readFile(path.join(ROOT, "desktop", "config-panel.html"), "utf8");
+  const html = await readSources();
   assert.match(html, /href="#tools"[\s\S]*onclick="switchTab\('tools'\)"/);
   assert.match(html, /<section id="section-tools" class="tab-section"/);
   assert.match(html, /迷你工具/);
 });
 
 test("tools cards list renders text embedding card", async () => {
-  const html = await readFile(path.join(ROOT, "desktop", "config-panel.html"), "utf8");
+  const html = await readSources();
   assert.match(html, /window\.renderToolsCards\s*=\s*function/);
   assert.match(html, /文本向量化/);
   assert.match(html, /'embedding':/);
@@ -358,8 +368,8 @@ test("tools cards list renders text embedding card", async () => {
 });
 
 test("image generation mini-tool sends media request and renders local history", async () => {
-  const html = await readFile(path.join(ROOT, "desktop", "config-panel.html"), "utf8");
-  const firstDocument = html.slice(0, html.indexOf("</html>") + "</html>".length);
+  const html = await readSources();
+  const firstDocument = html;
   assert.match(firstDocument, /'image-gen':/);
   assert.match(firstDocument, /toolCardHTML/);
   assert.match(firstDocument, /toolId === 'image-gen'/);
@@ -378,15 +388,15 @@ test("image generation mini-tool sends media request and renders local history",
 });
 
 test("image generation mini-tool keeps executable DOM action arguments safe", async () => {
-  const html = await readFile(path.join(ROOT, "desktop", "config-panel.html"), "utf8");
-  const firstDocument = html.slice(0, html.indexOf("</html>") + "</html>".length);
+  const html = await readSources();
+  const firstDocument = html;
   assert.match(firstDocument, /JSON\.stringify\(entry\.id\)/);
   assert.match(firstDocument, /JSON\.stringify\(path\)/);
 });
 
 test("media previews use history-owned same-origin files and history actions use a registry", async () => {
-  const html = await readFile(path.join(ROOT, "desktop", "config-panel.html"), "utf8");
-  const firstDocument = html.slice(0, html.indexOf("</html>") + "</html>".length);
+  const html = await readSources();
+  const firstDocument = html;
   assert.match(firstDocument, /\/v1\/media\/files\//);
   assert.doesNotMatch(firstDocument, /file:\/\//);
   assert.match(firstDocument, /MEDIA_HISTORY_TOOL_REGISTRY/);
@@ -396,7 +406,7 @@ test("media previews use history-owned same-origin files and history actions use
 });
 
 test("tools cards list renders classification metrics lab card", async () => {
-  const html = await readFile(path.join(ROOT, "desktop", "config-panel.html"), "utf8");
+  const html = await readSources();
   assert.match(html, /分类评估实验室/);
   assert.match(html, /toolId === 'classification-metrics'/);
   assert.match(html, /window\.renderClassificationMetricsDetail\s*=\s*function/);
@@ -419,7 +429,7 @@ test("tools cards list renders classification metrics lab card", async () => {
 });
 
 test("text embedding tool detail renders form, mode switch, and similarity formula", async () => {
-  const html = await readFile(path.join(ROOT, "desktop", "config-panel.html"), "utf8");
+  const html = await readSources();
   assert.match(html, /window\.renderToolsDetail\s*=\s*function/);
   assert.match(html, /embed-client-select/);
   assert.match(html, /embed-node-select/);
@@ -433,7 +443,7 @@ test("text embedding tool detail renders form, mode switch, and similarity formu
 });
 
 test("cosine similarity and embedding request helpers exist", async () => {
-  const html = await readFile(path.join(ROOT, "desktop", "config-panel.html"), "utf8");
+  const html = await readSources();
   assert.match(html, /function cosineSimilarity\(a, b\)/);
   assert.match(html, /window\.runEmbedding\s*=\s*async function/);
   assert.match(html, /params\.set\('endpoint_id'/);
@@ -495,7 +505,7 @@ test("custom agent-node blocks show the protocol and allow changing it inline", 
 
 
 test("tools cards list renders antigravity subscribe card", async () => {
-  const html = await readFile(path.join(ROOT, "desktop", "config-panel.html"), "utf8");
+  const html = await readSources();
   assert.match(html, /接入 Antigravity 订阅/);
   assert.match(html, /toolId === 'antigravity-subscribe'/);
   assert.match(html, /window\.renderAntigravitySubscribeDetail/);
@@ -505,7 +515,7 @@ test("tools cards list renders antigravity subscribe card", async () => {
 });
 
 test("endpoint type list includes antigravity google subscription label", async () => {
-  const html = await readFile(path.join(ROOT, "desktop", "config-panel.html"), "utf8");
+  const html = await readSources();
   assert.match(html, /value: "antigravity"/);
   assert.match(html, /Antigravity（Google 订阅）/);
   assert.match(html, /\['anthropic',\s*'openai-responses',\s*'openai-chat',\s*'grok',\s*'antigravity'\]/);
@@ -513,7 +523,7 @@ test("endpoint type list includes antigravity google subscription label", async 
 });
 
 test("config panel includes video generation mini-tool card and detail", async () => {
-  const html = await readFile(path.join(ROOT, "desktop", "config-panel.html"), "utf8");
+  const html = await readSources();
   assert.match(html, /videoGenState/);
   assert.match(html, /renderVideoGenDetail/);
   assert.match(html, /toolId === 'video-gen'/);
@@ -528,7 +538,7 @@ test("config panel includes video generation mini-tool card and detail", async (
 });
 
 test("config panel includes TTS mini-tool card and detail", async () => {
-  const html = await readFile(path.join(ROOT, "desktop", "config-panel.html"), "utf8");
+  const html = await readSources();
   assert.match(html, /ttsGenState/);
   assert.match(html, /renderTtsGenDetail/);
   assert.match(html, /toolId === 'tts-gen'/);
@@ -540,8 +550,8 @@ test("config panel includes TTS mini-tool card and detail", async () => {
 });
 
 test("media mini-tools use shared custom select popovers instead of native selects", async () => {
-  const html = await readFile(path.join(ROOT, "desktop", "config-panel.html"), "utf8");
-  const firstDocument = html.slice(0, html.indexOf("</html>") + "</html>".length);
+  const html = await readSources();
+  const firstDocument = html;
   assert.match(firstDocument, /function renderUiSelectHtml\(/);
   assert.match(firstDocument, /window\.toggleUiSelect\s*=\s*function/);
   assert.match(firstDocument, /window\.chooseUiSelectOption\s*=\s*function/);
@@ -555,8 +565,8 @@ test("media mini-tools use shared custom select popovers instead of native selec
 });
 
 test("media mini-tools show full built-in client display names", async () => {
-  const html = await readFile(path.join(ROOT, "desktop", "config-panel.html"), "utf8");
-  const firstDocument = html.slice(0, html.indexOf("</html>") + "</html>".length);
+  const html = await readSources();
+  const firstDocument = html;
   assert.match(firstDocument, /function clientDisplayName\(client\)/);
   assert.match(firstDocument, /code:\s*'Claude Code'/);
   assert.match(firstDocument, /desktop:\s*'Claude Desktop'/);
@@ -565,8 +575,8 @@ test("media mini-tools show full built-in client display names", async () => {
 
 
 test("chat model discovery suggestions and Claude catalog mini-tool are wired", async () => {
-  const html = await readFile(path.join(ROOT, "desktop", "config-panel.html"), "utf8");
-  const firstDocument = html.slice(0, html.indexOf("</html>") + "</html>".length);
+  const html = await readSources();
+  const firstDocument = html;
   assert.match(firstDocument, /fetchEndpointModels/);
   assert.match(firstDocument, /Auto-discover when user focuses upstream model or mapping target fields/);
   assert.match(firstDocument, /refreshEndpointModels/);
