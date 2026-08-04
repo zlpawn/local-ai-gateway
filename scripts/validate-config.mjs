@@ -9,7 +9,7 @@ import {
   validateGatewayConfig,
 } from "../lib/config/gateway-config-store.mjs";
 
-const VALID_PROVIDER_TYPES = new Set(["anthropic", "openai-chat", "openai-responses", "grok", "antigravity"]);
+const VALID_PROVIDER_TYPES = new Set(["anthropic", "openai-chat", "openai-responses", "grok", "antigravity", "codex-subscription", "chatgpt-codex"]);
 const VALID_AUTH_SCHEMES = new Set(["bearer", "x-api-key", "none", ""]);
 
 const configPath = path.resolve(process.argv[2] || process.env.GATEWAY_CONFIG_FILE || "gateway.config.json");
@@ -107,8 +107,8 @@ function validateEndpoint(label, endpoint) {
   if (!VALID_PROVIDER_TYPES.has(type)) {
     errors.push(`${label} has unsupported type '${endpoint.type}'.`);
   }
-  // antigravity is OAuth-based (no upstream base_url; gRPC host is internal).
-  if (type !== "antigravity") validateBaseUrl(label, endpoint.base_url);
+  // Subscription endpoints (antigravity, codex-subscription, chatgpt-codex) use local auth/gRPC/ChatGPT backend (no upstream base_url).
+  if (type !== "antigravity" && type !== "codex-subscription" && type !== "chatgpt-codex") validateBaseUrl(label, endpoint.base_url);
   if (endpoint.auth && !VALID_AUTH_SCHEMES.has(String(endpoint.auth).toLowerCase())) {
     errors.push(`${label} has unsupported auth '${endpoint.auth}'.`);
   }

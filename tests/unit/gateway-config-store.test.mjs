@@ -301,6 +301,24 @@ test("validation rejects Codex custom models that collide with official ids", ()
   assert.ok(issues.some((issue) => issue.code === "official_model_collision"));
 });
 
+test("validation allows codex-subscription endpoints to specify official Codex model ids", () => {
+  const issues = validateGatewayConfig({
+    clients: {
+      codex: {
+        endpoints: [{
+          id: "ep_codex_sub",
+          name: "Codex Subscription",
+          type: "codex-subscription",
+          models: ["gpt-5.6"],
+          model_mapping: {},
+        }],
+      },
+    },
+  }, { officialCodexIds: new Set(["gpt-5.6"]) });
+
+  assert.strictEqual(issues.length, 0);
+});
+
 test("load permits legacy model conflicts so users can resolve them through the UI", () => {
   const root = mkdtempSync(path.join(os.tmpdir(), "gateway-conflict-load-"));
   try {

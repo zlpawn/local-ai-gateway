@@ -6025,22 +6025,29 @@ window.saveConfig = async function(options = {}) {
             return true;
         } else {
             const payload = await res.json().catch(() => null);
-            const conflicts = payload?.error?.issues?.filter(issue =>
-                issue.code === 'duplicate_public_model'
-            ) || [];
-            const invalidClaudeNames = payload?.error?.issues?.filter(issue =>
-                issue.code === 'invalid_claude_model_name'
-            ) || [];
-            if (conflicts.length || invalidClaudeNames.length) {
-                const messages = conflicts.map(issue => {
-                    const suggestions = issue.occurrences
-                        .map(item => `${item.endpoint_name}: ${item.suggestion}`)
-                        .join('；');
-                    return `模型 ${issue.model_id} 重复，候选名称：${suggestions}`;
-                });
-                messages.push(...invalidClaudeNames.map(issue =>
-                    `Claude Desktop 映射名称 ${issue.model_id} 不符合规范，建议改为：${issue.suggestion}`
-                ));
+            const issues = payload?.error?.issues || [];
+            const conflicts = issues.filter(issue => issue.code === 'duplicate_public_model');
+            const invalidClaudeNames = issues.filter(issue => issue.code === 'invalid_claude_model_name');
+            const otherIssues = issues.filter(issue => issue.code !== 'duplicate_public_model' && issue.code !== 'invalid_claude_model_name');
+
+            if (issues.length) {
+                const messages: string[] = [];
+                if (conflicts.length) {
+                    messages.push(...conflicts.map(issue => {
+                        const suggestions = (issue.occurrences || [])
+                            .map(item => `${item.endpoint_name}: ${item.suggestion}`)
+                            .join('；');
+                        return `模型 ${issue.model_id} 重复，候选名称：${suggestions}`;
+                    }));
+                }
+                if (invalidClaudeNames.length) {
+                    messages.push(...invalidClaudeNames.map(issue =>
+                        `Claude Desktop 映射名称 ${issue.model_id} 不符合规范，建议改为：${issue.suggestion}`
+                    ));
+                }
+                if (otherIssues.length) {
+                    messages.push(...otherIssues.map(issue => issue.message || '配置校验失败'));
+                }
                 showToast(messages.join('\n'), 'error');
             } else {
                 showToast(payload?.error?.message || '保存配置失败', 'error');
