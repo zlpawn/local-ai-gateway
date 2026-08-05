@@ -10,22 +10,18 @@ function tmpDir() {
   return mkdtempSync(path.join(os.tmpdir(), "lancedb-"));
 }
 
-// These tests require Python lancedb installed.
-// They are skipped if lancedb is not available.
-async function isLanceDbAvailable() {
-  try {
-    const { execSync } = await import("node:child_process");
-    execSync("python3 -c 'import lancedb'", { timeout: 5000 });
-    return true;
-  } catch {
-    return false;
-  }
-}
+test("vector-store: createVectorStore returns all expected methods", () => {
+  const store = createVectorStore({ dbPath: "/tmp/test" });
+  assert.equal(typeof store.ensureTable, "function");
+  assert.equal(typeof store.upsertChunks, "function");
+  assert.equal(typeof store.search, "function");
+  assert.equal(typeof store.deleteByVideo, "function");
+  assert.equal(typeof store.listVideos, "function");
+  assert.equal(typeof store.getVideo, "function");
+  assert.equal(typeof store.getStats, "function");
+});
 
-const hasLanceDb = await isLanceDbAvailable();
-const skipIfNoLanceDb = hasLanceDb ? test : test.skip;
-
-skipIfNoLanceDb("vector-store: ensure table and upsert chunks", async () => {
+test("vector-store: ensure table and upsert chunks", async () => {
   const dir = tmpDir();
   try {
     const store = createVectorStore({ dbPath: dir });
@@ -73,10 +69,9 @@ skipIfNoLanceDb("vector-store: ensure table and upsert chunks", async () => {
   }
 });
 
-skipIfNoLanceDb("vector-store: search returns similar chunks", async () => {
+test("vector-store: search returns similar chunks", async () => {
   const dir = tmpDir();
   try {
-    // Mock embedding function
     const mockEmbed = async (text) => {
       if (text.toLowerCase().includes("cooking")) return [1.0, 0.0, 0.0];
       if (text.toLowerCase().includes("programming")) return [0.0, 1.0, 0.0];
@@ -110,7 +105,7 @@ skipIfNoLanceDb("vector-store: search returns similar chunks", async () => {
   }
 });
 
-skipIfNoLanceDb("vector-store: list and delete videos", async () => {
+test("vector-store: list and delete videos", async () => {
   const dir = tmpDir();
   try {
     const store = createVectorStore({ dbPath: dir });
@@ -143,13 +138,33 @@ skipIfNoLanceDb("vector-store: list and delete videos", async () => {
   }
 });
 
-test("vector-store: createVectorStore returns all expected methods", () => {
-  const store = createVectorStore({ dbPath: "/tmp/test" });
-  assert.equal(typeof store.ensureTable, "function");
-  assert.equal(typeof store.upsertChunks, "function");
-  assert.equal(typeof store.search, "function");
-  assert.equal(typeof store.deleteByVideo, "function");
-  assert.equal(typeof store.listVideos, "function");
-  assert.equal(typeof store.getVideo, "function");
-  assert.equal(typeof store.getStats, "function");
+test("vector-store: getVideo returns chunks sorted by index", async () => {
+  const dir = tmpDir();
+  try {
+    const store = createVectorStore({ dbPath: dir });
+    await store.ensureTable(3);
+
+    await store.upsertChunks([
+      {
+        chunk_id: "c1", video_id: "v1", video_url: "u1", video_title: "Test",
+        chunk_index: 1, start_seconds: 60, end_seconds: 120,
+        text: "second chunk", segment_ids: ["s2"], language: "en",
+        created_at: Date.now(), vector: [0, 1, 0],
+      },
+      {
+        chunk_id: "c2", video_id: "v1", video_url: "u1", video_title: "Test",
+        chunk_index: 0, start_seconds: 0, end_seconds: 60,
+        text: "first chunk", segment_ids: ["s1"], language: "en",
+        created_at: Date.now(), vector: [1, 0, 0],
+      },
+    ], { dim: 3 });
+
+    const result = await store.getVideo("v1");
+    assert.equal(result.chunk_count, 2);
+    assert.equal(result.chunks[0].chunk_index, 0);
+    assert.equal(result.chunks[1].chunk_index, 1);
+    assert.equal(result.chunks[0].text, "first chunk");
+  } finally {
+    rmSync(dir, { recursive: true, force: true });
+  }
 });
