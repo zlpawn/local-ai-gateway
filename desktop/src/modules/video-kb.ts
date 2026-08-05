@@ -318,6 +318,18 @@ function cookiePanelHTML(): string {
   return `
     <div class="video-kb-card">
       <div class="video-kb-card-title">Cookie 导出工具</div>
+      <div id="vk-cookie-extension-section" style="margin-bottom:16px;padding-bottom:16px;border-bottom:1px solid var(--border-color)">
+        <div style="font-size:13px;font-weight:600;margin-bottom:8px">通过浏览器插件导出（推荐，Chrome 开启时可用）</div>
+        <div class="form-group" style="margin-bottom:8px">
+          <label>域名</label>
+          <input type="text" id="vk-ext-cookie-domain" placeholder="如 bilibili.com">
+        </div>
+        <div class="video-kb-actions">
+          <button class="btn btn-primary" onclick="window.videoKbExportViaExtension()">用浏览器插件导出</button>
+        </div>
+        <div id="vk-ext-cookie-result"></div>
+      </div>
+      <div style="font-size:13px;font-weight:600;margin-bottom:8px;color:var(--text-secondary)">本地文件导出（备用，需关闭浏览器）</div>
       <div class="form-group" style="margin-bottom:16px">
         <label>选择浏览器</label>
         <select id="vk-cookie-browser" onchange="window.videoKbLoadDomains()">
@@ -329,7 +341,7 @@ function cookiePanelHTML(): string {
         <input type="text" id="vk-cookie-domain" placeholder="如 youtube.com">
       </div>
       <div class="video-kb-actions">
-        <button class="btn btn-primary" onclick="window.videoKbExportCookies()">导出 cookies.txt</button>
+        <button class="btn btn-secondary" onclick="window.videoKbExportCookies()">导出 cookies.txt</button>
       </div>
     </div>
     <div id="vk-cookie-result"></div>
@@ -713,6 +725,67 @@ async function loadVideoList(): Promise<void> {
 };
 
 (window as any).videoKbLoadDomains = function (): void { /* free-text domain input, no preload needed */ };
+
+(window as any).videoKbExportViaExtension = async function (): Promise<void> {
+    const domain = (document.getElementById("vk-ext-cookie-domain") as HTMLInputElement)?.value?.trim();
+    const resultDiv = document.getElementById("vk-ext-cookie-result");
+    if (!domain) {
+        if (resultDiv) resultDiv.innerHTML = '<div class="video-kb-banner err">请输入域名</div>';
+        return;
+    }
+    if (resultDiv) resultDiv.innerHTML = '<div class="video-kb-banner info">正在通过浏览器插件获取 cookie...</div>';
+    try {
+        const listResp = await fetch("/v1/extensions/list");
+        const listData = await listResp.json();
+        const ext = (listData.extensions || []).find((e: any) => e.online && (e.capabilities || []).includes("cookies"));
+        if (!ext) {
+            if (resultDiv) resultDiv.innerHTML = '<div class="video-kb-banner err">未找到在线的浏览器插件。请先安装「Leo cookie.txt Locally」扩展，详见「浏览器插件」面板。</div>';
+            return;
+        }
+        if (typeof (window as any).chrome === "undefined" || !(window as any).chrome?.runtime?.sendMessage) {
+            if (resultDiv) resultDiv.innerHTML = '<div class="video-kb-banner err">请使用 Chrome/Edge 打开本页面，并安装 Leo cookie.txt Locally 扩展。</div>';
+            return;
+        }
+        const cookies = await new Promise<any>((resolve, reject) => {
+            (window as any).chrome.runtime.sendMessage(ext.id, { action: "getCookies", domain }, (response: any) => {
+                if ((window as any).chrome.runtime.lastError || !response) {
+                    reject(new Error((window as any).chrome.runtime.lastError?.message || "扩展通信失败"));
+                } else if (response.error) {
+                    reject(new Error(response.error));
+                } else {
+                    resolve(response.cookies || []);
+                }
+            });
+        });
+        if (cookies.length === 0) {
+            if (resultDiv) resultDiv.innerHTML = '<div class="video-kb-banner err">未找到该域名的 cookie</div>';
+            return;
+        }
+        const importResp = await fetch("/v1/cookies/import", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({
+                domain,
+                cookies: cookies.map((c: any) => ({
+                    domain: c.domain, path: c.path, name: c.name, value: c.value,
+                    secure: c.secure, httponly: c.httpOnly, expires: c.expirationDate || 0,
+                })),
+            }),
+        });
+        const result = await importResp.json();
+        if (importResp.ok) {
+            if (resultDiv) resultDiv.innerHTML = `<div class="video-kb-banner ok">导出成功: ${result.count} 条 cookie<br>文件: <code>${esc(result.file_path)}</code></div>`;
+            const cookieSelect = document.getElementById("vk-cookie") as HTMLSelectElement | null;
+            if (cookieSelect) {
+                cookieSelect.innerHTML = `<option value="">不需要 Cookie</option><option value="${esc(result.file_path)}" selected>cookies.txt (${result.count} 条)</option>`;
+            }
+        } else {
+            if (resultDiv) resultDiv.innerHTML = `<div class="video-kb-banner err">导出失败: ${result.error?.message || "未知错误"}</div>`;
+        }
+    } catch (e: any) {
+        if (resultDiv) resultDiv.innerHTML = `<div class="video-kb-banner err">${esc(e.message || "导出失败")}</div>`;
+    }
+};
 
 (window as any).videoKbExportCookies = async function (): Promise<void> {
   const browser = (document.getElementById("vk-cookie-browser") as HTMLSelectElement)?.value;
