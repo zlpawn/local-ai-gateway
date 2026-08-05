@@ -1,4 +1,5 @@
 import { escapeHtml } from "./core/dom";
+import { renderVideoKbDetail } from "./modules/video-kb";
 import { showToast } from "./core/ui";
 import { getConfig, loadSyncStatus, fetchJson } from "./core/api";
 
@@ -11,7 +12,7 @@ let codexModelCatalogPath = "~/.codex/gateway-model-catalog.json";
 // Craft-style navigation: null = card list, {client,index} = detail editor
 let selectedEndpoint = null;
 let activeClient = 'code';
-let toolsView = 'cards'; // 'cards' | 'embedding' | 'classification-metrics' | 'antigravity-subscribe' | 'codex-subscribe'
+let toolsView = 'cards'; // 'cards' | 'embedding' | 'classification-metrics' | 'antigravity-subscribe' | 'codex-subscribe' | 'video-kb'
 let codexAuthState = {
     loading: false,
     busyAction: '',
@@ -3573,6 +3574,7 @@ window.switchTab = function(tabId) {
 const toolGroupConfigs = [
     { title: '媒体生成', tools: ['image-gen', 'video-gen', 'tts-gen'] },
     { title: '向量化', tools: ['embedding'] },
+    { title: '知识库', tools: ['video-kb'] },
     { title: '订阅接入', tools: ['antigravity-subscribe', 'codex-subscribe'] },
     { title: '模型配置', tools: ['claude-model-catalog'] },
     { title: '联网搜索', tools: ['web-search'] },
@@ -3585,6 +3587,7 @@ function toolDefs() {
         'video-gen': { name: '视频生成', desc: '使用已配置的视频生成节点，编写分镜提示词，提交异步任务并轮询结果，查看本地生成历史。', icon: '<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="4" width="14" height="16" rx="2"></rect><path d="m22 8-6 4 6 4V8z"></path></svg>' },
         'tts-gen': { name: 'TTS 语音合成', desc: '使用已配置的 TTS 节点，选择音色、调节语速，将文本转为语音并查看本地生成历史。', icon: '<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M11 5 6 9H2v6h4l5 4z"></path><path d="M15.5 8.5a5 5 0 0 1 0 7"></path><path d="M19 5a10 10 0 0 1 0 14"></path></svg>' },
         'embedding': { name: '文本向量化', desc: '选择已配置的向量模型,对文本生成向量或计算两段文本的余弦相似度。', icon: '<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z"></path></svg>' },
+        'video-kb': { name: '视频知识库', desc: '输入视频 URL，自动下载、转录、向量化，存入 LanceDB 后可语义检索。', icon: '<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="4" width="14" height="16" rx="2"></rect><path d="m22 8-6 4 6 4V8z"></path></svg>' },
         'antigravity-subscribe': { name: '接入 Antigravity 订阅', desc: '从本机提取 OAuth 凭据，登录 Google 订阅账号，让网关使用 Antigravity 的 Gemini 模型。', icon: '<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"></path><path d="M9 12l2 2 4-4"></path></svg>' },
         'codex-subscribe': { name: '接入 Codex 订阅', desc: '读取本机 Codex/ChatGPT 登录态，把官方模型做成可给 Claude Desktop / DeepTutor 使用的节点。', icon: '<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"></circle><path d="M8 12h8"></path><path d="M12 8v8"></path></svg>' },
         'claude-model-catalog': { name: 'Claude 模型列表', desc: '维护 Claude Desktop 映射原模型候选项：内置官方名 + 用户自定义。', icon: '<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 8V4H8"></path><rect x="4" y="8" width="16" height="12" rx="2"></rect><path d="M2 14h2"></path><path d="M20 14h2"></path><path d="M15 13v2"></path><path d="M9 13v2"></path></svg>' },
@@ -3632,6 +3635,7 @@ window.openTool = function(toolId) {
     else if (toolId === 'classification-metrics') renderClassificationMetricsDetail();
     else if (toolId === 'antigravity-subscribe') renderAntigravitySubscribeDetail();
     else if (toolId === 'codex-subscribe') renderCodexSubscribeDetail();
+    else if (toolId === 'video-kb') renderVideoKbDetail();
     else renderToolsDetail();
 };
 

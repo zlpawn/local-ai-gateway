@@ -71,6 +71,16 @@ import {
 import { syncClaudeCodeSettings } from "./lib/config/claude-code-settings.mjs";
 import { createModelDiscoveryService } from "./lib/models/discovery-service.mjs";
 import { createTokenTracker } from "./lib/analytics/token-tracker.mjs";
+import { createTaskStore } from "./lib/task-queue/store.mjs";
+import { createHandlerRegistry } from "./lib/task-queue/handler-registry.mjs";
+import { createTaskQueue } from "./lib/task-queue/queue.mjs";
+import { detectBrowsers, listCookieDomains, extractCookies } from "./lib/cookie-extractor/index.mjs";
+import { detectYtDlp, getYtDlpInstallHint, detectFfmpeg, videoIdFromUrl } from "./lib/video-kb/downloader.mjs";
+import { detectWhisperTools, getWhisperModelSizes, getInstallHint as getWhisperInstallHint } from "./lib/video-kb/transcriber.mjs";
+import { chunkTranscript } from "./lib/video-kb/chunker.mjs";
+import { createVectorStore } from "./lib/video-kb/vector-store.mjs";
+import { runVideoKbPipeline, getPipelineNodes } from "./lib/video-kb/pipeline.mjs";
+import { videoKbHandler } from "./lib/video-kb/handler.mjs";
 import { createModelPricingEngine, normalizeModelName } from "./lib/analytics/model-pricing.mjs";
 import { createFxRateService } from "./lib/analytics/fx-rate.mjs";
 import { createResponseUsageCapture } from "./lib/analytics/response-usage-capture.mjs";
@@ -896,6 +906,24 @@ async function route(req, res) {
     } else {
       sendJson(res, 404, { error: { message: "index.html not found" }});
     }
+    return;
+  }
+
+  if (reqPath.startsWith("/v1/video-kb")) {
+    if (!checkLocalAuth(req, res)) return;
+    await routeVideoKbRequest(req, res, context, reqPath);
+    return;
+  }
+
+  if (reqPath.startsWith("/v1/cookies")) {
+    if (!checkLocalAuth(req, res)) return;
+    await routeCookieRequest(req, res, context, reqPath);
+    return;
+  }
+
+  if (reqPath.startsWith("/v1/tasks")) {
+    if (!checkLocalAuth(req, res)) return;
+    await routeTaskQueueRequest(req, res, context, reqPath);
     return;
   }
 
@@ -2292,6 +2320,376 @@ if (reqPath === "/v1/config/secret" && req.method === "GET") {
       message: `${req.method} ${url.pathname} is not implemented`,
     },
   });
+}
+
+
+// --- Video KB REST routes ---
+
+function createGatewayEmbeddingFn(endpointId) {
+  return async function embed(text) {
+    const url = `http://127.0.0.1:${LISTEN_PORT}/v1/embeddings${endpointId ? "?endpoint_id=" + encodeURIComponent(endpointId) : ""}`;
+    const res = await fetch(url, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ input: text, model: "text-embedding" }),
+    });
+    if (!res.ok) {
+      const errBody = await res.text().catch(() => "");
+      throw new Error(`Embedding request failed (${res.status}): ${errBody}`);
+    }
+    const data = await res.json();
+    if (!data.data || !data.data[0] || !data.data[0].embedding) {
+      throw new Error("Embedding response missing vector data");
+    }
+    return data.data[0].embedding;
+  };
+}
+
+async function routeVideoKbRequest(req, res, context, reqPath) {
+  // GET /v1/video-kb/tools/whisper - detect installed whisper tools
+  if (reqPath === "/v1/video-kb/tools/whisper" && req.method === "GET") {
+    const tools = detectWhisperTools();
+    sendJson(res, 200, { tools });
+    return;
+  }
+
+  // GET /v1/video-kb/tools/whisper/models - model sizes + guidance
+  if (reqPath === "/v1/video-kb/tools/whisper/models" && req.method === "GET") {
+    const models = getWhisperModelSizes();
+    sendJson(res, 200, { models });
+    return;
+  }
+
+  // GET /v1/video-kb/tools/yt-dlp - detect yt-dlp
+  if (reqPath === "/v1/video-kb/tools/yt-dlp" && req.method === "GET") {
+    const ytdlp = detectYtDlp();
+    const ffmpeg = detectFfmpeg();
+    const installHint = getYtDlpInstallHint();
+    sendJson(res, 200, { yt_dlp: ytdlp, ffmpeg, install_hint: installHint });
+    return;
+  }
+
+  // GET /v1/video-kb/tools/embedding-endpoints - list available embedding nodes
+  if (reqPath === "/v1/video-kb/tools/embedding-endpoints" && req.method === "GET") {
+    const allEndpoints = Object.values(GATEWAY_CONFIG.clients || {}).flatMap(
+      (client) => client?.endpoints || [],
+    );
+    const embeddingEndpoints = selectEmbeddingEndpoints(allEndpoints);
+    sendJson(res, 200, { endpoints: embeddingEndpoints });
+    return;
+  }
+
+  // GET /v1/video-kb/pipeline/nodes - get pipeline node definitions
+  if (reqPath === "/v1/video-kb/pipeline/nodes" && req.method === "GET") {
+    sendJson(res, 200, { nodes: getPipelineNodes() });
+    return;
+  }
+
+  // POST /v1/video-kb/ingest - submit ingestion task
+  if (reqPath === "/v1/video-kb/ingest" && req.method === "POST") {
+    let body;
+    try {
+      body = JSON.parse(await readText(req) || "{}");
+    } catch {
+      sendJson(res, 400, { error: { type: "invalid_request_error", message: "Invalid JSON body." } });
+      return;
+    }
+    const dataDir = mediaDataDir();
+    const videoId = videoIdFromUrl(body.url || "");
+    const outputDir = path.join(dataDir, "video-kb", videoId);
+    const lanceDbPath = path.join(dataDir, "video-kb", "lancedb");
+    const payload = {
+      url: body.url,
+      cookieFile: body.cookie_file || null,
+      whisperTool: body.whisper_tool,
+      whisperModel: body.whisper_model,
+      language: body.language || "auto",
+      embeddingEndpointId: body.embedding_endpoint_id,
+      chunkStrategy: body.chunk_strategy || "time-window",
+      chunkTargetSeconds: body.chunk_target_seconds,
+      chunkMaxSeconds: body.chunk_max_seconds,
+      chunkOverlapSeconds: body.chunk_overlap_seconds,
+      keepVideo: body.keep_video !== false,
+      outputDir,
+      lanceDbPath,
+    };
+    try {
+      const id = globalTaskQueue.submit("video_kb", payload);
+      sendJson(res, 200, { task_id: id, taskId: id, video_id: videoId, status: "pending" });
+    } catch (err) {
+      sendJson(res, 400, { error: { type: "invalid_request_error", message: err instanceof Error ? err.message : String(err) } });
+    }
+    return;
+  }
+
+  // GET /v1/video-kb/videos - list indexed videos
+  if (reqPath === "/v1/video-kb/videos" && req.method === "GET") {
+    try {
+      const dataDir = mediaDataDir();
+      const lanceDbPath = path.join(dataDir, "video-kb", "lancedb");
+      const store = createVectorStore({ dbPath: lanceDbPath });
+      const videos = await store.listVideos();
+      sendJson(res, 200, { videos });
+    } catch (err) {
+      sendJson(res, 200, { videos: [], error: err instanceof Error ? err.message : String(err) });
+    }
+    return;
+  }
+
+  // GET /v1/video-kb/videos/:id - video details
+  const videoMatch = reqPath.match(/^\/v1\/video-kb\/videos\/([^/]+)$/);
+  if (videoMatch && req.method === "GET") {
+    const videoId = decodeURIComponent(videoMatch[1]);
+    try {
+      const dataDir = mediaDataDir();
+      const lanceDbPath = path.join(dataDir, "video-kb", "lancedb");
+      const store = createVectorStore({ dbPath: lanceDbPath });
+      const result = await store.getVideo(videoId);
+      sendJson(res, 200, result);
+    } catch (err) {
+      sendJson(res, 404, { error: { type: "video_not_found", message: err instanceof Error ? err.message : String(err) } });
+    }
+    return;
+  }
+
+  // DELETE /v1/video-kb/videos/:id - delete video + assets
+  if (videoMatch && req.method === "DELETE") {
+    const videoId = decodeURIComponent(videoMatch[1]);
+    try {
+      const dataDir = mediaDataDir();
+      const lanceDbPath = path.join(dataDir, "video-kb", "lancedb");
+      const store = createVectorStore({ dbPath: lanceDbPath });
+      await store.deleteByVideo(videoId);
+      // Also delete the assets directory
+      const assetDir = path.join(dataDir, "video-kb", videoId);
+      if (fs.existsSync(assetDir)) {
+        fs.rmSync(assetDir, { recursive: true, force: true });
+      }
+      sendJson(res, 200, { success: true, video_id: videoId });
+    } catch (err) {
+      sendJson(res, 500, { error: { type: "delete_failed", message: err instanceof Error ? err.message : String(err) } });
+    }
+    return;
+  }
+
+  // POST /v1/video-kb/search - semantic search
+  if (reqPath === "/v1/video-kb/search" && req.method === "POST") {
+    let body;
+    try {
+      body = JSON.parse(await readText(req) || "{}");
+    } catch {
+      sendJson(res, 400, { error: { type: "invalid_request_error", message: "Invalid JSON body." } });
+      return;
+    }
+    const query = String(body.query || "").trim();
+    if (!query) {
+      sendJson(res, 400, { error: { type: "invalid_request_error", message: "Missing 'query' field." } });
+      return;
+    }
+    const endpointId = body.embedding_endpoint_id;
+    const topK = Math.min(Number(body.top_k) || 5, 50);
+    const videoId = body.video_id || null;
+    try {
+      const dataDir = mediaDataDir();
+      const lanceDbPath = path.join(dataDir, "video-kb", "lancedb");
+      const embeddingFn = createGatewayEmbeddingFn(endpointId);
+      const store = createVectorStore({ dbPath: lanceDbPath, embeddingFn });
+      const results = await store.search(query, { topK, videoId });
+      sendJson(res, 200, { results, count: results.length });
+    } catch (err) {
+      sendJson(res, 500, { error: { type: "search_failed", message: err instanceof Error ? err.message : String(err) } });
+    }
+    return;
+  }
+
+  // GET /v1/video-kb/assets/:video_id/:type - stream asset file
+  const assetMatch = reqPath.match(/^\/v1\/video-kb\/assets\/([^/]+)\/([^/]+)$/);
+  if (assetMatch && req.method === "GET") {
+    const videoId = decodeURIComponent(assetMatch[1]);
+    const fileType = decodeURIComponent(assetMatch[2]); // video|audio|transcript
+    const dataDir = mediaDataDir();
+    const assetDir = path.join(dataDir, "video-kb", videoId);
+    const typeDir = fileType === "video" ? "video" : fileType === "audio" ? "audio" : "transcript";
+    const dir = path.join(assetDir, typeDir);
+    if (!fs.existsSync(dir)) {
+      sendJson(res, 404, { error: { type: "asset_not_found", message: "Asset directory not found." } });
+      return;
+    }
+    // Find the first file in the directory
+    const files = fs.readdirSync(dir).filter((f) => !f.endsWith(".info.json") && !f.endsWith(".partial"));
+    if (files.length === 0) {
+      sendJson(res, 404, { error: { type: "asset_not_found", message: "No asset file found." } });
+      return;
+    }
+    const filePath = path.join(dir, files[0]);
+    const stats = fs.statSync(filePath);
+    if (!stats.isFile()) {
+      sendJson(res, 404, { error: { type: "asset_not_found" } });
+      return;
+    }
+    const ext = path.extname(filePath).toLowerCase();
+    const mimeTypes = {
+      ".mp4": "video/mp4", ".webm": "video/webm", ".mkv": "video/x-matroska",
+      ".wav": "audio/wav", ".mp3": "audio/mpeg", ".m4a": "audio/mp4", ".ogg": "audio/ogg",
+      ".txt": "text/plain; charset=utf-8", ".json": "application/json; charset=utf-8",
+      ".srt": "text/plain; charset=utf-8",
+    };
+    const contentType = mimeTypes[ext] || "application/octet-stream";
+    res.writeHead(200, { "Content-Type": contentType, "Content-Length": stats.size, "Cache-Control": "no-store" });
+    fs.createReadStream(filePath).pipe(res);
+    return;
+  }
+
+  sendJson(res, 404, { error: { type: "not_found", message: `${req.method} ${reqPath} is not available on the video KB API.` } });
+}
+
+// --- Cookie extractor REST routes ---
+
+async function routeCookieRequest(req, res, context, reqPath) {
+  // GET /v1/cookies/browsers - detect installed browsers
+  if (reqPath === "/v1/cookies/browsers" && req.method === "GET") {
+    try {
+      const browsers = detectBrowsers();
+      sendJson(res, 200, { browsers });
+    } catch (err) {
+      sendJson(res, 500, { error: { type: "cookie_extract_error", message: err instanceof Error ? err.message : String(err) } });
+    }
+    return;
+  }
+
+  // GET /v1/cookies/domains?browser=chrome
+  if (reqPath === "/v1/cookies/domains" && req.method === "GET") {
+    const browser = String(context.url.searchParams.get("browser") || "");
+    if (!browser) {
+      sendJson(res, 400, { error: { type: "invalid_request_error", message: "Missing 'browser' query parameter." } });
+      return;
+    }
+    try {
+      const domains = listCookieDomains({ browser });
+      sendJson(res, 200, { browser, domains });
+    } catch (err) {
+      sendJson(res, 500, { error: { type: "cookie_extract_error", message: err instanceof Error ? err.message : String(err) } });
+    }
+    return;
+  }
+
+  // POST /v1/cookies/export
+  if (reqPath === "/v1/cookies/export" && req.method === "POST") {
+    let body;
+    try {
+      body = JSON.parse(await readText(req) || "{}");
+    } catch {
+      sendJson(res, 400, { error: { type: "invalid_request_error", message: "Invalid JSON body." } });
+      return;
+    }
+    const browser = String(body.browser || "").trim();
+    if (!browser) {
+      sendJson(res, 400, { error: { type: "invalid_request_error", message: "Missing 'browser' field." } });
+      return;
+    }
+    const domain = body.domain ? String(body.domain).trim() : "";
+    const outputPath = body.output_path
+      ? resolveProjectPath(body.output_path)
+      : path.join(path.dirname(GATEWAY_CONFIG_FILE), "cookies.txt");
+    try {
+      const result = await extractCookies({ browser, domain: domain || undefined, outputPath });
+      sendJson(res, 200, result);
+    } catch (err) {
+      sendJson(res, 500, { error: { type: "cookie_extract_error", message: err instanceof Error ? err.message : String(err) } });
+    }
+    return;
+  }
+
+  sendJson(res, 404, { error: { type: "not_found", message: `${req.method} ${reqPath} is not available on the cookie API.` } });
+}
+
+// --- Task queue REST routes ---
+
+async function routeTaskQueueRequest(req, res, context, reqPath) {
+  // POST /v1/tasks - submit a new task
+  if (reqPath === "/v1/tasks" && req.method === "POST") {
+    let body;
+    try {
+      body = JSON.parse(await readText(req) || "{}");
+    } catch {
+      sendJson(res, 400, { error: { type: "invalid_request_error", message: "Invalid JSON body." } });
+      return;
+    }
+    const type = String(body.type || "").trim();
+    if (!type) {
+      sendJson(res, 400, { error: { type: "invalid_request_error", message: "Missing 'type' field." } });
+      return;
+    }
+    if (!globalTaskRegistry.has(type)) {
+      sendJson(res, 400, { error: { type: "invalid_request_error", message: `Unknown task type '${type}'. Available: ${globalTaskRegistry.list().join(", ") || "none"}` } });
+      return;
+    }
+    try {
+      const id = globalTaskQueue.submit(type, body.payload || {});
+      sendJson(res, 200, { task_id: id, taskId: id, status: "pending" });
+    } catch (err) {
+      sendJson(res, 400, { error: { type: "invalid_request_error", message: err instanceof Error ? err.message : String(err) } });
+    }
+    return;
+  }
+
+  // GET /v1/tasks - list tasks
+  if (reqPath === "/v1/tasks" && req.method === "GET") {
+    const url = context.url;
+    const type = String(url.searchParams.get("type") || "");
+    const status = String(url.searchParams.get("status") || "");
+    const limit = Math.min(Number(url.searchParams.get("limit")) || 50, 200);
+    const offset = Math.max(Number(url.searchParams.get("offset")) || 0, 0);
+    const tasks = globalTaskQueue.list({ type, status, limit, offset });
+    sendJson(res, 200, { tasks, count: tasks.length });
+    return;
+  }
+
+  // GET /v1/tasks/:id - get task status
+  const taskMatch = reqPath.match(/^\/v1\/tasks\/([^/]+)$/);
+  if (taskMatch && req.method === "GET") {
+    const task = globalTaskQueue.get(decodeURIComponent(taskMatch[1]));
+    if (!task) {
+      sendJson(res, 404, { error: { type: "task_not_found", message: "Task not found." } });
+      return;
+    }
+    sendJson(res, 200, task);
+    return;
+  }
+
+  // POST /v1/tasks/:id/cancel
+  const cancelMatch = reqPath.match(/^\/v1\/tasks\/([^/]+)\/cancel$/);
+  if (cancelMatch && req.method === "POST") {
+    const id = decodeURIComponent(cancelMatch[1]);
+    const ok = globalTaskQueue.cancel(id);
+    if (!ok) {
+      sendJson(res, 404, { error: { type: "task_not_found", message: "Task not found or already terminal." } });
+      return;
+    }
+    sendJson(res, 200, { task_id: id, taskId: id, status: "cancel_requested" });
+    return;
+  }
+
+  // DELETE /v1/tasks/:id
+  const deleteMatch = reqPath.match(/^\/v1\/tasks\/([^/]+)$/);
+  if (deleteMatch && req.method === "DELETE") {
+    const id = decodeURIComponent(deleteMatch[1]);
+    const ok = globalTaskQueue.deleteTask(id);
+    if (!ok) {
+      sendJson(res, 404, { error: { type: "task_not_found", message: "Task not found or not in terminal state." } });
+      return;
+    }
+    sendJson(res, 200, { success: true, id });
+    return;
+  }
+
+  // GET /v1/tasks/types - list registered task types
+  if (reqPath === "/v1/tasks/types" && req.method === "GET") {
+    sendJson(res, 200, { types: globalTaskRegistry.list() });
+    return;
+  }
+
+  sendJson(res, 404, { error: { type: "not_found", message: `${req.method} ${reqPath} is not available on the task queue API.` } });
 }
 
 async function routeMediaRequest(req, res, context, reqPath) {
@@ -6315,6 +6713,35 @@ const globalPricingEngine = createModelPricingEngine({
   customPrices: GATEWAY_CONFIG.custom_prices || [],
 });
 const globalFxRateService = createFxRateService();
+
+// --- Generic background task queue ---
+const globalTaskStore = createTaskStore({
+  dbPath: resolveProjectPath(
+    process.env.GATEWAY_TASK_DB_FILE
+      || path.join(path.dirname(GATEWAY_CONFIG_FILE), "gateway.db"),
+  ),
+});
+const globalTaskRegistry = createHandlerRegistry();
+const globalTaskQueue = createTaskQueue({
+  store: globalTaskStore,
+  registry: globalTaskRegistry,
+  concurrency: intEnv("TASK_QUEUE_CONCURRENCY", 2),
+  maxRetries: intEnv("TASK_QUEUE_MAX_RETRIES", 1),
+});
+globalTaskQueue.start();
+
+// --- Register video_kb task handler ---
+// Wrap the handler to inject the gateway embedding function
+globalTaskRegistry.register(videoKbHandler.type, {
+  type: videoKbHandler.type,
+  steps: videoKbHandler.steps,
+  validate: videoKbHandler.validate,
+  async run(payload, ctx) {
+    // Inject embeddingFn that calls the gateway's embedding endpoint
+    const embeddingFn = createGatewayEmbeddingFn(payload.embeddingEndpointId);
+    return videoKbHandler.run({ ...payload, embeddingFn }, ctx);
+  },
+});
 
 const CODEX_MODELS_TTL_MS = intEnv("CODEX_MODELS_TTL_MS", 300_000);
 const CODEX_MODELS_LIVE_TIMEOUT_MS = intEnv("CODEX_MODELS_LIVE_TIMEOUT_MS", 2_500);

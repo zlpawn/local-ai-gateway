@@ -1,6 +1,6 @@
 {
   "version": 1,
-  "updatedAt": "2026-08-03T09:54:54.363Z",
+  "updatedAt": "2026-08-05T03:30:00.000Z",
   "skills": [
     {
       "id": "leo-video-to-karpathy-wiki",
@@ -75,6 +75,24 @@
       "icon": "⬇️",
       "featured": false,
       "tags": [],
+      "requiresDaemon": false,
+      "promoted": true,
+      "managed": true
+    },
+    {
+      "id": "leo-cookie-exporter",
+      "name": "leo-cookie-exporter",
+      "title": "Cookie Exporter",
+      "summary": "导出本地浏览器 cookie 为 Netscape 格式 cookies.txt,供 yt-dlp 下载登录视频使用。支持 Chrome、Edge、Brave、Firefox。",
+      "category": "download",
+      "categoryLabel": "下载采集",
+      "icon": "🍪",
+      "featured": false,
+      "tags": [
+        "cookie",
+        "yt-dlp",
+        "download"
+      ],
       "requiresDaemon": false,
       "promoted": true,
       "managed": true

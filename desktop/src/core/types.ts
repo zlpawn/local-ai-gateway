@@ -29,7 +29,7 @@ export interface Endpoint {
 
 export type ToolsView = "cards" | "embedding" | "classification-metrics"
   | "antigravity-subscribe" | "codex-subscribe"
-  | "image-gen" | "video-gen" | "tts";
+  | "image-gen" | "video-gen" | "tts" | "video-kb";
 
 export interface Selection {
   client: string;
