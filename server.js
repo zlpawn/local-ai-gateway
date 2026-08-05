@@ -75,6 +75,8 @@ import { createTaskStore } from "./lib/task-queue/store.mjs";
 import { createHandlerRegistry } from "./lib/task-queue/handler-registry.mjs";
 import { createTaskQueue } from "./lib/task-queue/queue.mjs";
 import { detectBrowsers, listCookieDomains, extractCookies } from "./lib/cookie-extractor/index.mjs";
+import { createExtensionStore } from "./lib/extension-registry/store.mjs";
+import { routeExtensionRequest, routeCookieImport } from "./lib/extension-registry/routes.mjs";
 import { detectYtDlp, getYtDlpInstallHint, detectFfmpeg, videoIdFromUrl } from "./lib/video-kb/downloader.mjs";
 import { detectWhisperTools, getWhisperModelSizes, getInstallHint as getWhisperInstallHint } from "./lib/video-kb/transcriber.mjs";
 import { chunkTranscript } from "./lib/video-kb/chunker.mjs";
@@ -167,6 +169,8 @@ const GATEWAY_SECRETS_FILE = resolveProjectPath(
   process.env.GATEWAY_SECRETS_FILE ||
   path.join(path.dirname(GATEWAY_CONFIG_FILE), "gateway.secrets.json"),
 );
+const globalExtensionStore = createExtensionStore({ dataDir: path.dirname(GATEWAY_CONFIG_FILE) });
+const EXTENSIONS_DIR = resolveProjectPath("extensions");
 const CLAUDE_3P_CONFIG_FILE = process.env.CLAUDE_3P_CONFIG_FILE || "";
 const CLAUDE_3P_CONFIG_LIBRARY = process.env.CLAUDE_3P_CONFIG_LIBRARY || "";
 const CLAUDE_3P_SYNC_DISABLED = isTruthy(process.env.CLAUDE_3P_SYNC_DISABLED);
@@ -918,6 +922,12 @@ async function route(req, res) {
   if (reqPath.startsWith("/v1/cookies")) {
     if (!checkLocalAuth(req, res)) return;
     await routeCookieRequest(req, res, context, reqPath);
+    return;
+  }
+
+  if (reqPath.startsWith("/v1/extensions")) {
+    if (!checkLocalAuth(req, res)) return;
+    routeExtensionRequest(req, res, context, reqPath, { store: globalExtensionStore, extensionsDir: EXTENSIONS_DIR });
     return;
   }
 
@@ -2597,6 +2607,12 @@ async function routeCookieRequest(req, res, context, reqPath) {
     } catch (err) {
       sendJson(res, 500, { error: { type: "cookie_extract_error", message: err instanceof Error ? err.message : String(err) } });
     }
+    return;
+  }
+
+  // POST /v1/cookies/import - import cookies from browser extension
+  if (reqPath === "/v1/cookies/import" && req.method === "POST") {
+    await routeCookieImport(req, res, context, { configDir: path.dirname(GATEWAY_CONFIG_FILE) });
     return;
   }
 
