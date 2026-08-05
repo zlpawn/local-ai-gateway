@@ -4638,6 +4638,12 @@ function getEmbeddingEndpoints(client) {
     return eps;
 }
 
+// Expose for external modules (video-kb etc.)
+window.__gatewayConfig = () => config;
+window.__getEmbeddingEndpoints = getEmbeddingEndpoints;
+window.__clientDisplayName = clientDisplayName;
+
+
 function renderMediaHistoryHtml(entries, mediaType) {
     if (!entries.length) return '<div class="media-gen-tip">暂无本地生成历史。</div>';
     return '<div class="media-gen-history">' + entries.map(entry => {
