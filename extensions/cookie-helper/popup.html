@@ -1,0 +1,23 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <link rel="stylesheet" href="popup.css">
+</head>
+<body>
+  <div class="header">
+    <h1>Leo cookie.txt Locally</h1>
+  </div>
+  <div class="field">
+    <label for="gateway-url">网关地址</label>
+    <input type="text" id="gateway-url" placeholder="http://127.0.0.1:8788">
+  </div>
+  <div class="field">
+    <label for="domain">域名</label>
+    <input type="text" id="domain" placeholder="如 bilibili.com">
+  </div>
+  <button id="export-btn">导出到网关</button>
+  <div id="result"></div>
+  <script src="popup.js"></script>
+</body>
+</html>
