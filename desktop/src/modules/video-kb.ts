@@ -181,31 +181,17 @@ function importPanelHTML(): string {
         <label>视频 URL</label>
         <input type="text" id="vk-url" placeholder="https://www.youtube.com/watch?v=...">
       </div>
+      <div class="form-group" style="margin-bottom:16px">
+        <label>Cookie 文件</label>
+        <select id="vk-cookie">
+          <option value="">不需要 Cookie</option>
+        </select>
+      </div>
+    </div>
+
+    <div class="video-kb-card">
+      <div class="video-kb-card-title">Whisper 转录</div>
       <div class="video-kb-form-grid">
-        <div class="form-group">
-          <label>Cookie 文件</label>
-          <select id="vk-cookie">
-            <option value="">不需要 Cookie</option>
-          </select>
-        </div>
-        <div class="form-group">
-          <label>Client</label>
-          <select id="vk-emb-client" onchange="window.videoKbOnEmbClientChange()">
-            <option value="">加载中...</option>
-          </select>
-        </div>
-        <div class="form-group">
-          <label>Embedding 节点</label>
-          <select id="vk-emb-endpoint" onchange="window.videoKbOnEmbEndpointChange()">
-            <option value="">无可用节点</option>
-          </select>
-        </div>
-        <div class="form-group">
-          <label>模型</label>
-          <select id="vk-emb-model">
-            <option value="">无</option>
-          </select>
-        </div>
         <div class="form-group">
           <label>Whisper 工具</label>
           <select id="vk-whisper-tool">
@@ -230,6 +216,30 @@ function importPanelHTML(): string {
             <option value="ko">한국어</option>
           </select>
         </div>
+      </div>
+    </div>
+
+    <div class="video-kb-card">
+      <div class="video-kb-card-title">向量化</div>
+      <div class="video-kb-form-grid">
+        <div class="form-group">
+          <label>Client</label>
+          <select id="vk-emb-client" onchange="window.videoKbOnEmbClientChange()">
+            <option value="">加载中...</option>
+          </select>
+        </div>
+        <div class="form-group">
+          <label>Embedding 节点</label>
+          <select id="vk-emb-endpoint" onchange="window.videoKbOnEmbEndpointChange()">
+            <option value="">无可用节点</option>
+          </select>
+        </div>
+        <div class="form-group">
+          <label>模型</label>
+          <select id="vk-emb-model">
+            <option value="">无</option>
+          </select>
+        </div>
         <div class="form-group">
           <label>分块策略</label>
           <select id="vk-chunk-strategy">
@@ -237,6 +247,12 @@ function importPanelHTML(): string {
             <option value="semantic">语义切分（高质量）</option>
           </select>
         </div>
+      </div>
+    </div>
+
+    <div class="video-kb-card">
+      <div class="video-kb-card-title">素材保留</div>
+      <div class="video-kb-form-grid">
         <div class="form-group">
           <label>保留视频素材</label>
           <select id="vk-keep-video">
@@ -250,6 +266,7 @@ function importPanelHTML(): string {
         <span id="vk-ytdlp-status" class="video-kb-status"></span>
       </div>
     </div>
+
     <div id="vk-task-progress" style="display:none">
       <div class="video-kb-card">
         <div class="video-kb-card-title">任务进度</div>
@@ -349,19 +366,8 @@ async function loadToolsData(): Promise<void> {
     }
   }
 
-  const embData = await apiGet<{ endpoints: EmbeddingEndpoint[] }>("/v1/video-kb/tools/embedding-endpoints");
-  if (embData) {
-    videoKbState.embeddingEndpoints = embData.endpoints;
-    const opts = embData.endpoints.length === 0
-      ? `<option value="">未配置 Embedding 节点</option>`
-      : embData.endpoints.map((e, i) =>
-          `<option value="${e.id}" ${i === 0 ? "selected" : ""}>${esc(e.name)} (${esc(e.embedding_model || e.models?.[0] || "")})</option>`
-        ).join("");
-    const sel1 = document.getElementById("vk-embedding");
-    const sel2 = document.getElementById("vk-search-embedding");
-    if (sel1) sel1.innerHTML = opts;
-    if (sel2) sel2.innerHTML = opts;
-  }
+  // Initialize embedding cascade from gateway config
+  initEmbeddingCascade();
 
   const ytdlpData = await apiGet<{ yt_dlp: { version: string } | null; ffmpeg: { path: string } | null; install_hint: { commands: string[] } }>("/v1/video-kb/tools/yt-dlp");
   if (ytdlpData) {
