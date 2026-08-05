@@ -99,7 +99,7 @@ When no extension is registered or online, the video-kb cookie panel shows the e
 
 **manifest.json:**
 - `manifest_version: 3`
-- `name: "Shrimp Cookie Helper"`
+- `name: "Leo cookie.txt Locally"`
 - `permissions: ["cookies", "activeTab", "storage"]`
 - `host_permissions: ["<all_urls>"]` (per user decision - local self-use tool, needs to read cookies from any site the user exports)
 - `externally_connectable: { matches: ["http://127.0.0.1:*/*", "http://localhost:*/*"] }`
@@ -141,7 +141,7 @@ createExtensionStore({ dataDir })
 ```json
 {
   "id": "abcdef...",
-  "name": "Shrimp Cookie Helper",
+  "name": "Leo cookie.txt Locally",
   "version": "1.0.0",
   "capabilities": ["cookies"],
   "permissions": ["cookies", "activeTab", "storage"],
@@ -201,7 +201,7 @@ The existing `cookiePanelHTML()` gains a new section above the local-file UI:
 - Always show the local-file UI below, labeled as fallback. The existing browser selector and export button remain unchanged.
 - When the local-file export fails with the EBUSY message, the error banner now appends: "建议使用浏览器插件导出（见上方）".
 
-**Path A communication:** The gateway page calls `chrome.runtime.sendMessage(extensionId, msg, callback)`. This only works if the page is loaded in a Chromium browser that has the extension installed and the extension declared this origin in `externally_connectable.matches`. If the page is opened in a non-Chromium browser or the extension is not installed, `chrome.runtime` is undefined or the call fails - the UI catches this and shows "请使用 Chrome/Edge 打开本页面，并安装 Cookie Helper 扩展".
+**Path A communication:** The gateway page calls `chrome.runtime.sendMessage(extensionId, msg, callback)`. This only works if the page is loaded in a Chromium browser that has the extension installed and the extension declared this origin in `externally_connectable.matches`. If the page is opened in a non-Chromium browser or the extension is not installed, `chrome.runtime` is undefined or the call fails - the UI catches this and shows "请使用 Chrome/Edge 打开本页面，并安装 Leo cookie.txt Locally 扩展".
 
 ## File Layout
 
