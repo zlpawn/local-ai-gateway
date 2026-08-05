@@ -190,6 +190,19 @@
     "codex": {
       "endpoints": [
         {
+          "id": "ep_9e10cf41-acef-4ac3-938a-f05eb38c5fa8",
+          "name": "GPT IMAGE",
+          "purpose": "image_generation",
+          "provider": "codex-subscription",
+          "base_url": "https://chatgpt.com/backend-api/codex",
+          "enabled": true,
+          "is_default": false,
+          "models": [
+            "gpt-image-2"
+          ],
+          "model_mapping": {}
+        },
+        {
           "id": "ep_60df571d-8056-4df0-9ac0-36b0ec182706",
           "name": "houshan-codingplan-2",
           "type": "openai-responses",

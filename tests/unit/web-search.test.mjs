@@ -228,6 +228,34 @@ test("tavily adapter maps request/response and errors", async () => {
   }
 });
 
+test("tavily adapter uses custom fetchImpl when provided", async () => {
+  let customFetchCalled = false;
+  const customFetch = async (url, init) => {
+    customFetchCalled = true;
+    assert.equal(url, "https://api.tavily.com/search");
+    return {
+      ok: true,
+      status: 200,
+      async text() {
+        return JSON.stringify({
+          query: "北京天气",
+          results: [{ title: "B", url: "https://b.test", content: "sunny" }],
+        });
+      },
+    };
+  };
+
+  const result = await tavilyAdapter.search({
+    query: "北京天气",
+    apiKey: "tvly-test",
+    fetchImpl: customFetch,
+  });
+
+  assert.equal(customFetchCalled, true);
+  assert.equal(result.ok, true);
+  assert.equal(result.results[0].url, "https://b.test");
+});
+
 test("validateGatewayConfig accepts one default web_search node and rejects bad provider", () => {
   const ok = validateGatewayConfig({
     clients: {

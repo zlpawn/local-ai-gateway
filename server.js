@@ -2503,6 +2503,14 @@ function mediaProviderContext(req, endpoint, signal) {
 }
 
 
+function webSearchFetchImpl(endpoint) {
+  const proxyUrl = configuredOutboundProxyUrl(endpoint) || officialCodexProxyUrl();
+  return (url, init = {}) => {
+    if (isLoopbackUrl(url)) return fetch(url, init);
+    return fetchWithOptionalProxy(url, { ...init, proxyUrl });
+  };
+}
+
 async function routeWebSearchRequest(req, res, context) {
   let body;
   try {
@@ -2519,7 +2527,11 @@ async function routeWebSearchRequest(req, res, context) {
   const endpointId = body.endpoint_id ? String(body.endpoint_id) : "";
   let candidateEndpoints = endpoints.filter((ep) => ep?.purpose === "web_search" && ep.enabled !== false);
   if (endpointId) candidateEndpoints = candidateEndpoints.filter((ep) => ep.id === endpointId);
-  const selected = selectWebSearchEndpoint(candidateEndpoints, { secrets: GATEWAY_SECRETS, env: process.env });
+  const selected = selectWebSearchEndpoint(candidateEndpoints, {
+    secrets: GATEWAY_SECRETS,
+    env: process.env,
+    fetchImpl: (ep) => webSearchFetchImpl(ep),
+  });
   if (!selected) {
     sendJson(res, 404, {
       error: {
@@ -2537,6 +2549,7 @@ async function routeWebSearchRequest(req, res, context) {
       time_range: body.time_range,
       options: selected.options || {},
       apiKey: selected.apiKey,
+      fetchImpl: selected.fetchImpl,
       signal: requestAbort.signal,
     });
     const persisted = await persistWebSearchResult({ result, body: { ...body, query }, endpoint: selected.endpoint });
@@ -2989,6 +3002,7 @@ async function forwardAnthropicMessagesResolved(body, clientReq, clientRes, cont
       secrets: GATEWAY_SECRETS,
       officialRoute: false,
       format: route.provider?.type === "openai-chat" ? "chat" : "anthropic",
+      fetchImpl: (ep) => webSearchFetchImpl(ep),
     })
     : { body, injected: false, selected: null, reason: "ineligible" };
   body = injectedSearch.body;
@@ -3361,6 +3375,7 @@ async function forwardOpenAIChatCompletionsResolved(body, clientReq, clientRes, 
       format: route.provider?.type === "anthropic" ? "anthropic" : (
         route.provider?.type === "openai-responses" ? "responses" : "chat"
       ),
+      fetchImpl: (ep) => webSearchFetchImpl(ep),
     })
     : { body, injected: false, selected: null, reason: "ineligible" };
   body = injectedSearch.body;
@@ -4134,6 +4149,7 @@ async function forwardResolvedCodexResponse({
     secrets: GATEWAY_SECRETS,
     officialRoute: false,
     format: "responses",
+    fetchImpl: (ep) => webSearchFetchImpl(ep),
   });
   body = injectedSearch.body;
   if (injectedSearch.injected) {
