@@ -1,4 +1,4 @@
-﻿:root[data-theme="dark"] {
+:root[data-theme="dark"] {
     /* Pure Dark Theme (No Purple Glow) */
     --bg-color: #09090b;
     --surface: #18181b;
@@ -3566,3 +3566,8 @@ input:focus, select:focus {
     gap: 6px;
     flex-shrink: 0;
 }
+
+/* Browser Extensions Module */
+.ext-status-dot.online { box-shadow: 0 0 6px rgba(74, 222, 128, 0.5); }
+.ext-status-dot.offline { opacity: 0.5; }
+.ext-cap-badge { text-transform: uppercase; letter-spacing: 0.5px; }

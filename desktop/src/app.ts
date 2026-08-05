@@ -3578,6 +3578,7 @@ const toolGroupConfigs = [
     { title: '订阅接入', tools: ['antigravity-subscribe', 'codex-subscribe'] },
     { title: '模型配置', tools: ['claude-model-catalog'] },
     { title: '联网搜索', tools: ['web-search'] },
+    { title: '浏览器插件', tools: ['browser-extensions'] },
     { title: '其他', tools: ['classification-metrics'] },
 ];
 
@@ -3593,6 +3594,7 @@ function toolDefs() {
         'claude-model-catalog': { name: 'Claude 模型列表', desc: '维护 Claude Desktop 映射原模型候选项：内置官方名 + 用户自定义。', icon: '<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 8V4H8"></path><rect x="4" y="8" width="16" height="12" rx="2"></rect><path d="M2 14h2"></path><path d="M20 14h2"></path><path d="M15 13v2"></path><path d="M9 13v2"></path></svg>' },
         'web-search': { name: '联网搜索', desc: '使用已配置的 web_search 节点，输入查询词、选择结果数量与时间范围，实时检索网页并查看本地搜索历史。', icon: '<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"></circle><path d="M2 12h20"></path><path d="M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z"></path></svg>' },
         'classification-metrics': { name: '分类评估实验室', desc: '讲清 TP/FP/FN/TN，以及准确率、精准率、召回率，并用你的数据现场计算。', icon: '<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="7" height="7"></rect><rect x="14" y="3" width="7" height="7"></rect><rect x="14" y="14" width="7" height="7"></rect><rect x="3" y="14" width="7" height="7"></rect></svg>' },
+        'browser-extensions': { name: '浏览器插件', desc: '管理已安装的浏览器扩展，通过扩展获取 Cookie 等浏览器数据。', icon: '<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14.7 6.3a1 1 0 0 0 0 1.4l1.6 1.6a1 1 0 0 0 1.4 0l3.77-3.77a6 6 0 0 1-7.94 7.94l-6.91 6.91a2.12 2.12 0 0 1-3-3l6.91-6.91a6 6 0 0 1 7.94-7.94l-3.76 3.76z"></path></svg>' },
     };
 }
 
@@ -3636,6 +3638,7 @@ window.openTool = function(toolId) {
     else if (toolId === 'antigravity-subscribe') renderAntigravitySubscribeDetail();
     else if (toolId === 'codex-subscribe') renderCodexSubscribeDetail();
     else if (toolId === 'video-kb') renderVideoKbDetail();
+    else if (toolId === 'browser-extensions') renderBrowserExtensionsDetail();
     else renderToolsDetail();
 };
 
@@ -3654,6 +3657,73 @@ window.backToToolsCards = function() {
     if (cards) cards.style.display = '';
     if (detail) detail.innerHTML = '';
     renderToolsCards();
+};
+
+async function renderBrowserExtensionsDetail(): Promise<void> {
+    const detail = document.getElementById('tools-detail');
+    if (!detail) return;
+    detail.innerHTML = `
+        <button class="btn btn-secondary" onclick="window.backToToolsCards()" style="margin-bottom:16px">← 返回</button>
+        <div class="section-header">
+            <div>
+                <h2>浏览器插件</h2>
+                <p>管理已安装的浏览器扩展，通过扩展获取 Cookie 等浏览器数据。</p>
+            </div>
+            <div class="section-header-actions">
+                <button class="btn btn-primary" onclick="window.downloadExtension()">下载扩展包</button>
+                <button class="btn btn-secondary" onclick="window.refreshExtensions()">刷新</button>
+            </div>
+        </div>
+        <div class="extension-install-hint" style="margin-bottom:20px;padding:16px;background:var(--bg-secondary);border-radius:8px;font-size:13px;color:var(--text-secondary)">
+            <strong>安装步骤：</strong>1. 点击「下载扩展包」获取 ZIP 文件并解压。2. 打开 chrome://extensions。3. 开启右上角「开发者模式」。4. 点击「加载已解压的扩展程序」，选择解压后的文件夹。
+        </div>
+        <div id="extension-list-container"></div>
+    `;
+    await window.refreshExtensions();
+}
+
+(window as any).downloadExtension = function(): void {
+    window.open('/v1/extensions/download', '_blank');
+};
+
+(window as any).refreshExtensions = async function(): Promise<void> {
+    const container = document.getElementById('extension-list-container');
+    if (!container) return;
+    try {
+        const resp = await fetch('/v1/extensions/list');
+        const data = await resp.json();
+        const extensions = data.extensions || [];
+        if (extensions.length === 0) {
+            container.innerHTML = '<div style="padding:32px;text-align:center;color:var(--text-secondary)">尚未检测到已安装的浏览器插件。请先下载并安装扩展。</div>';
+            return;
+        }
+        container.innerHTML = extensions.map((ext: any) => `
+            <div class="extension-card" style="display:flex;align-items:center;justify-content:space-between;padding:16px;margin-bottom:8px;background:var(--bg-secondary);border-radius:8px;border:1px solid var(--border-color)">
+                <div style="flex:1">
+                    <div style="display:flex;align-items:center;gap:8px;margin-bottom:4px">
+                        <span class="ext-status-dot ${ext.online ? 'online' : 'offline'}" style="width:8px;height:8px;border-radius:50%;background:${ext.online ? '#4ade80' : '#6b7280'}"></span>
+                        <strong>${escapeHtml(ext.name)}</strong>
+                        <span style="font-size:12px;color:var(--text-secondary)">v${escapeHtml(ext.version)}</span>
+                    </div>
+                    <div style="font-size:12px;color:var(--text-tertiary);font-family:monospace">${escapeHtml(ext.id)}</div>
+                    <div style="margin-top:4px">
+                        ${(ext.capabilities || []).map((cap: string) => `<span class="ext-cap-badge" style="display:inline-block;padding:2px 8px;font-size:11px;border-radius:4px;background:var(--bg-tertiary);color:var(--text-secondary);margin-right:4px">${escapeHtml(cap)}</span>`).join('')}
+                    </div>
+                </div>
+                <button class="btn btn-secondary" style="font-size:12px" onclick="window.removeExtension('${escapeHtml(ext.id)}')">删除</button>
+            </div>
+        `).join('');
+    } catch (e) {
+        container.innerHTML = '<div style="padding:32px;text-align:center;color:var(--text-danger)">加载失败</div>';
+    }
+};
+
+(window as any).removeExtension = async function(id: string): Promise<void> {
+    if (!confirm('确定删除此扩展记录？')) return;
+    try {
+        await fetch('/v1/extensions/' + encodeURIComponent(id), { method: 'DELETE' });
+        await (window as any).refreshExtensions();
+    } catch {}
 };
 
 function subauthBadgeClass(state) {
