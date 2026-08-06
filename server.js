@@ -463,7 +463,6 @@ const wsServer = new WebSocketServer({ noServer: true });
 server.on("upgrade", (req, socket, head) => {
   const url = new URL(req.url || "/", "http://localhost");
   if (url.pathname !== "/v1/skills/pty") {
-    socket.destroy();
     return;
   }
   const recordId = url.searchParams.get("recordId");
