@@ -190,6 +190,11 @@ function importPanelHTML(): string {
     </div>
 
     <div class="video-kb-card">
+      <div class="video-kb-card-title">Agent Reach 内容获取</div>
+      <div id="vk-agent-reach-status"><div class="video-kb-empty">检测中...</div></div>
+    </div>
+
+    <div class="video-kb-card">
       <div class="video-kb-card-title">Whisper 转录</div>
       <div class="video-kb-form-grid">
         <div class="form-group">
@@ -381,6 +386,9 @@ async function loadToolsData(): Promise<void> {
   // Initialize embedding cascade from gateway config
   initEmbeddingCascade();
 
+  // Load Agent Reach status
+  loadAgentReachStatus();
+
   const ytdlpData = await apiGet<{ yt_dlp: { version: string } | null; ffmpeg: { path: string } | null; install_hint: { commands: string[] } }>("/v1/video-kb/tools/yt-dlp");
   if (ytdlpData) {
     const status = document.getElementById("vk-ytdlp-status");
@@ -517,6 +525,131 @@ function refreshEmbeddingModels(
   videoKbState.searchEmbClient = sel.value;
   videoKbState.searchEmbEndpointId = "";
   refreshEmbeddingEndpoints(sel.value, "vk-search-emb-endpoint", null, false);
+};
+
+async function loadAgentReachStatus(): Promise<void> {
+  const container = document.getElementById("vk-agent-reach-status");
+  if (!container) return;
+
+  try {
+    const resp = await fetch("/v1/video-kb/tools/agent-reach");
+    const data = await resp.json();
+
+    if (!data.installed) {
+      const hint = data.install_hint || {};
+      const cmds = hint.commands || [];
+      container.innerHTML = `
+        <div class="video-kb-banner err">Agent Reach 未安装</div>
+        <div style="margin-top:12px;font-size:13px;color:var(--text-secondary);line-height:1.8">
+          ${hint.steps ? hint.steps.map((s: string) => `<div>${esc(s)}</div>`).join("") : ""}
+        </div>
+        <div class="video-kb-actions" style="margin-top:12px">
+          <button class="btn btn-primary" onclick="window.videoKbInstallAgentReach()">一键安装</button>
+        </div>
+      `;
+      return;
+    }
+
+    const channels = data.channels || [];
+    const installedChannels = data.installed_channels || [];
+    const channelBadges = installedChannels.length > 0
+      ? installedChannels.map((ch: string) => `<span class="badge">${esc(ch)}</span>`).join(" ")
+      : '<span class="video-kb-status">无已安装渠道</span>';
+
+    container.innerHTML = `
+      <div style="display:flex;align-items:center;gap:8px;margin-bottom:8px">
+        <span class="video-kb-status ok">Agent Reach v${esc(data.version)} 已安装</span>
+      </div>
+      <div style="margin-bottom:8px">
+        <div class="video-kb-status" style="margin-bottom:4px">已安装渠道:</div>
+        ${channelBadges}
+      </div>
+      <div class="video-kb-actions">
+        <button class="btn btn-sm" onclick="window.videoKbRefreshAgentReach()">刷新</button>
+        <button class="btn btn-sm" onclick="window.videoKbInstallChannels()">安装更多渠道</button>
+      </div>
+    `;
+  } catch {
+    container.innerHTML = '<div class="video-kb-status err">检测失败</div>';
+  }
+}
+
+(window as any).videoKbInstallAgentReach = async function (): Promise<void> {
+  if (!confirm("将安装 Agent Reach CLI 和基础渠道，可能需要几分钟。继续?")) return;
+
+  const container = document.getElementById("vk-agent-reach-status");
+  if (container) container.innerHTML = '<div class="video-kb-empty">安装中...</div>';
+
+  try {
+    const resp = await fetch("/v1/video-kb/tools/agent-reach/install", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({}),
+    });
+    const data = await resp.json();
+
+    if (data.task_id) {
+      // Poll task status
+      const taskId = data.task_id;
+      const pollInstall = async () => {
+        const taskResp = await fetch(`/v1/tasks/${taskId}`);
+        const task = await taskResp.json();
+        if (container) {
+          if (task.status === "running") {
+            const pct = (task.progress * 100).toFixed(0);
+            container.innerHTML = `<div class="video-kb-empty">安装中... ${pct}% ${esc(task.progress_message || "")}</div>`;
+            setTimeout(pollInstall, 2000);
+          } else if (task.status === "succeeded") {
+            container.innerHTML = '<div class="video-kb-banner ok">安装成功!</div>';
+            setTimeout(() => loadAgentReachStatus(), 1000);
+          } else {
+            container.innerHTML = `<div class="video-kb-banner err">安装失败: ${esc(task.error || "")}</div>`;
+          }
+        }
+      };
+      setTimeout(pollInstall, 1000);
+    }
+  } catch (e) {
+    if (container) container.innerHTML = '<div class="video-kb-banner err">安装请求失败</div>';
+  }
+};
+
+(window as any).videoKbRefreshAgentReach = function (): void {
+  loadAgentReachStatus();
+};
+
+(window as any).videoKbInstallChannels = function (): void {
+  const channels = prompt("输入要安装的渠道名(逗号分隔):\n例如: twitter,xiaohongshu,reddit,bilibili,facebook,instagram");
+  if (!channels) return;
+  const channelList = channels.split(",").map((c: string) => c.trim()).filter(Boolean);
+
+  fetch("/v1/video-kb/tools/agent-reach/channels", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ channels: channelList }),
+  }).then(async (resp) => {
+    const data = await resp.json();
+    if (data.task_id) {
+      const container = document.getElementById("vk-agent-reach-status");
+      if (container) container.innerHTML = '<div class="video-kb-empty">渠道安装中...</div>';
+      const pollChannels = async () => {
+        const taskResp = await fetch(`/v1/tasks/${data.task_id}`);
+        const task = await taskResp.json();
+        if (container) {
+          if (task.status === "running") {
+            container.innerHTML = `<div class="video-kb-empty">渠道安装中... ${esc(task.progress_message || "")}</div>`;
+            setTimeout(pollChannels, 2000);
+          } else if (task.status === "succeeded") {
+            container.innerHTML = '<div class="video-kb-banner ok">渠道安装成功!</div>';
+            setTimeout(() => loadAgentReachStatus(), 1000);
+          } else {
+            container.innerHTML = `<div class="video-kb-banner err">渠道安装失败: ${esc(task.error || "")}</div>`;
+          }
+        }
+      };
+      setTimeout(pollChannels, 1000);
+    }
+  });
 };
 
 async function loadBrowsers(): Promise<void> {

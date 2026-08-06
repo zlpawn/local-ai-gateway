@@ -83,6 +83,9 @@ import { chunkTranscript } from "./lib/video-kb/chunker.mjs";
 import { createVectorStore } from "./lib/video-kb/vector-store.mjs";
 import { runVideoKbPipeline, getPipelineNodes } from "./lib/video-kb/pipeline.mjs";
 import { videoKbHandler } from "./lib/video-kb/handler.mjs";
+import { detectAgentReach, getDoctorReport, getInstalledChannels } from "./lib/content-reach/detector.mjs";
+import { fetchContent } from "./lib/content-reach/fetcher.mjs";
+import { getInstallHint, installAgentReach, installChannels } from "./lib/content-reach/installer.mjs";
 import { createModelPricingEngine, normalizeModelName } from "./lib/analytics/model-pricing.mjs";
 import { createFxRateService } from "./lib/analytics/fx-rate.mjs";
 import { createResponseUsageCapture } from "./lib/analytics/response-usage-capture.mjs";
@@ -909,6 +912,12 @@ async function route(req, res) {
     } else {
       sendJson(res, 404, { error: { message: "index.html not found" }});
     }
+    return;
+  }
+
+  if (reqPath.startsWith("/v1/video-kb/tools/agent-reach")) {
+    if (!checkLocalAuth(req, res)) return;
+    await routeAgentReachRequest(req, res, context, reqPath);
     return;
   }
 
@@ -2331,6 +2340,96 @@ if (reqPath === "/v1/config/secret" && req.method === "GET") {
   });
 }
 
+
+// --- Agent Reach REST routes ---
+
+async function routeAgentReachRequest(req, res, context, reqPath) {
+  // GET /v1/video-kb/tools/agent-reach - detect status + installed channels
+  if (reqPath === "/v1/video-kb/tools/agent-reach" && req.method === "GET") {
+    const detected = detectAgentReach();
+    if (!detected.installed) {
+      const hint = getInstallHint();
+      sendJson(res, 200, { installed: false, install_hint: hint });
+      return;
+    }
+    const report = await getDoctorReport();
+    const channels = await getInstalledChannels();
+    sendJson(res, 200, {
+      installed: true,
+      version: detected.version,
+      path: detected.path,
+      channels: report.channels,
+      installed_channels: channels,
+    });
+    return;
+  }
+
+  // POST /v1/video-kb/tools/agent-reach/install - install agent-reach + basic channels
+  if (reqPath === "/v1/video-kb/tools/agent-reach/install" && req.method === "POST") {
+    let body;
+    try {
+      body = JSON.parse(await readText(req) || "{}");
+    } catch {
+      sendJson(res, 400, { error: { type: "invalid_request_error", message: "Invalid JSON body." } });
+      return;
+    }
+    // Submit as background task
+    try {
+      const id = globalTaskQueue.submit("agent_reach_install", {
+        action: "install",
+        channels: body.channels || null,
+      });
+      sendJson(res, 200, { task_id: id, taskId: id, status: "pending" });
+    } catch (err) {
+      sendJson(res, 400, { error: { type: "invalid_request_error", message: err instanceof Error ? err.message : String(err) } });
+    }
+    return;
+  }
+
+  // POST /v1/video-kb/tools/agent-reach/channels - install additional channels
+  if (reqPath === "/v1/video-kb/tools/agent-reach/channels" && req.method === "POST") {
+    let body;
+    try {
+      body = JSON.parse(await readText(req) || "{}");
+    } catch {
+      sendJson(res, 400, { error: { type: "invalid_request_error", message: "Invalid JSON body." } });
+      return;
+    }
+    const channels = body.channels;
+    if (!channels || !Array.isArray(channels) || channels.length === 0) {
+      sendJson(res, 400, { error: { type: "invalid_request_error", message: "Missing 'channels' array." } });
+      return;
+    }
+    try {
+      const id = globalTaskQueue.submit("agent_reach_install", {
+        action: "channels",
+        channels,
+      });
+      sendJson(res, 200, { task_id: id, taskId: id, status: "pending" });
+    } catch (err) {
+      sendJson(res, 400, { error: { type: "invalid_request_error", message: err instanceof Error ? err.message : String(err) } });
+    }
+    return;
+  }
+
+  // GET /v1/video-kb/tools/agent-reach/fetch - fetch content from a URL (test endpoint)
+  if (reqPath === "/v1/video-kb/tools/agent-reach/fetch" && req.method === "GET") {
+    const testUrl = context.url.searchParams.get("url");
+    if (!testUrl) {
+      sendJson(res, 400, { error: { type: "invalid_request_error", message: "Missing 'url' query parameter." } });
+      return;
+    }
+    try {
+      const content = await fetchContent(testUrl);
+      sendJson(res, 200, { content });
+    } catch (err) {
+      sendJson(res, 500, { error: { type: "fetch_failed", message: err instanceof Error ? err.message : String(err) } });
+    }
+    return;
+  }
+
+  sendJson(res, 404, { error: { type: "not_found", message: `${req.method} ${reqPath} is not available on the agent-reach API.` } });
+}
 
 // --- Video KB REST routes ---
 
@@ -6744,6 +6843,69 @@ const globalTaskQueue = createTaskQueue({
   maxRetries: intEnv("TASK_QUEUE_MAX_RETRIES", 1),
 });
 globalTaskQueue.start();
+
+// --- Register agent_reach_install task handler ---
+globalTaskRegistry.register("agent_reach_install", {
+  type: "agent_reach_install",
+  steps: () => [
+    { id: "install", label: "安装 Agent Reach", status: "pending" },
+    { id: "channels", label: "安装渠道", status: "pending" },
+  ],
+  validate(payload) {
+    if (!payload?.action) return ["Missing 'action' field"];
+    return null;
+  },
+  async run(payload, { signal, onProgress, onSteps }) {
+    const steps = [
+      { id: "install", label: "安装 Agent Reach", status: "pending" },
+      { id: "channels", label: "安装渠道", status: "pending" },
+    ];
+    onSteps(steps, "install");
+
+    if (payload.action === "install") {
+      steps[0].status = "running";
+      onSteps(steps, "install");
+      onProgress(0.1, "安装 Agent Reach CLI...");
+
+      const result = await installAgentReach({
+        signal,
+        onProgress: (frac, msg) => {
+          onProgress(frac * 0.8, msg);
+        },
+      });
+
+      steps[0].status = result.success ? "done" : "failed";
+      steps[1].status = result.success ? "done" : "pending";
+      onSteps(steps, null);
+
+      if (!result.success) throw new Error(result.message);
+      onProgress(1.0, result.message);
+      return { success: true, message: result.message };
+    }
+
+    if (payload.action === "channels") {
+      steps[0].status = "done";
+      steps[1].status = "running";
+      onSteps(steps, "channels");
+
+      const result = await installChannels(payload.channels, {
+        signal,
+        onProgress: (frac, msg) => {
+          onProgress(frac, msg);
+        },
+      });
+
+      steps[1].status = result.success ? "done" : "failed";
+      onSteps(steps, null);
+
+      if (!result.success) throw new Error(result.message);
+      onProgress(1.0, result.message);
+      return { success: true, message: result.message };
+    }
+
+    throw new Error(`Unknown action: ${payload.action}`);
+  },
+});
 
 // --- Register video_kb task handler ---
 // Wrap the handler to inject the gateway embedding function
