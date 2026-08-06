@@ -3659,19 +3659,87 @@ window.backToToolsCards = function() {
     renderToolsCards();
 };
 
+// --- Browser Extensions module (cards + detail, mirrors tools pattern) ---
+
+const extensionDefs: Record<string, { name: string; desc: string; icon: string }> = {
+    "leo-cookie": {
+        name: "Leo cookie.txt Locally",
+        desc: "从浏览器导出 Cookie 到网关，生成 Netscape cookies.txt 文件。支持 Chrome/Edge/Brave，无需关闭浏览器。",
+        icon: '<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 12a9 9 0 1 1-9-9c0 1.5.5 3 1.5 4l-1.5 1.5a3 3 0 0 0 4 4L17 15c1 .5 2.5 1 4 1z"></path><circle cx="8.5" cy="8.5" r="0.5" fill="currentColor"></circle><circle cx="13" cy="6.5" r="0.5" fill="currentColor"></circle><circle cx="16.5" cy="10.5" r="0.5" fill="currentColor"></circle><circle cx="7.5" cy="13" r="0.5" fill="currentColor"></circle></svg>',
+    },
+};
+
+let extensionView: "cards" | string = "cards";
+
+function renderExtensionCards(): void {
+    const cards = document.getElementById("extension-cards");
+    const detail = document.getElementById("extension-detail");
+    if (!cards || !detail) return;
+    detail.innerHTML = "";
+    cards.style.display = "";
+    const defs = Object.entries(extensionDefs).map(([id, def]) => `
+        <div class="tools-card" onclick="window.openExtension('${id}')">
+            <div class="tools-card-icon">${def.icon}</div>
+            <div class="tools-card-name">${escapeHtml(def.name)}</div>
+            <div class="tools-card-desc">${escapeHtml(def.desc)}</div>
+        </div>
+    `).join("");
+    cards.innerHTML = `<div class="tools-group"><div class="tools-group-title">已支持插件</div><div class="tools-cards">${defs}</div></div>`;
+}
+
+window.openExtension = function(id: string): void {
+    extensionView = id;
+    if (id === "leo-cookie") renderLeoCookieDetail();
+};
+
+window.backToExtensionCards = function(): void {
+    extensionView = "cards";
+    const cards = document.getElementById("extension-cards");
+    const detail = document.getElementById("extension-detail");
+    if (cards) cards.style.display = "";
+    if (detail) detail.innerHTML = "";
+    renderExtensionCards();
+};
+
 async function renderBrowserExtensionsDetail(): Promise<void> {
+    extensionView = "cards";
+    renderExtensionCards();
+}
+
+async function renderLeoCookieDetail(): Promise<void> {
+    const cards = document.getElementById("extension-cards");
+    const detail = document.getElementById("extension-detail");
+    if (cards) cards.style.display = "none";
+    if (!detail) return;
+    detail.innerHTML = `
+        <button class="btn btn-secondary" onclick="window.backToExtensionCards()" style="margin-bottom:16px">← 返回</button>
+        <div class="section-header">
+            <div>
+                <h2>Leo cookie.txt Locally</h2>
+                <p>从浏览器导出 Cookie 到网关。安装扩展后自动注册，状态显示在下方。</p>
+            </div>
+            <div class="section-header-actions">
+                <button class="btn btn-primary" onclick="window.downloadExtension()">下载扩展包</button>
+                <button class="btn btn-secondary" onclick="window.refreshExtensions()">刷新</button>
+            </div>
+        </div>
+        <div class="extension-install-hint" style="margin-bottom:20px;padding:16px;background:var(--bg-secondary);border-radius:8px;font-size:13px;color:var(--text-secondary)">
+            <strong>安装步骤：</strong>1. 点击「下载扩展包」获取 ZIP 文件并解压。2. 打开 chrome://extensions。3. 开启右上角「开发者模式」。4. 点击「加载已解压的扩展程序」，选择解压后的文件夹。
+        </div>
+        <div id="extension-list-container"></div>
+    `;
     await window.refreshExtensions();
 }
 
 (window as any).downloadExtension = function(): void {
-    window.open('/v1/extensions/download', '_blank');
+    window.open("/v1/extensions/download", "_blank");
 };
 
 (window as any).refreshExtensions = async function(): Promise<void> {
-    const container = document.getElementById('extension-list-container');
+    const container = document.getElementById("extension-list-container");
     if (!container) return;
     try {
-        const resp = await fetch('/v1/extensions/list');
+        const resp = await fetch("/v1/extensions/list");
         const data = await resp.json();
         const extensions = data.extensions || [];
         if (extensions.length === 0) {
@@ -3682,31 +3750,30 @@ async function renderBrowserExtensionsDetail(): Promise<void> {
             <div class="extension-card" style="display:flex;align-items:center;justify-content:space-between;padding:16px;margin-bottom:8px;background:var(--bg-secondary);border-radius:8px;border:1px solid var(--border-color)">
                 <div style="flex:1">
                     <div style="display:flex;align-items:center;gap:8px;margin-bottom:4px">
-                        <span class="ext-status-dot ${ext.online ? 'online' : 'offline'}" style="width:8px;height:8px;border-radius:50%;background:${ext.online ? '#4ade80' : '#6b7280'}"></span>
+                        <span class="ext-status-dot ${ext.online ? "online" : "offline"}" style="width:8px;height:8px;border-radius:50%;background:${ext.online ? "#4ade80" : "#6b7280"}"></span>
                         <strong>${escapeHtml(ext.name)}</strong>
                         <span style="font-size:12px;color:var(--text-secondary)">v${escapeHtml(ext.version)}</span>
                     </div>
                     <div style="font-size:12px;color:var(--text-tertiary);font-family:monospace">${escapeHtml(ext.id)}</div>
                     <div style="margin-top:4px">
-                        ${(ext.capabilities || []).map((cap: string) => `<span class="ext-cap-badge" style="display:inline-block;padding:2px 8px;font-size:11px;border-radius:4px;background:var(--bg-tertiary);color:var(--text-secondary);margin-right:4px">${escapeHtml(cap)}</span>`).join('')}
+                        ${(ext.capabilities || []).map((cap: string) => `<span class="ext-cap-badge" style="display:inline-block;padding:2px 8px;font-size:11px;border-radius:4px;background:var(--bg-tertiary);color:var(--text-secondary);margin-right:4px">${escapeHtml(cap)}</span>`).join("")}
                     </div>
                 </div>
                 <button class="btn btn-secondary" style="font-size:12px" onclick="window.removeExtension('${escapeHtml(ext.id)}')">删除</button>
             </div>
-        `).join('');
+        `).join("");
     } catch (e) {
         container.innerHTML = '<div style="padding:32px;text-align:center;color:var(--text-danger)">加载失败</div>';
     }
 };
 
 (window as any).removeExtension = async function(id: string): Promise<void> {
-    if (!confirm('确定删除此扩展记录？')) return;
+    if (!confirm("确定删除此扩展记录？")) return;
     try {
-        await fetch('/v1/extensions/' + encodeURIComponent(id), { method: 'DELETE' });
+        await fetch("/v1/extensions/" + encodeURIComponent(id), { method: "DELETE" });
         await (window as any).refreshExtensions();
     } catch {}
 };
-
 function subauthBadgeClass(state) {
     if (state === 'logged_in' || state === 'ready') return 'is-ok';
     if (

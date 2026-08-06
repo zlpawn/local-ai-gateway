@@ -691,15 +691,9 @@ experimental_bearer_token = "dummy"</pre>
                         <h2>浏览器插件 (Browser Extensions)</h2>
                         <p>管理已安装的浏览器扩展，通过扩展获取 Cookie 等浏览器数据。</p>
                     </div>
-                    <div class="section-header-actions">
-                        <button class="btn btn-primary" onclick="window.downloadExtension()">下载扩展包</button>
-                        <button class="btn btn-secondary" onclick="window.refreshExtensions()">刷新</button>
-                    </div>
                 </div>
-                <div class="extension-install-hint" style="margin-bottom:20px;padding:16px;background:var(--bg-secondary);border-radius:8px;font-size:13px;color:var(--text-secondary)">
-                    <strong>安装步骤：</strong>1. 点击「下载扩展包」获取 ZIP 文件并解压。2. 打开 chrome://extensions。3. 开启右上角「开发者模式」。4. 点击「加载已解压的扩展程序」，选择解压后的文件夹。
-                </div>
-                <div id="extension-list-container"></div>
+                <div id="extension-cards" class="tools-groups"></div>
+                <div id="extension-detail"></div>
             </section>
 
             <!-- Preset CLI Section -->
