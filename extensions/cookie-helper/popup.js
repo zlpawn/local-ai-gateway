@@ -14,7 +14,7 @@ document.addEventListener("DOMContentLoaded", async () => {
   gatewayInput.addEventListener("change", async () => {
     const url = gatewayInput.value.trim() || GATEWAY_DEFAULT;
     await chrome.storage.local.set({ gatewayUrl: url });
-    resultDiv.textContent = "网关地址已保存";
+    resultDiv.textContent = "Shrimp 服务地址已保存";
     setTimeout(() => { resultDiv.textContent = ""; }, 2000);
   });
 
@@ -69,7 +69,7 @@ document.addEventListener("DOMContentLoaded", async () => {
         resultDiv.innerHTML = `<span class="err">导出失败: ${data.error?.message || "未知错误"}</span>`;
       }
     } catch (e) {
-      resultDiv.innerHTML = `<span class="err">无法连接到网关，请检查网关地址</span>`;
+      resultDiv.innerHTML = `<span class="err">无法连接到网关，请检查Shrimp 服务地址</span>`;
     } finally {
       exportBtn.disabled = false;
       exportBtn.textContent = "导出到网关";

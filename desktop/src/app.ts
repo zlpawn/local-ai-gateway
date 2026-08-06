@@ -3491,6 +3491,15 @@ window.closeEndpointDetail = function() {
 };
 
 window.switchTab = function(tabId) {
+    // Update URL hash so refresh keeps the current tab
+    if (tabId && tabId !== 'code') {
+        history.replaceState(null, '', '#' + tabId);
+    } else {
+        history.replaceState(null, '', window.location.pathname);
+    }
+    // Reset sub-view state when switching top-level tabs
+    toolsView = 'cards';
+    extensionView = 'cards';
     // If clicking the skills parent item while already on the skills tab,
     // toggle the nav group open/closed instead of re-switching.
     if (tabId === 'skills') {
@@ -3554,7 +3563,7 @@ window.switchTab = function(tabId) {
         renderToolsCards();
     }
     if (tabId === 'extensions') {
-        window.refreshExtensions();
+        renderBrowserExtensionsDetail();
     }
     if (tabId === 'cli') {
         refreshCliLibrary(false);
@@ -3630,6 +3639,7 @@ window.renderToolsCards = function() {
 };
 window.openTool = function(toolId) {
     toolsView = toolId;
+    history.replaceState(null, '', '#tools/' + toolId);
     if (toolId === 'image-gen') renderImageGenDetail();
     else if (toolId === 'video-gen') renderVideoGenDetail();
     else if (toolId === 'tts-gen') renderTtsGenDetail();
@@ -3652,6 +3662,7 @@ window.backToToolsCards = function() {
         antigravityAuthState.busyAction = '';
     }
     toolsView = 'cards';
+    history.replaceState(null, '', '#tools');
     const cards = document.getElementById('tools-cards');
     const detail = document.getElementById('tools-detail');
     if (cards) cards.style.display = '';
@@ -3690,10 +3701,12 @@ function renderExtensionCards(): void {
 window.openExtension = function(id: string): void {
     extensionView = id;
     if (id === "leo-cookie") renderLeoCookieDetail();
+    history.replaceState(null, '', '#extensions/' + id);
 };
 
 window.backToExtensionCards = function(): void {
     extensionView = "cards";
+    history.replaceState(null, '', '#extensions');
     const cards = document.getElementById("extension-cards");
     const detail = document.getElementById("extension-detail");
     if (cards) cards.style.display = "";
@@ -3702,6 +3715,17 @@ window.backToExtensionCards = function(): void {
 };
 
 async function renderBrowserExtensionsDetail(): Promise<void> {
+    // Check if hash has a sub-view (e.g. #extensions/leo-cookie)
+    const hash = window.location.hash.replace('#', '');
+    const parts = hash.split('/');
+    if (parts.length >= 2 && parts[0] === 'extensions') {
+        const subView = parts[1];
+        extensionView = subView;
+        if (subView === 'leo-cookie') {
+            renderLeoCookieDetail();
+            return;
+        }
+    }
     extensionView = "cards";
     renderExtensionCards();
 }
@@ -3724,7 +3748,13 @@ async function renderLeoCookieDetail(): Promise<void> {
             </div>
         </div>
         <div class="extension-install-hint" style="margin-bottom:20px;padding:16px;background:var(--bg-secondary);border-radius:8px;font-size:13px;color:var(--text-secondary)">
-            <strong>安装步骤：</strong>1. 点击「下载扩展包」获取 ZIP 文件并解压。2. 打开 chrome://extensions。3. 开启右上角「开发者模式」。4. 点击「加载已解压的扩展程序」，选择解压后的文件夹。
+            <strong>安装步骤：</strong>
+            <ol style="margin:8px 0 0;padding-left:20px;line-height:2">
+              <li>点击「下载扩展包」获取 ZIP 文件并解压</li>
+              <li>打开 chrome://extensions</li>
+              <li>开启右上角「开发者模式」</li>
+              <li>点击「加载已解压的扩展程序」，选择解压后的文件夹</li>
+            </ol>
         </div>
         <div id="extension-list-container"></div>
     `;
@@ -5925,9 +5955,19 @@ window.copyEmbedVector = function(label) {
 
 window.addEventListener('load', () => {
     const hash = window.location.hash.replace('#', '');
-    const knownTabs = ['code','desktop','codex','deeptutor','analytics','proxy','sync','skills','install-history','tools','cli','cli-install-history','cli-sources'];
-    if (knownTabs.includes(hash) || isCustomClient(hash)) {
-        switchTab(hash);
+    const parts = hash.split('/');
+    const tabId = parts[0];
+    const knownTabs = ['code','desktop','codex','deeptutor','analytics','proxy','sync','skills','install-history','tools','extensions','cli','cli-install-history','cli-sources'];
+    if (knownTabs.includes(tabId) || isCustomClient(tabId)) {
+        switchTab(tabId);
+        // Restore sub-view for tools/extensions
+        if (parts.length >= 2) {
+            if (tabId === 'tools') {
+                setTimeout(() => window.openTool(parts[1]), 100);
+            } else if (tabId === 'extensions') {
+                setTimeout(() => window.openExtension(parts[1]), 100);
+            }
+        }
     }
 });
 
