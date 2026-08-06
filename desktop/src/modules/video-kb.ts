@@ -618,10 +618,87 @@ async function loadAgentReachStatus(): Promise<void> {
   loadAgentReachStatus();
 };
 
-(window as any).videoKbInstallChannels = function (): void {
-  const channels = prompt("输入要安装的渠道名(逗号分隔):\n例如: twitter,xiaohongshu,reddit,bilibili,facebook,instagram");
-  if (!channels) return;
-  const channelList = channels.split(",").map((c: string) => c.trim()).filter(Boolean);
+(window as any).videoKbInstallChannels = async function (): Promise<void> {
+  // Remove existing modal if any
+  const existing = document.getElementById("vk-channel-modal");
+  if (existing) existing.remove();
+
+  // Fetch current channel status from agent-reach doctor
+  let channels: Array<{name: string; status: string; display_name?: string; backend?: string; auth_required?: boolean}> = [];
+  try {
+    const resp = await fetch("/v1/video-kb/tools/agent-reach");
+    const data = await resp.json();
+    channels = (data.channels || []).filter((ch: any) => ch.status !== "ok");
+  } catch { /* ignore */ }
+
+  if (channels.length === 0) {
+    const modal = document.createElement("div");
+    modal.id = "vk-channel-modal";
+    modal.className = "vk-modal-overlay";
+    modal.innerHTML = `
+      <div class="vk-modal">
+        <div class="vk-modal-header">
+          <h3>安装渠道</h3>
+          <button class="vk-modal-close" onclick="document.getElementById('vk-channel-modal').remove()">\u00d7</button>
+        </div>
+        <div class="vk-modal-body">
+          <div class="video-kb-empty">所有渠道均已安装或可用</div>
+        </div>
+        <div class="vk-modal-footer">
+          <button class="btn btn-primary" onclick="document.getElementById('vk-channel-modal').remove()">关闭</button>
+        </div>
+      </div>
+    `;
+    modal.addEventListener("click", (e) => { if (e.target === modal) modal.remove(); });
+    document.body.appendChild(modal);
+    return;
+  }
+
+  const modal = document.createElement("div");
+  modal.id = "vk-channel-modal";
+  modal.className = "vk-modal-overlay";
+  modal.innerHTML = `
+    <div class="vk-modal">
+      <div class="vk-modal-header">
+        <h3>安装渠道</h3>
+        <button class="vk-modal-close" onclick="document.getElementById('vk-channel-modal').remove()">\u00d7</button>
+      </div>
+      <div class="vk-modal-body">
+        <div class="vk-channel-list">
+          ${channels.map((ch) => `
+            <label class="vk-channel-item">
+              <input type="checkbox" value="${esc(ch.name)}" class="vk-channel-checkbox">
+              <div class="vk-channel-info">
+                <div class="vk-channel-name">${esc(ch.display_name || ch.name)}</div>
+                <div class="vk-channel-desc">${esc(ch.backend || "")}${ch.status === "warn" ? " (需配置)" : ""}</div>
+                ${ch.auth_required ? '<span class="vk-channel-tag">需登录</span>' : '<span class="vk-channel-tag ok">免登录</span>'}
+              </div>
+            </label>
+          `).join("")}
+        </div>
+      </div>
+      <div class="vk-modal-footer">
+        <button class="btn" onclick="document.getElementById('vk-channel-modal').remove()">取消</button>
+        <button class="btn btn-primary" onclick="window.videoKbConfirmInstallChannels()">安装选中</button>
+      </div>
+    </div>
+  `;
+  modal.addEventListener("click", (e) => {
+    if (e.target === modal) modal.remove();
+  });
+  document.body.appendChild(modal);
+};
+
+(window as any).videoKbConfirmInstallChannels = function (): void {
+  const checked = document.querySelectorAll<HTMLInputElement>(".vk-channel-checkbox:checked");
+  const channelList = Array.from(checked).map((cb) => cb.value);
+  if (channelList.length === 0) return;
+
+  const modal = document.getElementById("vk-channel-modal");
+  if (modal) modal.remove();
+
+  const container = document.getElementById("vk-agent-reach-status");
+  if (container) container.innerHTML = `<div class="video-kb-empty">渠道安装中...</div>`;
 
   fetch("/v1/video-kb/tools/agent-reach/channels", {
     method: "POST",
@@ -630,8 +707,6 @@ async function loadAgentReachStatus(): Promise<void> {
   }).then(async (resp) => {
     const data = await resp.json();
     if (data.task_id) {
-      const container = document.getElementById("vk-agent-reach-status");
-      if (container) container.innerHTML = '<div class="video-kb-empty">渠道安装中...</div>';
       const pollChannels = async () => {
         const taskResp = await fetch(`/v1/tasks/${data.task_id}`);
         const task = await taskResp.json();
