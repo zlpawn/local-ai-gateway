@@ -3553,6 +3553,9 @@ window.switchTab = function(tabId) {
         toolsView = 'cards';
         renderToolsCards();
     }
+    if (tabId === 'extensions') {
+        window.refreshExtensions();
+    }
     if (tabId === 'cli') {
         refreshCliLibrary(false);
     }
@@ -3578,7 +3581,6 @@ const toolGroupConfigs = [
     { title: '订阅接入', tools: ['antigravity-subscribe', 'codex-subscribe'] },
     { title: '模型配置', tools: ['claude-model-catalog'] },
     { title: '联网搜索', tools: ['web-search'] },
-    { title: '浏览器插件', tools: ['browser-extensions'] },
     { title: '其他', tools: ['classification-metrics'] },
 ];
 
@@ -3594,7 +3596,6 @@ function toolDefs() {
         'claude-model-catalog': { name: 'Claude 模型列表', desc: '维护 Claude Desktop 映射原模型候选项：内置官方名 + 用户自定义。', icon: '<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 8V4H8"></path><rect x="4" y="8" width="16" height="12" rx="2"></rect><path d="M2 14h2"></path><path d="M20 14h2"></path><path d="M15 13v2"></path><path d="M9 13v2"></path></svg>' },
         'web-search': { name: '联网搜索', desc: '使用已配置的 web_search 节点，输入查询词、选择结果数量与时间范围，实时检索网页并查看本地搜索历史。', icon: '<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"></circle><path d="M2 12h20"></path><path d="M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z"></path></svg>' },
         'classification-metrics': { name: '分类评估实验室', desc: '讲清 TP/FP/FN/TN，以及准确率、精准率、召回率，并用你的数据现场计算。', icon: '<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="7" height="7"></rect><rect x="14" y="3" width="7" height="7"></rect><rect x="14" y="14" width="7" height="7"></rect><rect x="3" y="14" width="7" height="7"></rect></svg>' },
-        'browser-extensions': { name: '浏览器插件', desc: '管理已安装的浏览器扩展，通过扩展获取 Cookie 等浏览器数据。', icon: '<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14.7 6.3a1 1 0 0 0 0 1.4l1.6 1.6a1 1 0 0 0 1.4 0l3.77-3.77a6 6 0 0 1-7.94 7.94l-6.91 6.91a2.12 2.12 0 0 1-3-3l6.91-6.91a6 6 0 0 1 7.94-7.94l-3.76 3.76z"></path></svg>' },
     };
 }
 
@@ -3638,7 +3639,6 @@ window.openTool = function(toolId) {
     else if (toolId === 'antigravity-subscribe') renderAntigravitySubscribeDetail();
     else if (toolId === 'codex-subscribe') renderCodexSubscribeDetail();
     else if (toolId === 'video-kb') renderVideoKbDetail();
-    else if (toolId === 'browser-extensions') renderBrowserExtensionsDetail();
     else renderToolsDetail();
 };
 
@@ -3660,25 +3660,6 @@ window.backToToolsCards = function() {
 };
 
 async function renderBrowserExtensionsDetail(): Promise<void> {
-    const detail = document.getElementById('tools-detail');
-    if (!detail) return;
-    detail.innerHTML = `
-        <button class="btn btn-secondary" onclick="window.backToToolsCards()" style="margin-bottom:16px">← 返回</button>
-        <div class="section-header">
-            <div>
-                <h2>浏览器插件</h2>
-                <p>管理已安装的浏览器扩展，通过扩展获取 Cookie 等浏览器数据。</p>
-            </div>
-            <div class="section-header-actions">
-                <button class="btn btn-primary" onclick="window.downloadExtension()">下载扩展包</button>
-                <button class="btn btn-secondary" onclick="window.refreshExtensions()">刷新</button>
-            </div>
-        </div>
-        <div class="extension-install-hint" style="margin-bottom:20px;padding:16px;background:var(--bg-secondary);border-radius:8px;font-size:13px;color:var(--text-secondary)">
-            <strong>安装步骤：</strong>1. 点击「下载扩展包」获取 ZIP 文件并解压。2. 打开 chrome://extensions。3. 开启右上角「开发者模式」。4. 点击「加载已解压的扩展程序」，选择解压后的文件夹。
-        </div>
-        <div id="extension-list-container"></div>
-    `;
     await window.refreshExtensions();
 }
 
