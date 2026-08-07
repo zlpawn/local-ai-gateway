@@ -1,7 +1,7 @@
 {
   "manifest_version": 3,
   "name": "Leo cookie.txt Locally",
-  "version": "1.0.0",
+  "version": "1.1.0",
   "description": "Export cookies from the browser to the Shrimp gateway as Netscape cookies.txt",
   "permissions": [
     "cookies",
