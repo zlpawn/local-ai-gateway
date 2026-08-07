@@ -77,6 +77,7 @@ import { createTaskQueue } from "./lib/task-queue/queue.mjs";
 import { detectBrowsers, listCookieDomains, extractCookies } from "./lib/cookie-extractor/index.mjs";
 import { createExtensionStore } from "./lib/extension-registry/store.mjs";
 import { routeExtensionRequest, routeCookieImport } from "./lib/extension-registry/routes.mjs";
+import { createExtensionTaskSystem } from "./lib/extension-tasks/create-system.mjs";
 import { detectYtDlp, getYtDlpInstallHint, detectFfmpeg, videoIdFromUrl } from "./lib/video-kb/downloader.mjs";
 import { detectWhisperTools, getWhisperModelSizes, getInstallHint as getWhisperInstallHint } from "./lib/video-kb/transcriber.mjs";
 import { chunkTranscript } from "./lib/video-kb/chunker.mjs";
@@ -175,6 +176,11 @@ const GATEWAY_SECRETS_FILE = resolveProjectPath(
   path.join(path.dirname(GATEWAY_CONFIG_FILE), "gateway.secrets.json"),
 );
 const globalExtensionStore = createExtensionStore({ dataDir: path.dirname(GATEWAY_CONFIG_FILE) });
+const globalExtensionTaskSystem = createExtensionTaskSystem({
+  dataDir: path.dirname(GATEWAY_CONFIG_FILE),
+  configDir: path.dirname(GATEWAY_CONFIG_FILE),
+  extensionStore: globalExtensionStore,
+});
 const EXTENSIONS_DIR = resolveProjectPath("extensions");
 const CLAUDE_3P_CONFIG_FILE = process.env.CLAUDE_3P_CONFIG_FILE || "";
 const CLAUDE_3P_CONFIG_LIBRARY = process.env.CLAUDE_3P_CONFIG_LIBRARY || "";
@@ -957,6 +963,12 @@ async function route(req, res) {
   if (reqPath.startsWith("/v1/extensions")) {
     if (!checkLocalAuth(req, res)) return;
     routeExtensionRequest(req, res, context, reqPath, { store: globalExtensionStore, extensionsDir: EXTENSIONS_DIR });
+    return;
+  }
+
+  if (reqPath.startsWith("/v1/extension-tasks")) {
+    if (!checkLocalAuth(req, res)) return;
+    await globalExtensionTaskSystem.routeExtensionTaskRequest(req, res, context, reqPath);
     return;
   }
 
@@ -3116,6 +3128,18 @@ async function routeCookieRequest(req, res, context, reqPath) {
   // POST /v1/cookies/import - import cookies from browser extension
   if (reqPath === "/v1/cookies/import" && req.method === "POST") {
     await routeCookieImport(req, res, context, { configDir: path.dirname(GATEWAY_CONFIG_FILE) });
+    return;
+  }
+
+  // POST /v1/cookies/export-via-extension - agent/skill path via extension task bus
+  if (reqPath === "/v1/cookies/export-via-extension" && req.method === "POST") {
+    await globalExtensionTaskSystem.routeCookieExportViaExtension(req, res, context, reqPath);
+    return;
+  }
+
+  // GET /v1/cookies/export-via-extension/:taskId
+  if (reqPath.startsWith("/v1/cookies/export-via-extension/") && req.method === "GET") {
+    await globalExtensionTaskSystem.routeCookieExportViaExtension(req, res, context, reqPath);
     return;
   }
 
