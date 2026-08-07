@@ -81,8 +81,10 @@ import { detectYtDlp, getYtDlpInstallHint, detectFfmpeg, videoIdFromUrl } from "
 import { detectWhisperTools, getWhisperModelSizes, getInstallHint as getWhisperInstallHint } from "./lib/video-kb/transcriber.mjs";
 import { chunkTranscript } from "./lib/video-kb/chunker.mjs";
 import { createVectorStore } from "./lib/video-kb/vector-store.mjs";
-import { runVideoKbPipeline, getPipelineNodes } from "./lib/video-kb/pipeline.mjs";
+import { runVideoKbPipeline, getPipelineNodes, resolveSelectedSteps, validateSelectedSteps, getDefaultSelectedSteps } from "./lib/video-kb/pipeline.mjs";
 import { videoKbHandler } from "./lib/video-kb/handler.mjs";
+import { createMetaStore } from "./lib/video-kb/meta-store.mjs";
+import { generateVideoSummary } from "./lib/video-kb/summarizer.mjs";
 import { detectAgentReach, getDoctorReport, getDoctorSnapshot, getInstalledChannels, invalidateDoctorCache } from "./lib/content-reach/detector.mjs";
 import { fetchContent } from "./lib/content-reach/fetcher.mjs";
 import { getInstallHint, installAgentReach, installChannels } from "./lib/content-reach/installer.mjs";
@@ -2495,8 +2497,7 @@ async function routeAgentReachRequest(req, res, context, reqPath) {
 function createGatewayEmbeddingFn(endpointId) {
   return async function embed(text) {
     console.error("[embedding] calling for text length:", text?.length, "endpoint:", endpointId);
-    // Debug: uncomment to log every embedding call
-  console.log("[video-kb] embeddingFn created for endpoint:", endpointId);
+    console.log("[video-kb] embeddingFn created for endpoint:", endpointId);
     const url = `http://127.0.0.1:${LISTEN_PORT}/v1/embeddings${endpointId ? "?endpoint_id=" + encodeURIComponent(endpointId) : ""}`;
     const res = await fetch(url, {
       method: "POST",
@@ -2513,6 +2514,100 @@ function createGatewayEmbeddingFn(endpointId) {
     }
     return data.data[0].embedding;
   };
+}
+
+function createGatewaySummaryFn({ client, model } = {}) {
+  return async function summarize({ title, transcript, description, signal } = {}) {
+    return generateVideoSummary({
+      title,
+      transcript,
+      description,
+      client: client || "code",
+      model: model || "",
+      listenPort: LISTEN_PORT,
+      signal,
+    });
+  };
+}
+
+function videoKbPaths() {
+  const dataDir = mediaDataDir();
+  return {
+    dataDir,
+    rootDir: path.join(dataDir, "video-kb"),
+    lanceDbPath: path.join(dataDir, "video-kb", "lancedb"),
+    metaDbPath: path.join(dataDir, "video-kb", "meta.sqlite"),
+  };
+}
+
+function listChatEndpointsForClient(clientName) {
+  const client = GATEWAY_CONFIG.clients?.[clientName];
+  if (!client) return [];
+  return (client.endpoints || [])
+    .filter((ep) => ep && ep.enabled !== false)
+    .filter((ep) => !ep.purpose || ep.purpose === "chat")
+    .map((ep) => ({
+      id: ep.id,
+      name: ep.name || ep.id,
+      base_url: ep.base_url || "",
+      models: Array.isArray(ep.models) ? ep.models : [],
+      is_default: Boolean(ep.is_default),
+      enabled: ep.enabled !== false,
+    }));
+}
+
+function mergeVideoLists(metaVideos = [], vectorVideos = []) {
+  const map = new Map();
+  for (const v of vectorVideos || []) {
+    map.set(v.video_id, {
+      video_id: v.video_id,
+      video_url: v.video_url || "",
+      video_title: v.video_title || "untitled",
+      source_title: v.video_title || "untitled",
+      display_title: v.video_title || "untitled",
+      chunk_count: Number(v.chunk_count || 0),
+      duration_start: Number.isFinite(v.duration_start) ? v.duration_start : 0,
+      duration_end: Number.isFinite(v.duration_end) ? v.duration_end : 0,
+      duration: Number.isFinite(v.duration_end) ? Math.max(0, v.duration_end - (Number.isFinite(v.duration_start) ? v.duration_start : 0)) : 0,
+      language: v.language || "",
+      summary_short: "",
+      summary_full: "",
+      key_points: [],
+      topics: [],
+      steps_done: [],
+      created_at: Number(v.created_at || 0),
+      updated_at: Number(v.created_at || 0),
+      has_vectors: true,
+    });
+  }
+  for (const v of metaVideos || []) {
+    const prev = map.get(v.video_id) || {};
+    map.set(v.video_id, {
+      ...prev,
+      video_id: v.video_id,
+      video_url: v.video_url || prev.video_url || "",
+      video_title: v.display_title || v.video_title || prev.video_title || "untitled",
+      source_title: v.source_title || prev.source_title || "",
+      display_title: v.display_title || prev.display_title || prev.video_title || "untitled",
+      chunk_count: Number(v.chunk_count || prev.chunk_count || 0),
+      duration_start: prev.duration_start ?? 0,
+      duration_end: prev.duration_end ?? Number(v.duration || 0),
+      duration: Number(v.duration || prev.duration || 0),
+      language: v.language || prev.language || "",
+      summary_short: v.summary_short || "",
+      summary_full: v.summary_full || "",
+      key_points: v.key_points || [],
+      topics: v.topics || [],
+      steps_done: v.steps_done || [],
+      uploader: v.uploader || "",
+      assets: v.assets || {},
+      created_at: Number(v.created_at || prev.created_at || 0),
+      updated_at: Number(v.updated_at || prev.updated_at || v.created_at || 0),
+      has_vectors: Boolean(prev.has_vectors),
+      status: v.status || "ready",
+    });
+  }
+  return [...map.values()].sort((a, b) => Number(b.updated_at || b.created_at || 0) - Number(a.updated_at || a.created_at || 0));
 }
 
 async function routeVideoKbRequest(req, res, context, reqPath) {
@@ -2551,7 +2646,25 @@ async function routeVideoKbRequest(req, res, context, reqPath) {
 
   // GET /v1/video-kb/pipeline/nodes - get pipeline node definitions
   if (reqPath === "/v1/video-kb/pipeline/nodes" && req.method === "GET") {
-    sendJson(res, 200, { nodes: getPipelineNodes() });
+    sendJson(res, 200, {
+      nodes: getPipelineNodes(),
+      default_steps: getDefaultSelectedSteps(),
+    });
+    return;
+  }
+
+  // GET /v1/video-kb/tools/chat-endpoints - list chat endpoints for summary model selection
+  if (reqPath === "/v1/video-kb/tools/chat-endpoints" && req.method === "GET") {
+    const clientName = String(context.url.searchParams.get("client") || "").trim();
+    if (clientName) {
+      sendJson(res, 200, { client: clientName, endpoints: listChatEndpointsForClient(clientName) });
+      return;
+    }
+    const clients = Object.keys(GATEWAY_CONFIG.clients || {}).map((name) => ({
+      client: name,
+      endpoints: listChatEndpointsForClient(name),
+    })).filter((item) => item.endpoints.length > 0);
+    sendJson(res, 200, { clients });
     return;
   }
 
@@ -2564,10 +2677,10 @@ async function routeVideoKbRequest(req, res, context, reqPath) {
       sendJson(res, 400, { error: { type: "invalid_request_error", message: "Invalid JSON body." } });
       return;
     }
-    const dataDir = mediaDataDir();
+    const { rootDir, lanceDbPath, metaDbPath } = videoKbPaths();
     const videoId = videoIdFromUrl(body.url || "");
-    const outputDir = path.join(dataDir, "video-kb", videoId);
-    const lanceDbPath = path.join(dataDir, "video-kb", "lancedb");
+    const outputDir = path.join(rootDir, videoId);
+    const selectedSteps = resolveSelectedSteps(body.steps || body.selected_steps || body.enabled_steps);
     const payload = {
       url: body.url,
       cookieFile: body.cookie_file || null,
@@ -2575,17 +2688,28 @@ async function routeVideoKbRequest(req, res, context, reqPath) {
       whisperModel: body.whisper_model,
       language: body.language || "auto",
       embeddingEndpointId: body.embedding_endpoint_id,
+      summaryClient: body.summary_client || null,
+      summaryModel: body.summary_model || null,
       chunkStrategy: body.chunk_strategy || "time-window",
       chunkTargetSeconds: body.chunk_target_seconds,
       chunkMaxSeconds: body.chunk_max_seconds,
       chunkOverlapSeconds: body.chunk_overlap_seconds,
       keepVideo: body.keep_video !== false,
+      selectedSteps,
       outputDir,
       lanceDbPath,
+      metaDbPath,
+      listenPort: LISTEN_PORT,
     };
+    const issues = validateSelectedSteps(selectedSteps, payload);
+    if (!payload.url) issues.unshift("Missing 'url'");
+    if (issues.length) {
+      sendJson(res, 400, { error: { type: "invalid_request_error", message: issues.join("；") } });
+      return;
+    }
     try {
       const id = globalTaskQueue.submit("video_kb", payload);
-      sendJson(res, 200, { task_id: id, taskId: id, video_id: videoId, status: "pending" });
+      sendJson(res, 200, { task_id: id, taskId: id, video_id: videoId, status: "pending", steps: selectedSteps });
     } catch (err) {
       sendJson(res, 400, { error: { type: "invalid_request_error", message: err instanceof Error ? err.message : String(err) } });
     }
@@ -2595,11 +2719,15 @@ async function routeVideoKbRequest(req, res, context, reqPath) {
   // GET /v1/video-kb/videos - list indexed videos
   if (reqPath === "/v1/video-kb/videos" && req.method === "GET") {
     try {
-      const dataDir = mediaDataDir();
-      const lanceDbPath = path.join(dataDir, "video-kb", "lancedb");
-      const store = createVectorStore({ dbPath: lanceDbPath });
-      const videos = await store.listVideos();
-      sendJson(res, 200, { videos });
+      const { lanceDbPath, metaDbPath } = videoKbPaths();
+      const metaStore = createMetaStore({ dbPath: metaDbPath });
+      const vectorStore = createVectorStore({ dbPath: lanceDbPath });
+      const [metaVideos, vectorVideos] = await Promise.all([
+        Promise.resolve(metaStore.listVideos()),
+        vectorStore.listVideos().catch(() => []),
+      ]);
+      metaStore.close();
+      sendJson(res, 200, { videos: mergeVideoLists(metaVideos, vectorVideos) });
     } catch (err) {
       sendJson(res, 200, { videos: [], error: err instanceof Error ? err.message : String(err) });
     }
@@ -2611,13 +2739,91 @@ async function routeVideoKbRequest(req, res, context, reqPath) {
   if (videoMatch && req.method === "GET") {
     const videoId = decodeURIComponent(videoMatch[1]);
     try {
-      const dataDir = mediaDataDir();
-      const lanceDbPath = path.join(dataDir, "video-kb", "lancedb");
-      const store = createVectorStore({ dbPath: lanceDbPath });
-      const result = await store.getVideo(videoId);
-      sendJson(res, 200, result);
+      const { lanceDbPath, metaDbPath } = videoKbPaths();
+      const metaStore = createMetaStore({ dbPath: metaDbPath });
+      const vectorStore = createVectorStore({ dbPath: lanceDbPath });
+      const meta = metaStore.getVideo(videoId);
+      const vector = await vectorStore.getVideo(videoId);
+      metaStore.close();
+      if (!meta && !(vector?.chunk_count > 0)) {
+        sendJson(res, 404, { error: { type: "video_not_found", message: `Video not found: ${videoId}` } });
+        return;
+      }
+      sendJson(res, 200, {
+        ...(meta || { video_id: videoId }),
+        chunks: vector?.chunks || [],
+        chunk_count: Number(meta?.chunk_count || vector?.chunk_count || 0),
+      });
     } catch (err) {
       sendJson(res, 404, { error: { type: "video_not_found", message: err instanceof Error ? err.message : String(err) } });
+    }
+    return;
+  }
+
+  // PATCH /v1/video-kb/videos/:id - rename / update metadata
+  if (videoMatch && req.method === "PATCH") {
+    const videoId = decodeURIComponent(videoMatch[1]);
+    let body;
+    try {
+      body = JSON.parse(await readText(req) || "{}");
+    } catch {
+      sendJson(res, 400, { error: { type: "invalid_request_error", message: "Invalid JSON body." } });
+      return;
+    }
+    try {
+      const { rootDir, lanceDbPath, metaDbPath } = videoKbPaths();
+      const metaStore = createMetaStore({ dbPath: metaDbPath });
+      let meta = metaStore.getVideo(videoId);
+      if (!meta) {
+        const vectorStore = createVectorStore({ dbPath: lanceDbPath });
+        const vector = await vectorStore.getVideo(videoId).catch(() => ({ chunk_count: 0 }));
+        let sourceTitle = body.source_title || "";
+        let videoUrl = body.video_url || "";
+        let duration = 0;
+        try {
+          const infoPath = path.join(rootDir, videoId, "audio", `${videoId}.info.json`);
+          const infoPath2 = path.join(rootDir, videoId, "video", `${videoId}.info.json`);
+          const infoFile = fs.existsSync(infoPath) ? infoPath : (fs.existsSync(infoPath2) ? infoPath2 : null);
+          if (infoFile) {
+            const info = JSON.parse(fs.readFileSync(infoFile, "utf8"));
+            sourceTitle = sourceTitle || info.title || "";
+            videoUrl = videoUrl || info.webpage_url || info.url || "";
+            duration = Number(info.duration || 0) || 0;
+          }
+        } catch { /* ignore */ }
+        const assetDir = path.join(rootDir, videoId);
+        const hasAssets = fs.existsSync(assetDir);
+        if (!(vector?.chunk_count > 0) && !hasAssets && !sourceTitle) {
+          metaStore.close();
+          sendJson(res, 404, { error: { type: "video_not_found", message: `Video not found: ${videoId}` } });
+          return;
+        }
+        meta = metaStore.upsertVideo({
+          video_id: videoId,
+          video_url: videoUrl,
+          source_title: sourceTitle || body.display_title || body.title || "untitled",
+          display_title: body.display_title || body.title || sourceTitle || "untitled",
+          duration,
+          chunk_count: Number(vector?.chunk_count || 0),
+        });
+      }
+      if (body.display_title || body.title) {
+        meta = metaStore.updateTitle(videoId, body.display_title || body.title);
+        const vectorStore = createVectorStore({ dbPath: lanceDbPath });
+        await vectorStore.updateVideoTitle(videoId, meta.display_title);
+      }
+      if (body.summary_short || body.summary_full || body.key_points || body.topics) {
+        meta = metaStore.updateSummary(videoId, {
+          summary_short: body.summary_short ?? meta.summary_short,
+          summary_full: body.summary_full ?? meta.summary_full,
+          key_points: body.key_points ?? meta.key_points,
+          topics: body.topics ?? meta.topics,
+        });
+      }
+      metaStore.close();
+      sendJson(res, 200, { success: true, video: meta });
+    } catch (err) {
+      sendJson(res, 500, { error: { type: "update_failed", message: err instanceof Error ? err.message : String(err) } });
     }
     return;
   }
@@ -2626,12 +2832,13 @@ async function routeVideoKbRequest(req, res, context, reqPath) {
   if (videoMatch && req.method === "DELETE") {
     const videoId = decodeURIComponent(videoMatch[1]);
     try {
-      const dataDir = mediaDataDir();
-      const lanceDbPath = path.join(dataDir, "video-kb", "lancedb");
+      const { rootDir, lanceDbPath, metaDbPath } = videoKbPaths();
       const store = createVectorStore({ dbPath: lanceDbPath });
       await store.deleteByVideo(videoId);
-      // Also delete the assets directory
-      const assetDir = path.join(dataDir, "video-kb", videoId);
+      const metaStore = createMetaStore({ dbPath: metaDbPath });
+      metaStore.deleteVideo(videoId);
+      metaStore.close();
+      const assetDir = path.join(rootDir, videoId);
       if (fs.existsSync(assetDir)) {
         fs.rmSync(assetDir, { recursive: true, force: true });
       }
@@ -7000,8 +7207,18 @@ globalTaskRegistry.register(videoKbHandler.type, {
   validate: videoKbHandler.validate,
   async run(payload, ctx) {
     // Inject embeddingFn that calls the gateway's embedding endpoint
-    const embeddingFn = createGatewayEmbeddingFn(payload.embeddingEndpointId);
-    return videoKbHandler.run({ ...payload, embeddingFn }, ctx);
+    const embeddingFn = payload.embeddingEndpointId
+      ? createGatewayEmbeddingFn(payload.embeddingEndpointId)
+      : null;
+    const summaryFn = payload.summaryModel
+      ? createGatewaySummaryFn({ client: payload.summaryClient, model: payload.summaryModel })
+      : null;
+    return videoKbHandler.run({
+      ...payload,
+      embeddingFn,
+      summaryFn,
+      listenPort: LISTEN_PORT,
+    }, ctx);
   },
 });
 

@@ -1,4 +1,4 @@
-:root[data-theme="dark"] {
+﻿:root[data-theme="dark"] {
     /* Pure Dark Theme (No Purple Glow) */
     --bg-color: #09090b;
     --surface: #18181b;
@@ -3706,4 +3706,44 @@ input:focus, select:focus {
     gap: 8px;
     padding: 12px 20px;
     border-top: 1px solid var(--border-color);
+}
+
+.video-kb-step-select {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px 12px;
+}
+
+.video-kb-step-option {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 10px;
+  border: 1px solid var(--border-color);
+  border-radius: 8px;
+  font-size: 13px;
+  color: var(--text-primary);
+  background: var(--bg-secondary);
+  cursor: pointer;
+}
+
+.video-kb-step-option input {
+  margin: 0;
+}
+
+.video-kb-asset-source {
+  font-size: 12px;
+  color: var(--text-secondary);
+  margin-top: 2px;
+}
+
+.video-kb-asset-summary {
+  font-size: 13px;
+  line-height: 1.5;
+  color: var(--text-primary);
+  margin: 6px 0 8px;
+}
+
+.video-kb-asset-summary.muted {
+  color: var(--text-secondary);
 }

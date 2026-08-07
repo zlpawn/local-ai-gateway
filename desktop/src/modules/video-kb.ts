@@ -50,6 +50,50 @@ function getEmbeddingClients(): string[] {
   );
 }
 
+interface ChatEndpoint {
+  id: string;
+  name: string;
+  base_url?: string;
+  models?: string[];
+  is_default?: boolean;
+  enabled?: boolean;
+}
+
+function getChatEndpoints(client: string): ChatEndpoint[] {
+  const config = getGatewayConfig();
+  const eps = (config.clients?.[client]?.endpoints || []) as any[];
+  return eps
+    .filter((ep) => ep && ep.enabled !== false)
+    .filter((ep) => !ep.purpose || ep.purpose === "chat")
+    .map((ep) => ({
+      id: ep.id,
+      name: ep.name || ep.id,
+      base_url: ep.base_url || "",
+      models: Array.isArray(ep.models) ? ep.models : [],
+      is_default: Boolean(ep.is_default),
+      enabled: ep.enabled !== false,
+    }));
+}
+
+function getChatClients(): string[] {
+  const config = getGatewayConfig();
+  return Object.keys(config.clients || {}).filter((c: string) => getChatEndpoints(c).length > 0);
+}
+
+function collectChatModels(endpoints: ChatEndpoint[]): string[] {
+  const models: string[] = [];
+  const seen = new Set<string>();
+  for (const ep of endpoints) {
+    for (const model of ep.models || []) {
+      const id = String(model || "").trim();
+      if (!id || seen.has(id)) continue;
+      seen.add(id);
+      models.push(id);
+    }
+  }
+  return models;
+}
+
 interface TaskStep {
   id: string;
   label: string;
@@ -87,11 +131,20 @@ interface VideoInfo {
   video_id: string;
   video_url: string;
   video_title: string;
+  source_title?: string;
+  display_title?: string;
   chunk_count: number;
   duration_start: number;
   duration_end: number;
+  duration?: number;
   language: string;
+  summary_short?: string;
+  summary_full?: string;
+  key_points?: string[];
+  topics?: string[];
+  steps_done?: string[];
   created_at: number;
+  updated_at?: number;
 }
 
 interface BrowserInfo {
@@ -99,6 +152,24 @@ interface BrowserInfo {
   name: string;
   cookieDbPath: string;
 }
+
+interface PipelineNodeInfo {
+  id: string;
+  label: string;
+  weight?: number;
+  default_enabled?: boolean;
+  requires?: string[];
+}
+
+const DEFAULT_PIPELINE_STEPS = [
+  "fetch_info",
+  "download_audio",
+  "download_video",
+  "transcribe",
+  "summarize",
+  "chunk",
+  "vectorize",
+];
 
 const videoKbState = {
   whisperTools: [] as WhisperTool[],
@@ -108,6 +179,10 @@ const videoKbState = {
   embModel: "" as string,
   searchEmbClient: "" as string,
   searchEmbEndpointId: "" as string,
+  summaryClient: "" as string,
+  summaryModel: "" as string,
+  pipelineNodes: [] as PipelineNodeInfo[],
+  selectedSteps: new Set<string>(DEFAULT_PIPELINE_STEPS),
   currentTaskId: null as string | null,
   taskPollTimer: null as ReturnType<typeof setTimeout> | null,
   browsers: [] as BrowserInfo[],
@@ -191,6 +266,12 @@ function importPanelHTML(): string {
     </div>
 
     <div class="video-kb-card">
+      <div class="video-kb-card-title">执行步骤</div>
+      <div id="vk-steps-select" class="video-kb-step-select"></div>
+      <div class="video-kb-status" style="margin-top:8px">可只下载素材，也可以完整转录/摘要/入库。取消不需要的步骤即可。</div>
+    </div>
+
+    <div class="video-kb-card">
       <div class="video-kb-card-title">Agent Reach 内容获取</div>
       <div id="vk-agent-reach-status"><div class="video-kb-empty">检测中...</div></div>
     </div>
@@ -223,6 +304,25 @@ function importPanelHTML(): string {
           </select>
         </div>
       </div>
+    </div>
+
+    <div class="video-kb-card">
+      <div class="video-kb-card-title">视频摘要</div>
+      <div class="video-kb-form-grid">
+        <div class="form-group">
+          <label>Client</label>
+          <select id="vk-summary-client" onchange="window.videoKbOnSummaryClientChange()">
+            <option value="">加载中...</option>
+          </select>
+        </div>
+        <div class="form-group">
+          <label>摘要模型</label>
+          <select id="vk-summary-model" onchange="window.videoKbOnSummaryModelChange()">
+            <option value="">无</option>
+          </select>
+        </div>
+      </div>
+      <div class="video-kb-status" style="margin-top:8px">未选模型时，摘要步骤会使用规则摘要兜底。</div>
     </div>
 
     <div class="video-kb-card">
@@ -390,6 +490,8 @@ async function loadToolsData(): Promise<void> {
 
   // Initialize embedding cascade from gateway config
   initEmbeddingCascade();
+  initSummaryCascade();
+  await loadPipelineNodes();
 
   // Load Agent Reach status
   loadAgentReachStatus();
@@ -441,6 +543,104 @@ function initEmbeddingCascade(): void {
     refreshEmbeddingEndpoints(videoKbState.searchEmbClient, "vk-search-emb-endpoint", null, false);
   }
 }
+
+
+async function loadPipelineNodes(): Promise<void> {
+  const data = await apiGet<{ nodes: PipelineNodeInfo[]; default_steps?: string[] }>("/v1/video-kb/pipeline/nodes");
+  if (data?.nodes?.length) {
+    videoKbState.pipelineNodes = data.nodes;
+    if (videoKbState.selectedSteps.size === 0 || [...videoKbState.selectedSteps].every((s) => DEFAULT_PIPELINE_STEPS.includes(s))) {
+      const defaults = data.default_steps?.length
+        ? data.default_steps
+        : data.nodes.filter((n) => n.default_enabled !== false).map((n) => n.id);
+      videoKbState.selectedSteps = new Set(defaults);
+    }
+  } else if (!videoKbState.pipelineNodes.length) {
+    videoKbState.pipelineNodes = [
+      { id: "fetch_info", label: "获取视频信息", default_enabled: true },
+      { id: "agent_reach_get", label: "Agent Reach 内容获取", default_enabled: false },
+      { id: "download_audio", label: "下载音轨", default_enabled: true },
+      { id: "download_video", label: "下载视频素材", default_enabled: true },
+      { id: "transcribe", label: "语音转录", default_enabled: true },
+      { id: "summarize", label: "生成摘要", default_enabled: true },
+      { id: "chunk", label: "文本分块", default_enabled: true },
+      { id: "vectorize", label: "向量化入库", default_enabled: true },
+    ];
+  }
+  renderStepSelector();
+}
+
+function renderStepSelector(): void {
+  const box = document.getElementById("vk-steps-select");
+  if (!box) return;
+  const nodes = videoKbState.pipelineNodes.length
+    ? videoKbState.pipelineNodes
+    : DEFAULT_PIPELINE_STEPS.map((id) => ({ id, label: id, default_enabled: true }));
+  box.innerHTML = nodes.map((node) => {
+    const checked = videoKbState.selectedSteps.has(node.id) ? "checked" : "";
+    return `
+      <label class="video-kb-step-option">
+        <input type="checkbox" value="${esc(node.id)}" ${checked} onchange="window.videoKbToggleStep('${esc(node.id)}', this.checked)">
+        <span>${esc(node.label)}</span>
+      </label>
+    `;
+  }).join("");
+}
+
+function initSummaryCascade(): void {
+  const clients = getChatClients();
+  const clientOpts = clients.length === 0
+    ? `<option value="">无可用 Client</option>`
+    : clients.map((c) => `<option value="${c}">${esc(clientDisplayName(c))}</option>`).join("");
+  const clientSel = document.getElementById("vk-summary-client") as HTMLSelectElement | null;
+  if (!clientSel) return;
+  clientSel.innerHTML = clientOpts;
+  if (clients.length > 0 && !videoKbState.summaryClient) {
+    // Prefer same client as embedding when available.
+    videoKbState.summaryClient = clients.includes(videoKbState.embClient) ? videoKbState.embClient : clients[0];
+  }
+  if (videoKbState.summaryClient) clientSel.value = videoKbState.summaryClient;
+  refreshSummaryModels(videoKbState.summaryClient);
+}
+
+function refreshSummaryModels(client: string): void {
+  const modelSel = document.getElementById("vk-summary-model") as HTMLSelectElement | null;
+  if (!modelSel) return;
+  const endpoints = getChatEndpoints(client);
+  const models = collectChatModels(endpoints);
+  if (models.length === 0) {
+    modelSel.innerHTML = `<option value="">无可用模型</option>`;
+    modelSel.disabled = true;
+    videoKbState.summaryModel = "";
+    return;
+  }
+  modelSel.disabled = false;
+  if (!videoKbState.summaryModel || !models.includes(videoKbState.summaryModel)) {
+    videoKbState.summaryModel = models[0];
+  }
+  modelSel.innerHTML = models.map((m) =>
+    `<option value="${esc(m)}" ${m === videoKbState.summaryModel ? "selected" : ""}>${esc(m)}</option>`
+  ).join("");
+}
+
+(window as any).videoKbToggleStep = function (stepId: string, checked: boolean): void {
+  if (checked) videoKbState.selectedSteps.add(stepId);
+  else videoKbState.selectedSteps.delete(stepId);
+};
+
+(window as any).videoKbOnSummaryClientChange = function (): void {
+  const sel = document.getElementById("vk-summary-client") as HTMLSelectElement | null;
+  if (!sel) return;
+  videoKbState.summaryClient = sel.value;
+  videoKbState.summaryModel = "";
+  refreshSummaryModels(sel.value);
+};
+
+(window as any).videoKbOnSummaryModelChange = function (): void {
+  const sel = document.getElementById("vk-summary-model") as HTMLSelectElement | null;
+  if (!sel) return;
+  videoKbState.summaryModel = sel.value;
+};
 
 function refreshEmbeddingEndpoints(
   client: string,
@@ -824,14 +1024,26 @@ function updateModelGuide(): void {
   const language = (document.getElementById("vk-language") as HTMLSelectElement)?.value;
   const chunkStrategy = (document.getElementById("vk-chunk-strategy") as HTMLSelectElement)?.value;
   const keepVideo = (document.getElementById("vk-keep-video") as HTMLSelectElement)?.value === "true";
+  const summaryClient = (document.getElementById("vk-summary-client") as HTMLSelectElement)?.value || videoKbState.summaryClient;
+  const summaryModel = (document.getElementById("vk-summary-model") as HTMLSelectElement)?.value || videoKbState.summaryModel;
+  const selectedSteps = [...videoKbState.selectedSteps];
 
-  if (!whisperTool) { alert("请先安装 Whisper 工具"); return; }
-  if (!embeddingEndpointId) { alert("请配置 Embedding 节点"); return; }
+  if (selectedSteps.length === 0) { alert("请至少选择一个执行步骤"); return; }
+  if (selectedSteps.includes("transcribe") && !whisperTool) { alert("已勾选语音转录，请先安装/选择 Whisper 工具"); return; }
+  if (selectedSteps.includes("vectorize") && !embeddingEndpointId) { alert("已勾选向量化入库，请配置 Embedding 节点"); return; }
 
-  const result = await apiPost<{ task_id: string }>("/v1/video-kb/ingest", {
-    url, cookie_file: cookieFile || null, whisper_tool: whisperTool,
-    whisper_model: whisperModel, language, embedding_endpoint_id: embeddingEndpointId,
-    chunk_strategy: chunkStrategy, keep_video: keepVideo,
+  const result = await apiPost<{ task_id: string; error?: { message?: string } }>("/v1/video-kb/ingest", {
+    url,
+    cookie_file: cookieFile || null,
+    whisper_tool: whisperTool || null,
+    whisper_model: whisperModel || null,
+    language,
+    embedding_endpoint_id: embeddingEndpointId || null,
+    summary_client: summaryClient || null,
+    summary_model: summaryModel || null,
+    chunk_strategy: chunkStrategy,
+    keep_video: keepVideo,
+    steps: selectedSteps,
   });
 
   if (result?.task_id) {
@@ -839,7 +1051,7 @@ function updateModelGuide(): void {
     document.getElementById("vk-task-progress")!.style.display = "block";
     pollTaskProgress();
   } else {
-    alert("提交失败");
+    alert((result as any)?.error?.message || "提交失败");
   }
 };
 
@@ -923,7 +1135,8 @@ function renderTaskComplete(task: TaskInfo): void {
   if (label) {
     if (task.status === "succeeded" && task.result) {
       const r = task.result as Record<string, string | number | null>;
-      label.innerHTML = `<span class="video-kb-banner ok">导入完成: ${esc(String(r.title || ""))} | ${r.chunk_count} 个分块 | 语言: ${esc(String(r.detected_language || ""))}</span>`;
+      const summary = r.summary_short ? ` | 摘要: ${esc(String(r.summary_short))}` : "";
+      label.innerHTML = `<span class="video-kb-banner ok">导入完成: ${esc(String(r.title || ""))} | ${r.chunk_count || 0} 个分块 | 语言: ${esc(String(r.detected_language || ""))}${summary}</span>`;
     } else if (task.status === "failed") {
       label.innerHTML = `<span class="video-kb-banner err">失败: ${esc(task.error || "")}</span>`;
     } else {
@@ -992,24 +1205,61 @@ async function loadVideoList(): Promise<void> {
     return;
   }
 
-  panel.innerHTML = data.videos.map((v) => `
+  panel.innerHTML = data.videos.map((v) => {
+    const title = v.display_title || v.video_title || "untitled";
+    const source = v.source_title && v.source_title !== title ? `<div class="video-kb-asset-source">原标题: ${esc(v.source_title)}</div>` : "";
+    const summary = v.summary_short
+      ? `<div class="video-kb-asset-summary">${esc(v.summary_short)}</div>`
+      : `<div class="video-kb-asset-summary muted">暂无摘要</div>`;
+    const durationLabel = Number(v.duration || 0) > 0
+      ? fmtTime(Number(v.duration || 0))
+      : `${fmtTime(v.duration_start)}-${fmtTime(v.duration_end)}`;
+    return `
     <div class="video-kb-asset-row">
       <div class="video-kb-asset-info">
-        <div class="video-kb-asset-title">${esc(v.video_title)}</div>
+        <div class="video-kb-asset-title">${esc(title)}</div>
+        ${source}
+        ${summary}
         <div class="video-kb-asset-meta">
-          ${v.chunk_count} 分块 | ${fmtTime(v.duration_start)}-${fmtTime(v.duration_end)} | ${esc(v.language)} | ${new Date(v.created_at).toLocaleDateString()}<br>
+          ${v.chunk_count || 0} 分块 | ${durationLabel} | ${esc(v.language || "-")} | ${new Date(v.updated_at || v.created_at).toLocaleDateString()}<br>
           <a href="${esc(v.video_url)}" target="_blank">${esc(v.video_url)}</a>
         </div>
       </div>
       <div class="video-kb-asset-actions">
+        <button class="btn btn-sm" onclick='window.videoKbRenameVideo(${JSON.stringify(v.video_id)}, ${JSON.stringify(title)})'>重命名</button>
         <button class="btn btn-sm" onclick="window.videoKbViewAsset('${v.video_id}','transcript')">转录</button>
         <button class="btn btn-sm" onclick="window.videoKbViewAsset('${v.video_id}','audio')">音频</button>
         <button class="btn btn-sm" onclick="window.videoKbViewAsset('${v.video_id}','video')">视频</button>
         <button class="btn btn-sm btn-danger" onclick="window.videoKbDeleteVideo('${v.video_id}')">删除</button>
       </div>
-    </div>
-  `).join("");
+    </div>`;
+  }).join("");
 }
+
+(window as any).videoKbRenameVideo = async function (videoId: string, currentTitle: string): Promise<void> {
+  const next = prompt("输入新的显示标题", currentTitle || "");
+  if (next == null) return;
+  const title = String(next).trim();
+  if (!title) {
+    alert("标题不能为空");
+    return;
+  }
+  try {
+    const resp = await fetch(`/v1/video-kb/videos/${encodeURIComponent(videoId)}`, {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ display_title: title }),
+    });
+    const data = await resp.json().catch(() => ({}));
+    if (!resp.ok) {
+      alert(data?.error?.message || "重命名失败");
+      return;
+    }
+    loadVideoList();
+  } catch {
+    alert("重命名失败");
+  }
+};
 
 (window as any).videoKbViewAsset = function (videoId: string, type: string): void {
   window.open(`/v1/video-kb/assets/${videoId}/${type}`, "_blank");
