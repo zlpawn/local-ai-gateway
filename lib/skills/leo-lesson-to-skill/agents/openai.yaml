@@ -1,0 +1,4 @@
+interface:
+  display_name: "Leo 课程转 Skill"
+  short_description: "将课程视频方法论内化为可执行的新 skill。"
+  default_prompt: "Use $leo-lesson-to-skill to turn this course video into a reusable skill."
