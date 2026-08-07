@@ -11,9 +11,9 @@
 - ASR 工具：`whisper-ctranslate2` 或 `mlx_whisper`（macOS Apple Silicon 优先）
 - OCR 工具：`tesseract` 或 PaddleOCR（可选，用于 PPT 文字提取）
 
-缺少必需工具时停止并报告缺项，不进入后续步骤。具体探测命令和路径规则参见 `leo-video-to-karpathy-wiki` 的 [platform-runtime.md](../../leo-video-to-karpathy-wiki/references/platform-runtime.md)。
+缺少必需工具时停止并报告缺项，不进入后续步骤。具体探测命令和路径规则参见 [platform-runtime.md](platform-runtime.md)。
 
-运行 Manifest 的 schema 参见 `leo-video-to-karpathy-wiki` 的 [cleanup-policy.md](../../leo-video-to-karpathy-wiki/references/cleanup-policy.md)，包含 `run_id`、`status`、`temp_root`、`permanent_assets`、`temporary_files` 等字段。
+运行 Manifest 的 schema 参见 [cleanup-policy.md](cleanup-policy.md)，包含 `run_id`、`status`、`temp_root`、`permanent_assets`、`temporary_files` 等字段。
 
 ## 2. 获取与归档源视频
 
@@ -58,7 +58,7 @@
 
 ### 4.2 Slide 级去重（关键差异）
 
-课程视频的 PPT 会长时间静止，固定间隔采样会产生大量近似帧。`leo-video-to-karpathy-wiki` 的 pHash 去重（汉明距离 <= 6、时间差 <= 2s）不足以处理这种情况，因为同一张 slide 停留 30 秒以上时，固定间隔会反复抽到同一张。
+课程视频的 PPT 会长时间静止，固定间隔采样会产生大量近似帧。常规 pHash 去重（汉明距离 <= 6、时间差 <= 2s）不足以处理这种情况，因为同一张 slide 停留 30 秒以上时，固定间隔会反复抽到同一张。
 
 本 skill 在 pHash 去重基础上增加 slide 级聚类：
 

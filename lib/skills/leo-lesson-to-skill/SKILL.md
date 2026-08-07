@@ -70,10 +70,9 @@ description: "将课程或教学视频中的方法论内化为可执行的新 sk
 
 ### 步骤 4：交付与注册
 
-1. 将生成的 skill 复制到 `~/.agents/skills/` 目录（Codex skill 的 single source of truth）。如果是在项目中开发，同时提交到项目的 `lib/skills/` 目录。
-2. 本地生成的 skill 不需要写入 `.skill-lock.json`（该文件仅用于外部安装的 skill 注册）。
+1. 将生成的 skill 复制到 `~/.agents/skills/` 目录（Codex skill 的 single source of truth）。本地创建的 skill 不需要写入 `.skill-lock.json`（该文件仅用于通过安装器安装的外部 skill）。
 3. 报告：skill 名称、路径、测试结果、使用方式示例。
-4. 清理临时文件（遵循 leo-video-to-karpathy-wiki 的 cleanup-policy 规范，需用户授权）。
+4. 清理临时文件（遵循 [cleanup-policy.md](references/cleanup-policy.md) 规范，需用户授权）。
 
 完成标准：skill 已安装可用，用户知道怎么调用，临时文件已处理。
 
