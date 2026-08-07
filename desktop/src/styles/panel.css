@@ -3747,3 +3747,28 @@ input:focus, select:focus {
 .video-kb-asset-summary.muted {
   color: var(--text-secondary);
 }
+
+.video-kb-error-detail {
+  margin-top: 8px;
+  padding: 10px 12px;
+  border-radius: 8px;
+  border: 1px solid color-mix(in srgb, var(--danger) 35%, var(--border-color));
+  background: color-mix(in srgb, var(--danger) 8%, var(--bg-secondary));
+  color: var(--text-primary);
+  font-size: 12px;
+  line-height: 1.55;
+  white-space: pre-wrap;
+  word-break: break-word;
+}
+
+.video-kb-step.failed .video-kb-step-msg {
+  color: var(--danger);
+  max-width: 100%;
+}
+
+.video-kb-asset-summary-full {
+  margin-top: 6px;
+  color: var(--text-secondary);
+  font-size: 12px;
+  line-height: 1.5;
+}

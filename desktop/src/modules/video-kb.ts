@@ -257,6 +257,10 @@ function importPanelHTML(): string {
         <label>视频 URL</label>
         <input type="text" id="vk-url" placeholder="https://www.youtube.com/watch?v=...">
       </div>
+      <div class="form-group full" style="margin-bottom:16px">
+        <label>显示标题（可选）</label>
+        <input type="text" id="vk-display-title" placeholder="留空则使用源站标题">
+      </div>
       <div class="form-group" style="margin-bottom:16px">
         <label>Cookie 文件</label>
         <select id="vk-cookie">
@@ -1032,8 +1036,11 @@ function updateModelGuide(): void {
   if (selectedSteps.includes("transcribe") && !whisperTool) { alert("已勾选语音转录，请先安装/选择 Whisper 工具"); return; }
   if (selectedSteps.includes("vectorize") && !embeddingEndpointId) { alert("已勾选向量化入库，请配置 Embedding 节点"); return; }
 
+  const displayTitle = (document.getElementById("vk-display-title") as HTMLInputElement)?.value?.trim() || "";
+
   const result = await apiPost<{ task_id: string; error?: { message?: string } }>("/v1/video-kb/ingest", {
     url,
+    display_title: displayTitle || null,
     cookie_file: cookieFile || null,
     whisper_tool: whisperTool || null,
     whisper_model: whisperModel || null,
@@ -1108,6 +1115,11 @@ function updateTaskButtons(task: TaskInfo): void {
   (window as any).videoKbIngest();
 };
 
+function findFailedStep(task: TaskInfo): TaskStep | null {
+  const steps = task.steps || [];
+  return steps.find((s) => s.status === "failed") || null;
+}
+
 function renderTaskSteps(task: TaskInfo): void {
   const container = document.getElementById("vk-steps-list");
   if (container) {
@@ -1116,7 +1128,7 @@ function renderTaskSteps(task: TaskInfo): void {
       <div class="video-kb-step ${step.status}">
         <span class="video-kb-step-icon">${icons[step.status] || "○"}</span>
         <span class="video-kb-step-label">${esc(step.label)}</span>
-        ${step.status === "running" && step.message ? `<span class="video-kb-step-msg">${esc(step.message)}</span>` : ""}
+        ${(step.status === "running" || step.status === "failed") && step.message ? `<span class="video-kb-step-msg">${esc(step.message)}</span>` : ""}
         ${step.status === "running" && step.progress > 0 ? `<span class="video-kb-step-pct">${(step.progress * 100).toFixed(0)}%</span>` : ""}
       </div>
     `).join("");
@@ -1126,23 +1138,36 @@ function renderTaskSteps(task: TaskInfo): void {
   const label = document.getElementById("vk-progress-label");
   const pct = (task.progress * 100).toFixed(1);
   if (fill) fill.style.width = `${pct}%`;
-  if (label) label.textContent = `${pct}% - ${esc(task.progress_message || "")}`;
+  if (label && task.status !== "failed" && task.status !== "succeeded" && task.status !== "cancelled") {
+    label.textContent = `${pct}% - ${esc(task.progress_message || "")}`;
+  }
 }
 
 function renderTaskComplete(task: TaskInfo): void {
   updateTaskButtons(task);
   const label = document.getElementById("vk-progress-label");
-  if (label) {
-    if (task.status === "succeeded" && task.result) {
-      const r = task.result as Record<string, string | number | null>;
-      const summary = r.summary_short ? ` | 摘要: ${esc(String(r.summary_short))}` : "";
-      label.innerHTML = `<span class="video-kb-banner ok">导入完成: ${esc(String(r.title || ""))} | ${r.chunk_count || 0} 个分块 | 语言: ${esc(String(r.detected_language || ""))}${summary}</span>`;
-    } else if (task.status === "failed") {
-      label.innerHTML = `<span class="video-kb-banner err">失败: ${esc(task.error || "")}</span>`;
-    } else {
-      label.innerHTML = `<span class="video-kb-status">已取消</span>`;
-    }
+  if (!label) return;
+
+  if (task.status === "succeeded" && task.result) {
+    const r = task.result as Record<string, string | number | null>;
+    const summary = r.summary_short ? ` | 摘要: ${esc(String(r.summary_short))}` : "";
+    label.innerHTML = `<span class="video-kb-banner ok">导入完成: ${esc(String(r.title || ""))} | ${r.chunk_count || 0} 个分块 | 语言: ${esc(String(r.detected_language || ""))}${summary}</span>`;
+    return;
   }
+
+  if (task.status === "cancelled") {
+    label.innerHTML = `<span class="video-kb-status">已取消</span>`;
+    return;
+  }
+
+  // failed
+  const failed = findFailedStep(task);
+  const failedLabel = failed?.label || "未知步骤";
+  const detail = failed?.message || task.error || "未知错误";
+  label.innerHTML = `
+    <div class="video-kb-banner err">失败环节：${esc(failedLabel)}</div>
+    <div class="video-kb-error-detail">${esc(detail)}</div>
+  `;
 }
 
 (window as any).videoKbSearch = async function (): Promise<void> {
@@ -1209,7 +1234,7 @@ async function loadVideoList(): Promise<void> {
     const title = v.display_title || v.video_title || "untitled";
     const source = v.source_title && v.source_title !== title ? `<div class="video-kb-asset-source">原标题: ${esc(v.source_title)}</div>` : "";
     const summary = v.summary_short
-      ? `<div class="video-kb-asset-summary">${esc(v.summary_short)}</div>`
+      ? `<div class="video-kb-asset-summary">${esc(v.summary_short)}${v.summary_full && v.summary_full !== v.summary_short ? `<div class="video-kb-asset-summary-full">${esc(v.summary_full)}</div>` : ""}</div>`
       : `<div class="video-kb-asset-summary muted">暂无摘要</div>`;
     const durationLabel = Number(v.duration || 0) > 0
       ? fmtTime(Number(v.duration || 0))
@@ -1227,6 +1252,7 @@ async function loadVideoList(): Promise<void> {
       </div>
       <div class="video-kb-asset-actions">
         <button class="btn btn-sm" onclick='window.videoKbRenameVideo(${JSON.stringify(v.video_id)}, ${JSON.stringify(title)})'>重命名</button>
+        <button class="btn btn-sm" onclick='window.videoKbRegenerateSummary(${JSON.stringify(v.video_id)})'>重新生成摘要</button>
         <button class="btn btn-sm" onclick="window.videoKbViewAsset('${v.video_id}','transcript')">转录</button>
         <button class="btn btn-sm" onclick="window.videoKbViewAsset('${v.video_id}','audio')">音频</button>
         <button class="btn btn-sm" onclick="window.videoKbViewAsset('${v.video_id}','video')">视频</button>
@@ -1258,6 +1284,51 @@ async function loadVideoList(): Promise<void> {
     loadVideoList();
   } catch {
     alert("重命名失败");
+  }
+};
+
+(window as any).videoKbRegenerateSummary = async function (videoId: string): Promise<void> {
+  // Prefer current import-panel summary selection if available.
+  const summaryClient = (document.getElementById("vk-summary-client") as HTMLSelectElement)?.value
+    || videoKbState.summaryClient
+    || "";
+  const summaryModel = (document.getElementById("vk-summary-model") as HTMLSelectElement)?.value
+    || videoKbState.summaryModel
+    || "";
+
+  if (!summaryClient) {
+    // Ensure cascade is initialized if user only opened assets tab.
+    initSummaryCascade();
+  }
+  const client = (document.getElementById("vk-summary-client") as HTMLSelectElement)?.value
+    || videoKbState.summaryClient
+    || getChatClients()[0]
+    || "code";
+  const model = (document.getElementById("vk-summary-model") as HTMLSelectElement)?.value
+    || videoKbState.summaryModel
+    || collectChatModels(getChatEndpoints(client))[0]
+    || "";
+
+  if (!confirm(`重新生成摘要？\nClient: ${client}\n模型: ${model || "规则摘要兜底"}`)) return;
+
+  try {
+    const resp = await fetch(`/v1/video-kb/videos/${encodeURIComponent(videoId)}/summary`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        summary_client: client,
+        summary_model: model || null,
+      }),
+    });
+    const data = await resp.json().catch(() => ({}));
+    if (!resp.ok) {
+      alert(data?.error?.message || "重新生成摘要失败");
+      return;
+    }
+    alert(`摘要已更新\n${data?.video?.summary_short || data?.summary?.summary_short || ""}`);
+    loadVideoList();
+  } catch {
+    alert("重新生成摘要失败");
   }
 };
 

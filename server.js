@@ -2690,6 +2690,7 @@ async function routeVideoKbRequest(req, res, context, reqPath) {
       embeddingEndpointId: body.embedding_endpoint_id,
       summaryClient: body.summary_client || null,
       summaryModel: body.summary_model || null,
+      displayTitle: body.display_title || body.title || null,
       chunkStrategy: body.chunk_strategy || "time-window",
       chunkTargetSeconds: body.chunk_target_seconds,
       chunkMaxSeconds: body.chunk_max_seconds,
@@ -2845,6 +2846,113 @@ async function routeVideoKbRequest(req, res, context, reqPath) {
       sendJson(res, 200, { success: true, video_id: videoId });
     } catch (err) {
       sendJson(res, 500, { error: { type: "delete_failed", message: err instanceof Error ? err.message : String(err) } });
+    }
+    return;
+  }
+
+  // POST /v1/video-kb/videos/:id/summary - regenerate summary
+  const summaryMatch = reqPath.match(/^\/v1\/video-kb\/videos\/([^/]+)\/summary$/);
+  if (summaryMatch && req.method === "POST") {
+    const videoId = decodeURIComponent(summaryMatch[1]);
+    let body;
+    try {
+      body = JSON.parse(await readText(req) || "{}");
+    } catch {
+      sendJson(res, 400, { error: { type: "invalid_request_error", message: "Invalid JSON body." } });
+      return;
+    }
+    try {
+      const { rootDir, metaDbPath } = videoKbPaths();
+      const metaStore = createMetaStore({ dbPath: metaDbPath });
+      let meta = metaStore.getVideo(videoId);
+      if (!meta) {
+        // bootstrap from local assets if possible
+        let sourceTitle = "";
+        let videoUrl = "";
+        let duration = 0;
+        try {
+          const infoPath = path.join(rootDir, videoId, "audio", `${videoId}.info.json`);
+          const infoPath2 = path.join(rootDir, videoId, "video", `${videoId}.info.json`);
+          const infoFile = fs.existsSync(infoPath) ? infoPath : (fs.existsSync(infoPath2) ? infoPath2 : null);
+          if (infoFile) {
+            const info = JSON.parse(fs.readFileSync(infoFile, "utf8"));
+            sourceTitle = info.title || "";
+            videoUrl = info.webpage_url || info.url || "";
+            duration = Number(info.duration || 0) || 0;
+          }
+        } catch { /* ignore */ }
+        if (!fs.existsSync(path.join(rootDir, videoId))) {
+          metaStore.close();
+          sendJson(res, 404, { error: { type: "video_not_found", message: `Video not found: ${videoId}` } });
+          return;
+        }
+        meta = metaStore.upsertVideo({
+          video_id: videoId,
+          video_url: videoUrl,
+          source_title: sourceTitle || "untitled",
+          display_title: sourceTitle || "untitled",
+          duration,
+        });
+      }
+
+      // Prefer transcript text; fall back to existing full summary/source title
+      let transcript = "";
+      const transcriptCandidates = [
+        path.join(rootDir, videoId, "transcript", `${videoId}.txt`),
+      ];
+      try {
+        const tdir = path.join(rootDir, videoId, "transcript");
+        if (fs.existsSync(tdir)) {
+          for (const f of fs.readdirSync(tdir)) {
+            if (f.endsWith(".txt")) transcriptCandidates.push(path.join(tdir, f));
+          }
+        }
+      } catch { /* ignore */ }
+      for (const p of transcriptCandidates) {
+        if (fs.existsSync(p)) {
+          try {
+            transcript = fs.readFileSync(p, "utf8");
+            if (transcript.trim()) break;
+          } catch { /* ignore */ }
+        }
+      }
+      if (!transcript.trim()) {
+        metaStore.close();
+        sendJson(res, 400, {
+          error: {
+            type: "summary_source_missing",
+            message: "没有可用于摘要的转写文本。请先执行“语音转录”或“Agent Reach 内容获取”。",
+          },
+        });
+        return;
+      }
+
+      const summaryClient = body.summary_client || body.client || "code";
+      const summaryModel = body.summary_model || body.model || "";
+      const summary = await generateVideoSummary({
+        title: meta.display_title || meta.source_title || "untitled",
+        transcript,
+        description: "",
+        client: summaryClient,
+        model: summaryModel,
+        listenPort: LISTEN_PORT,
+      });
+      meta = metaStore.updateSummary(videoId, summary);
+      metaStore.close();
+      sendJson(res, 200, {
+        success: true,
+        video: meta,
+        summary,
+        used_model: summaryModel || null,
+        used_client: summaryClient,
+      });
+    } catch (err) {
+      sendJson(res, 500, {
+        error: {
+          type: "summary_failed",
+          message: err instanceof Error ? err.message : String(err),
+        },
+      });
     }
     return;
   }
