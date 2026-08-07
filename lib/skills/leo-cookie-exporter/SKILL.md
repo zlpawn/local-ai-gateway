@@ -97,6 +97,8 @@ Cookie 只是 `type=cookies.export` 的一种。底层通用 API：
 
 完全独立，不依赖网关。需 Python 3.8+；Chrome 系另需 `pycryptodome`。
 
+适用：网关未运行 / 扩展未安装 / Firefox / 临时离线导出。
+
 ### 依赖检查
 
 ```bash
@@ -113,15 +115,20 @@ python scripts/export_cookies.py --browser chrome --domain youtube.com -o cookie
 python scripts/export_cookies.py --browser firefox --all -o cookies.txt
 ```
 
-Windows 上 Chrome 运行中读库失败时，优先改走路径 C。
+脚本会优先查找较新的 `Default/Network/Cookies`，再回退旧的 `Default/Cookies`。
+
+失败时优先改走路径 C：
+
+1. Windows 上 Chrome/Edge/Brave 运行中文件被独占锁定
+2. 解密结果为空，或提示 app-bound encryption（`v20`）
 
 ### 跨平台
 
 | 平台 | Chrome/Edge/Brave | Firefox |
 |------|-------------------|---------|
-| macOS | Keychain | 明文 |
-| Windows | DPAPI；难解 v20 | 明文 |
-| Linux | keyring / peanuts | 明文 |
+| macOS | Keychain（首次可能弹授权） | 明文 |
+| Windows | DPAPI；无法解 app-bound `v20` | 明文 |
+| Linux | keyring / fallback `peanuts` | 明文 |
 
 ## 选择建议
 

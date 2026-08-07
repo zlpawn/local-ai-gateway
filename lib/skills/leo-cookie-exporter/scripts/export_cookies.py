@@ -5,6 +5,9 @@ Cookie Exporter - 导出本地浏览器 cookie 为 Netscape 格式 cookies.txt
 支持浏览器: Chrome, Edge, Brave, Firefox
 跨平台: macOS (Keychain), Windows (DPAPI), Linux (keyring/fallback)
 
+这是离线备用路径。若本项目网关可用，优先使用浏览器扩展
+「Leo cookie.txt Locally」导出（可在 Chrome 开启时工作，并绕过 Windows 文件锁与 app-bound encryption）。
+
 用法:
     python export_cookies.py --list-browsers
     python export_cookies.py --browser chrome --list-domains
@@ -22,49 +25,89 @@ import sys
 import tempfile
 from pathlib import Path
 
-# Browser profile paths
+# Browser profile paths.
+# Chrome-family newer builds store cookies under Default/Network/Cookies;
+# older builds use Default/Cookies. Candidates are tried in order.
 BROWSER_CONFIG = {
     "chrome": {
         "name": "Google Chrome",
-        "darwin": "Library/Application Support/Google/Chrome/Default",
-        "win32": "AppData/Local/Google/Chrome/User Data/Default",
-        "linux": ".config/google-chrome/Default",
+        "cookie_candidates": {
+            "darwin": [
+                "Library/Application Support/Google/Chrome/Default/Network/Cookies",
+                "Library/Application Support/Google/Chrome/Default/Cookies",
+            ],
+            "win32": [
+                "AppData/Local/Google/Chrome/User Data/Default/Network/Cookies",
+                "AppData/Local/Google/Chrome/User Data/Default/Cookies",
+            ],
+            "linux": [
+                ".config/google-chrome/Default/Network/Cookies",
+                ".config/google-chrome/Default/Cookies",
+            ],
+        },
         "local_state": {
             "darwin": "Library/Application Support/Google/Chrome/Local State",
             "win32": "AppData/Local/Google/Chrome/User Data/Local State",
+            "linux": ".config/google-chrome/Local State",
         },
         "keychain_key": "Chrome Safe Storage",
         "encrypted": True,
     },
     "edge": {
         "name": "Microsoft Edge",
-        "darwin": "Library/Application Support/Microsoft Edge/Default",
-        "win32": "AppData/Local/Microsoft/Edge/User Data/Default",
-        "linux": ".config/microsoft-edge/Default",
+        "cookie_candidates": {
+            "darwin": [
+                "Library/Application Support/Microsoft Edge/Default/Network/Cookies",
+                "Library/Application Support/Microsoft Edge/Default/Cookies",
+            ],
+            "win32": [
+                "AppData/Local/Microsoft/Edge/User Data/Default/Network/Cookies",
+                "AppData/Local/Microsoft/Edge/User Data/Default/Cookies",
+            ],
+            "linux": [
+                ".config/microsoft-edge/Default/Network/Cookies",
+                ".config/microsoft-edge/Default/Cookies",
+            ],
+        },
         "local_state": {
             "darwin": "Library/Application Support/Microsoft Edge/Local State",
             "win32": "AppData/Local/Microsoft/Edge/User Data/Local State",
+            "linux": ".config/microsoft-edge/Local State",
         },
         "keychain_key": "Microsoft Edge Safe Storage",
         "encrypted": True,
     },
     "brave": {
         "name": "Brave Browser",
-        "darwin": "Library/Application Support/BraveSoftware/Brave-Browser/Default",
-        "win32": "AppData/Local/BraveSoftware/Brave-Browser/User Data/Default",
-        "linux": ".config/BraveSoftware/Brave-Browser/Default",
+        "cookie_candidates": {
+            "darwin": [
+                "Library/Application Support/BraveSoftware/Brave-Browser/Default/Network/Cookies",
+                "Library/Application Support/BraveSoftware/Brave-Browser/Default/Cookies",
+            ],
+            "win32": [
+                "AppData/Local/BraveSoftware/Brave-Browser/User Data/Default/Network/Cookies",
+                "AppData/Local/BraveSoftware/Brave-Browser/User Data/Default/Cookies",
+            ],
+            "linux": [
+                ".config/BraveSoftware/Brave-Browser/Default/Network/Cookies",
+                ".config/BraveSoftware/Brave-Browser/Default/Cookies",
+            ],
+        },
         "local_state": {
             "darwin": "Library/Application Support/BraveSoftware/Brave-Browser/Local State",
             "win32": "AppData/Local/BraveSoftware/Brave-Browser/User Data/Local State",
+            "linux": ".config/BraveSoftware/Brave-Browser/Local State",
         },
         "keychain_key": "Brave Safe Storage",
         "encrypted": True,
     },
     "firefox": {
         "name": "Mozilla Firefox",
-        "darwin": "Library/Application Support/Firefox/Profiles",
-        "win32": "AppData/Roaming/Mozilla/Firefox/Profiles",
-        "linux": ".mozilla/firefox",
+        "profiles_dir": {
+            "darwin": "Library/Application Support/Firefox/Profiles",
+            "win32": "AppData/Roaming/Mozilla/Firefox/Profiles",
+            "linux": ".mozilla/firefox",
+        },
         "encrypted": False,
     },
 }
@@ -78,6 +121,13 @@ def get_platform():
     return sys.platform
 
 
+def first_existing(paths):
+    for p in paths:
+        if os.path.exists(p):
+            return p
+    return None
+
+
 def detect_browsers():
     """Detect installed browsers and their cookie database paths."""
     home = get_home()
@@ -86,7 +136,7 @@ def detect_browsers():
 
     for browser_id, config in BROWSER_CONFIG.items():
         if browser_id == "firefox":
-            profiles_dir = os.path.join(home, config.get(platform, ""))
+            profiles_dir = os.path.join(home, config["profiles_dir"].get(platform, ""))
             if not os.path.isdir(profiles_dir):
                 continue
             for entry in os.listdir(profiles_dir):
@@ -100,14 +150,17 @@ def detect_browsers():
                     })
                     break
         else:
-            profile_dir = os.path.join(home, config.get(platform, ""))
-            cookie_db = os.path.join(profile_dir, "Cookies")
-            if os.path.exists(cookie_db):
+            candidates = [
+                os.path.join(home, rel)
+                for rel in config["cookie_candidates"].get(platform, [])
+            ]
+            cookie_db = first_existing(candidates)
+            if cookie_db:
                 results.append({
                     "id": browser_id,
                     "name": config["name"],
                     "cookie_db_path": cookie_db,
-                    "profile_path": profile_dir,
+                    "profile_path": os.path.dirname(cookie_db),
                 })
 
     return results
@@ -117,7 +170,29 @@ def open_cookie_db(cookie_db_path):
     """Open cookie DB from a copy (avoid lock issues with running browser)."""
     tmp = tempfile.NamedTemporaryFile(suffix=".db", delete=False)
     tmp.close()
-    shutil.copy2(cookie_db_path, tmp.name)
+    try:
+        shutil.copy2(cookie_db_path, tmp.name)
+    except OSError as e:
+        try:
+            os.unlink(tmp.name)
+        except OSError:
+            pass
+        # Windows Chrome/Edge/Brave hold an exclusive lock while running.
+        if get_platform() == "win32" and getattr(e, "winerror", None) in (32, 33):
+            raise RuntimeError(
+                "无法读取浏览器 Cookies 数据库：文件被浏览器独占锁定。\n"
+                "在 Windows 上，Chrome/Edge/Brave 运行时会独占锁定 Cookies 文件。\n"
+                "请优先使用网关的浏览器插件「Leo cookie.txt Locally」导出；\n"
+                "或完全关闭对应浏览器后重试本脚本。"
+            ) from e
+        if e.errno in (11, 13, 16, 26):  # EAGAIN/EACCES/EBUSY/ETXTBSY-ish
+            raise RuntimeError(
+                "无法读取浏览器 Cookies 数据库：文件可能被浏览器锁定。\n"
+                "请优先使用浏览器插件「Leo cookie.txt Locally」导出；\n"
+                "或完全关闭对应浏览器后重试。"
+            ) from e
+        raise RuntimeError(f"Failed to copy cookie database: {e}") from e
+
     conn = sqlite3.connect(tmp.name)
     conn.row_factory = sqlite3.Row
     return conn, tmp.name
@@ -133,7 +208,7 @@ def get_chrome_key(browser_id):
     elif platform == "win32":
         local_state_rel = config["local_state"].get("win32", "")
         return get_key_windows(local_state_rel)
-    elif platform == "linux":
+    elif platform.startswith("linux"):
         return get_key_linux(config["keychain_key"])
     else:
         raise RuntimeError(f"Unsupported platform: {platform}")
@@ -160,7 +235,6 @@ def get_key_macos(keychain_key):
 
 def get_key_windows(local_state_rel):
     """Retrieve Chrome decryption key via DPAPI on Windows."""
-    from Crypto.Cipher import AES
     import base64
 
     local_state_path = os.path.join(get_home(), local_state_rel)
@@ -185,7 +259,8 @@ def get_key_windows(local_state_rel):
         f"Add-Type -AssemblyName System.Security; "
         f"[System.Security.Cryptography.ProtectedData]::Unprotect("
         f"[byte[]](-split ('{hex_str}' -split '(.{{2}})' -ne '' | "
-        f"ForEach-Object {{ [Convert]::ToByte($_,16) }})), $null, 'CurrentUser')"
+        f"ForEach-Object {{ [Convert]::ToByte($_,16) }})), $null, 'CurrentUser') | "
+        f"ForEach-Object {{ '{{0:X2}}' -f $_ }}"
     )
     try:
         result = subprocess.run(
@@ -202,30 +277,39 @@ def get_key_windows(local_state_rel):
 
 def get_key_linux(keychain_key):
     """Retrieve Chrome key from Linux keyring or use fallback."""
+    import hashlib
+
     try:
-        import dbus
-        bus = dbus.SessionBus()
-        # Try gnome-keyring
-        try:
-            collection = dbus.SessionBus().get_object(
-                "org.freedesktop.secrets", "/org/freedesktop/secrets/aliases/default"
-            )
-            collection.Unlock()
-            # Search for Chrome Safe Storage item
-            for item_path in collection.SearchItems({"xdg:schema": "chrome_libsecret_os_crypt_password_v2"}):
-                item = dbus.SessionBus().get_object("org.freedesktop.secrets", item_path)
-                secret = item.GetSecret("org.freedesktop.Secret.Service", session_path)
-                password = bytes(secret[2]).decode("utf-8")
-                import hashlib
-                return hashlib.pbkdf2_hmac("sha1", password.encode(), b"saltysalt", 1, dklen=16)
-        except Exception:
-            pass
-    except ImportError:
+        result = subprocess.run(
+            [
+                "python3",
+                "-c",
+                (
+                    "import secretstorage; bus=secretstorage.dbus_init(); "
+                    "col=secretstorage.get_default_collection(bus); col.unlock(); "
+                    f"target={keychain_key!r}; "
+                    "\nfor item in col.get_all_items():\n"
+                    "    if item.get_label()==target:\n"
+                    "        print(item.get_secret().decode()); break"
+                ),
+            ],
+            capture_output=True,
+            text=True,
+            timeout=5,
+            check=False,
+        )
+        password = (result.stdout or "").strip()
+        if password:
+            return hashlib.pbkdf2_hmac("sha1", password.encode(), b"saltysalt", 1, dklen=16)
+    except Exception:
         pass
 
     # Fallback: "peanuts" (Linux Chrome default when no keyring)
-    import hashlib
     return hashlib.pbkdf2_hmac("sha1", b"peanuts", b"saltysalt", 1, dklen=16)
+
+
+class AppBoundEncryptionError(RuntimeError):
+    """Raised when Chrome app-bound encryption (v20) is encountered."""
 
 
 def decrypt_chrome_value(encrypted_value, key):
@@ -234,10 +318,22 @@ def decrypt_chrome_value(encrypted_value, key):
         return ""
 
     prefix = encrypted_value[:3]
+    if prefix == b"v20":
+        raise AppBoundEncryptionError(
+            "检测到 Chrome app-bound encryption (v20)。本地脚本无法解密。\n"
+            "请改用浏览器插件「Leo cookie.txt Locally」导出到网关。"
+        )
     if prefix in (b"v10", b"v11"):
+        try:
+            from Crypto.Cipher import AES
+        except ImportError as e:
+            raise RuntimeError(
+                "pycryptodome is required for Chrome cookie decryption. "
+                "Install with: pip install pycryptodome"
+            ) from e
+
         if sys.platform == "win32":
             # AES-256-GCM: nonce(12) + ciphertext + tag(16)
-            from Crypto.Cipher import AES
             nonce = encrypted_value[3:15]
             ciphertext = encrypted_value[15:-16]
             tag = encrypted_value[-16:]
@@ -245,7 +341,6 @@ def decrypt_chrome_value(encrypted_value, key):
             return cipher.decrypt_and_verify(ciphertext, tag).decode("utf-8")
         else:
             # AES-128-CBC: IV = 16 spaces
-            from Crypto.Cipher import AES
             iv = b" " * 16
             cipher = AES.new(key, AES.MODE_CBC, iv=iv)
             decrypted = cipher.decrypt(encrypted_value[3:])
@@ -274,20 +369,48 @@ def read_chrome_cookies(conn, key, domain_filter=None):
         ).fetchall()
 
     cookies = []
+    saw_v20 = False
     for row in rows:
         value = row["value"]
-        if not value and row["encrypted_value"]:
-            value = decrypt_chrome_value(row["encrypted_value"], key)
+        enc = row["encrypted_value"]
+        if not value and enc:
+            if isinstance(enc, memoryview):
+                enc = enc.tobytes()
+            if enc[:3] == b"v20":
+                saw_v20 = True
+                continue
+            try:
+                value = decrypt_chrome_value(enc, key)
+            except AppBoundEncryptionError:
+                saw_v20 = True
+                continue
+            except Exception:
+                continue
         if not value:
             continue
+        # Chrome expires_utc is microseconds since 1601-01-01.
+        expires_raw = row["expires_utc"] or 0
+        try:
+            expires = int(expires_raw // 1_000_000 - 11_644_473_600)
+        except Exception:
+            expires = 0
         cookies.append({
             "domain": row["host_key"],
             "path": row["path"],
             "name": row["name"],
             "value": value,
             "secure": bool(row["is_secure"]),
-            "expires": int(row["expires_utc"] // 1_000_000 - 11644473600),
+            "expires": expires if expires > 0 else 0,
         })
+
+    if not cookies and saw_v20:
+        raise AppBoundEncryptionError(
+            "检测到 Chrome app-bound encryption (v20)，本地脚本无法解密这些 cookie。\n"
+            "请改用浏览器插件「Leo cookie.txt Locally」：\n"
+            "  1) 网关「浏览器插件」面板下载并加载扩展\n"
+            "  2) 在「视频知识库 → Cookie 工具」点「用浏览器插件导出」\n"
+            "  或点击扩展弹窗「导出到网关」"
+        )
     return cookies
 
 
@@ -323,13 +446,20 @@ def to_netscape_format(cookies):
     for c in cookies:
         include_sub = "TRUE" if c["domain"].startswith(".") else "FALSE"
         secure = "TRUE" if c["secure"] else "FALSE"
-        expires = str(c["expires"]) if c["expires"] > 0 else "FALSE"
-        lines.append(f"{c['domain']}\t{include_sub}\t{c['path']}\t{secure}\t{expires}\t{c['name']}\t{c['value']}")
+        expires = str(c["expires"]) if c["expires"] and c["expires"] > 0 else "0"
+        lines.append(
+            f"{c['domain']}\t{include_sub}\t{c['path']}\t{secure}\t{expires}\t{c['name']}\t{c['value']}"
+        )
     return "\n".join(lines) + "\n"
 
 
 def main():
-    parser = argparse.ArgumentParser(description="Export browser cookies to Netscape format.")
+    parser = argparse.ArgumentParser(
+        description=(
+            "Export browser cookies to Netscape format. "
+            "Offline fallback path — prefer the Leo cookie.txt Locally extension when the gateway is available."
+        )
+    )
     parser.add_argument("--list-browsers", action="store_true", help="List detected browsers")
     parser.add_argument("--browser", type=str, help="Browser ID (chrome/edge/brave/firefox)")
     parser.add_argument("--list-domains", action="store_true", help="List cookie domains for the browser")
@@ -344,6 +474,10 @@ def main():
             print("No browsers detected.")
         for b in browsers:
             print(f"  {b['id']}: {b['name']} -> {b['cookie_db_path']}")
+        print(
+            "\nTip: If you are using the local-ai-gateway, prefer the browser extension "
+            "'Leo cookie.txt Locally' (works while Chrome is open)."
+        )
         return
 
     if not args.browser:
@@ -357,7 +491,12 @@ def main():
         sys.exit(1)
 
     config = BROWSER_CONFIG[args.browser]
-    conn, tmp_db = open_cookie_db(browser["cookie_db_path"])
+    try:
+        conn, tmp_db = open_cookie_db(browser["cookie_db_path"])
+    except RuntimeError as e:
+        print(f"Error: {e}", file=sys.stderr)
+        sys.exit(1)
+
     try:
         if args.list_domains:
             if config["encrypted"]:
@@ -380,19 +519,37 @@ def main():
         else:
             cookies = read_firefox_cookies(conn, args.domain)
 
+        if not cookies:
+            print(
+                "Warning: 0 cookies exported. "
+                "If Chrome is open on Windows, or cookies use app-bound encryption (v20), "
+                "switch to the Leo cookie.txt Locally browser extension.",
+                file=sys.stderr,
+            )
+
         text = to_netscape_format(cookies)
         output_path = os.path.abspath(args.output)
         with open(output_path, "w", encoding="utf-8") as f:
             f.write(text)
-        os.chmod(output_path, 0o600)
+        try:
+            os.chmod(output_path, 0o600)
+        except OSError:
+            pass
 
         domains = sorted(set(c["domain"] for c in cookies))
         print(f"Exported {len(cookies)} cookies from {len(domains)} domains to: {output_path}")
-        print(f"Domains: {', '.join(domains)}")
+        if domains:
+            print(f"Domains: {', '.join(domains)}")
         print(f"\nUsage: yt-dlp --cookies \"{output_path}\" <URL>")
+    except (AppBoundEncryptionError, RuntimeError) as e:
+        print(f"Error: {e}", file=sys.stderr)
+        sys.exit(1)
     finally:
         conn.close()
-        os.unlink(tmp_db)
+        try:
+            os.unlink(tmp_db)
+        except OSError:
+            pass
 
 
 if __name__ == "__main__":

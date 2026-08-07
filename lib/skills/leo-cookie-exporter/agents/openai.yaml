@@ -1,4 +1,4 @@
 interface:
   display_name: "Cookie Exporter"
-  short_description: "优先经网关扩展任务导出 cookie；本地脚本备用。生成 Netscape cookies.txt 供 yt-dlp 使用。"
-  default_prompt: "帮我导出 bilibili cookie 给 yt-dlp。优先 POST /v1/cookies/export-via-extension 并按 2s×30 轮询；若 no_online_extension 再退回本地脚本。"
+  short_description: "优先经网关扩展任务导出 cookie；本地 export_cookies.py 备用。生成 Netscape cookies.txt 供 yt-dlp 使用。"
+  default_prompt: "帮我导出 bilibili cookie 给 yt-dlp。优先 POST /v1/cookies/export-via-extension 并按 2s×30 轮询；若 no_online_extension，再退回 scripts/export_cookies.py。"
