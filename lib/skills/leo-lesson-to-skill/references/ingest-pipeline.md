@@ -34,7 +34,7 @@
 
 所有候选均失败则在运行 Manifest 中记录 `asr_status: failed` 并停止流水线（无 transcript 则无法提炼方法论），不得伪造字幕。
 
-输出统一 Segment Schema（字段名与第 5 节统一中间表示一致）：
+输出统一 Segment Schema（字段名与第 6 节统一中间表示一致）：
 
 ```json
 {
@@ -81,15 +81,15 @@ pHash 依赖不可用时禁用去重（`dedup_status: disabled_dependency_missin
 
 ### 4.4 视觉审计
 
-对每个代表帧执行 OCR（PaddleOCR / Tesseract）或模型图像理解，提取 PPT 上的文字。OCR 不可用时 `visual_audit_status: blocked`，仍可继续（字幕是主要信息源，PPT 是补充）。
+对每个代表帧执行 OCR（PaddleOCR / Tesseract）或模型图像理解，提取 PPT 上的文字。`visual_audit_status` 取值规则：`complete`（OCR 成功）、`blocked`（OCR 工具不可用，仍可继续）、`not_applicable`（无 PPT，见 4.3 节）、`failed`（工具可用但执行异常）。`asr_status` 同理：`complete`（转写成功）、`failed`（全部后端失败，流水线停止）。
 
 ## 5. 多视频合并
 
 当输入为多个视频（如同一课程的 3 个述职视频）时：
 
-1. 为每个视频独立执行步骤 2-4（获取、ASR、抽帧去重）。
-2. 合并所有视频的 transcript segments，segment_id 保持各视频前缀唯一（如 `V1-ASR-S0001`、`V2-ASR-S0001`）。
-3. 合并所有视频的 visual_evidence frames，frame_id 同理加视频前缀。
+1. 为每个视频独立执行第 2 节（获取归档）、第 3 节（ASR 转写）、第 4 节（抽帧去重视觉审计）。
+2. 合并所有视频的 transcript segments，合并时 segment 的 `id` 加视频前缀保持唯一（如 `V1-ASR-S0001`、`V2-ASR-S0001`）。
+3. 合并所有视频的 visual_evidence frames，frame 的 `id` 同理加视频前缀。
 4. metadata 中记录 `video_count` 和每个视频的独立时长。
 5. 不确定项合并为一个 `uncertain_items` 列表。
 
@@ -101,9 +101,10 @@ Ingest 层最终输出（单视频或多视频合并后），供方法论提炼�
 {
   "source": {
     "type": "video",
-    "uri": "https://...",
+    "uris": ["https://video1...", "https://video2...", "https://video3..."],
     "metadata": {
-      "duration_seconds": 1724.5,
+      "video_count": 3,
+      "duration_seconds": [580.2, 620.5, 523.8],
       "asr_tool": "mlx_whisper",
       "asr_model": "medium",
       "asr_device": "metal",
@@ -112,7 +113,8 @@ Ingest 层最终输出（单视频或多视频合并后），供方法论提炼�
       "scene_threshold": 0.3,
       "dedup_algorithm": "pHash + slide_clustering",
       "dedup_hamming_threshold": 6,
-      "visual_audit_status": "complete"
+      "visual_audit_status": "complete",
+      "asr_status": "complete"
     }
   },
   "transcript": {

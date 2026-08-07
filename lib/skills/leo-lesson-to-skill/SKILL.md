@@ -31,7 +31,7 @@ description: "将课程或教学视频中的方法论内化为可执行的新 sk
 获取视频、转写、抽帧、提炼方法论。按需读取并遵守 [ingest-pipeline.md](references/ingest-pipeline.md)。
 
 1. 探测操作系统和基础媒体工具（ffmpeg、ffprobe、yt-dlp），缺少必需工具时停止并报告。
-2. 确定输入源（单个或多个 URL / 本地文件），创建运行 Manifest 和临时目录。多视频输入时为每个视频独立执行步骤 3-7，最终合并为一份统一中间表示。
+2. 确定输入源（单个或多个 URL / 本地文件），创建运行 Manifest 和临时目录。多视频输入时为每个视频独立执行步骤 3-7（获取、ASR、抽帧、视觉审计），最终合并为一份统一中间表示（详见 ingest-pipeline.md 第 5 节）。
 3. 下载或复制源视频到临时目录，URL 输入额外保存 `.info.json`。
 4. 执行 ASR 转写（中文课程需指定语言参数），生成结构化 transcript（含 id、时间戳、文本）。
 5. 执行确定性抽帧，使用 slide 级去重（同一张幻灯片只保留一个代表帧）。
@@ -104,7 +104,7 @@ SKILL.md 内部结构：
 {
   "source": {
     "type": "video",
-    "uri": "...",
+    "uris": ["..."],
     "metadata": {}
   },
   "transcript": {
