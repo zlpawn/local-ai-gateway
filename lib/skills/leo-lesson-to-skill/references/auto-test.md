@@ -50,9 +50,9 @@ Mock 场景设计原则：
 
 ## 3. 执行测试
 
-将 mock 输入当作真实用户输入，调用生成的 skill：
+测试在 skill 安装之前执行，读取临时目录中生成的 skill 文件（尚未复制到 `~/.agents/skills/`）：
 
-1. 读取生成的 SKILL.md 和 references，按工作流步骤执行。
+1. 读取临时目录中生成的 SKILL.md 和 references，按工作流步骤执行。
 2. 将 mock user_input 作为用户输入。
 3. 走完完整工作流，产出最终结果（如述职报告大纲）。
 

@@ -13,6 +13,8 @@
 
 缺少必需工具时停止并报告缺项，不进入后续步骤。具体探测命令和路径规则参见 `leo-video-to-karpathy-wiki` 的 [platform-runtime.md](../../leo-video-to-karpathy-wiki/references/platform-runtime.md)。
 
+运行 Manifest 的 schema 参见 `leo-video-to-karpathy-wiki` 的 [cleanup-policy.md](../../leo-video-to-karpathy-wiki/references/cleanup-policy.md)，包含 `run_id`、`status`、`temp_root`、`permanent_assets`、`temporary_files` 等字段。
+
 ## 2. 获取与归档源视频
 
 1. 本地文件：按字节复制到临时目录并校验。
@@ -27,6 +29,8 @@
 - Windows 无 CUDA：`whisper-ctranslate2 --device cpu`
 - macOS Apple Silicon：优先 `mlx_whisper`，失败回退 `whisper-ctranslate2 --device cpu`
 - macOS Intel：`whisper-ctranslate2 --device cpu`
+
+指定语言参数以提高准确率：中文课程使用 `--language zh`，英文课程使用 `--language en`，中英混合课程使用 `--language zh`（中文为主，英文术语穿插）。不指定时依赖 ASR 工具自动检测，但课程视频建议显式指定。
 
 所有候选均失败则在运行 Manifest 中记录 `asr_status: failed` 并停止流水线（无 transcript 则无法提炼方法论），不得伪造字幕。
 
@@ -66,13 +70,32 @@
 
 pHash 依赖不可用时禁用去重（`dedup_status: disabled_dependency_missing`），不使用未定义算法。
 
-### 4.3 视觉审计
+### 4.3 无 PPT 场景处理
+
+部分课程视频为纯口述（talking-head）或白板书写，没有 PPT 幻灯片。此时：
+
+- 场景检测（`gt(scene,0.3)`）产生的候选帧极少或为零，属于正常情况。
+- `visual_evidence.frames` 为空数组，`visual_audit_status` 设为 `not_applicable`。
+- 不影响后续流程：transcript 是主要信息源，visual_evidence 是补充。方法论提炼完全依赖 ASR 文本。
+- 白板书写类视频如果场景变化频繁（讲者不断书写），可降低场景阈值至 `0.15` 增加采样密度，但仍使用 slide 级去重。
+
+### 4.4 视觉审计
 
 对每个代表帧执行 OCR（PaddleOCR / Tesseract）或模型图像理解，提取 PPT 上的文字。OCR 不可用时 `visual_audit_status: blocked`，仍可继续（字幕是主要信息源，PPT 是补充）。
 
-## 5. 统一中间表示
+## 5. 多视频合并
 
-Ingest 层最终输出，供方法论提炼消费：
+当输入为多个视频（如同一课程的 3 个述职视频）时：
+
+1. 为每个视频独立执行步骤 2-4（获取、ASR、抽帧去重）。
+2. 合并所有视频的 transcript segments，segment_id 保持各视频前缀唯一（如 `V1-ASR-S0001`、`V2-ASR-S0001`）。
+3. 合并所有视频的 visual_evidence frames，frame_id 同理加视频前缀。
+4. metadata 中记录 `video_count` 和每个视频的独立时长。
+5. 不确定项合并为一个 `uncertain_items` 列表。
+
+## 6. 统一中间表示
+
+Ingest 层最终输出（单视频或多视频合并后），供方法论提炼消费：
 
 ```json
 {
@@ -131,7 +154,7 @@ Ingest 层最终输出，供方法论提炼消费：
 
 `slide_group_size` 记录该代表帧代表的原始帧数量，用于评估该 slide 停留时长。
 
-## 6. 完成标准
+## 7. 完成标准
 
 - 源视频存在、大小大于 0、`ffprobe` 可读
 - URL 输入有 `.info.json`

@@ -31,9 +31,9 @@ description: "将课程或教学视频中的方法论内化为可执行的新 sk
 获取视频、转写、抽帧、提炼方法论。按需读取并遵守 [ingest-pipeline.md](references/ingest-pipeline.md)。
 
 1. 探测操作系统和基础媒体工具（ffmpeg、ffprobe、yt-dlp），缺少必需工具时停止并报告。
-2. 确定输入源（URL 或本地文件），创建运行 Manifest 和临时目录。
+2. 确定输入源（单个或多个 URL / 本地文件），创建运行 Manifest 和临时目录。多视频输入时为每个视频独立执行步骤 3-7，最终合并为一份统一中间表示。
 3. 下载或复制源视频到临时目录，URL 输入额外保存 `.info.json`。
-4. 执行 ASR 转写，生成结构化 transcript（含 id、时间戳、文本）。
+4. 执行 ASR 转写（中文课程需指定语言参数），生成结构化 transcript（含 id、时间戳、文本）。
 5. 执行确定性抽帧，使用 slide 级去重（同一张幻灯片只保留一个代表帧）。
 6. 对代表帧执行视觉审计（OCR 提取 PPT 文字）。
 7. 将 ASR + 视觉证据合成统一中间表示。
@@ -70,8 +70,8 @@ description: "将课程或教学视频中的方法论内化为可执行的新 sk
 
 ### 步骤 4：交付与注册
 
-1. 将生成的 skill 安装到 skills 目录。
-2. 更新项目的 skill 注册（如 lock 文件或 manifest）。
+1. 将生成的 skill 复制到 `~/.agents/skills/` 目录（Codex skill 的 single source of truth）。如果是在项目中开发，同时提交到项目的 `lib/skills/` 目录。
+2. 本地生成的 skill 不需要写入 `.skill-lock.json`（该文件仅用于外部安装的 skill 注册）。
 3. 报告：skill 名称、路径、测试结果、使用方式示例。
 4. 清理临时文件（遵循 leo-video-to-karpathy-wiki 的 cleanup-policy 规范，需用户授权）。
 
