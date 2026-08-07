@@ -85,7 +85,9 @@
           "models": [],
           "model_mapping": {
             "claude-opus-5": "claude-opus-5",
-            "claude-sonnet-4-5": "gpt-5.6-sol"
+            "claude-sonnet-4-5": "gpt-5.6-sol",
+            "claude-haiku-4-5": "GLM-5.2",
+            "claude-haiku-4-0": "deepseek-v4-flash-ga"
           }
         },
         {
@@ -609,6 +611,15 @@
     "claude_model_catalog": {
       "user_models": [],
       "disabled_builtin_models": []
+    }
+  },
+  "sessionSync": {
+    "skillMounts": {
+      "leo-video-to-karpathy-wiki": {
+        "antigravity": false,
+        "claude": false,
+        "codex": true
+      }
     }
   }
 }
