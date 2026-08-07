@@ -1,5 +1,6 @@
 import { escapeHtml } from "./core/dom";
 import { renderVideoKbDetail } from "./modules/video-kb";
+import { renderIchingDetail } from "./modules/iching";
 import { showToast } from "./core/ui";
 import { getConfig, loadSyncStatus, fetchJson } from "./core/api";
 
@@ -3590,6 +3591,7 @@ const toolGroupConfigs = [
     { title: '订阅接入', tools: ['antigravity-subscribe', 'codex-subscribe'] },
     { title: '模型配置', tools: ['claude-model-catalog'] },
     { title: '联网搜索', tools: ['web-search'] },
+    { title: '国学', tools: ['iching'] },
     { title: '其他', tools: ['classification-metrics'] },
 ];
 
@@ -3604,6 +3606,7 @@ function toolDefs() {
         'codex-subscribe': { name: '接入 Codex 订阅', desc: '读取本机 Codex/ChatGPT 登录态，把官方模型做成可给 Claude Desktop / DeepTutor 使用的节点。', icon: '<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"></circle><path d="M8 12h8"></path><path d="M12 8v8"></path></svg>' },
         'claude-model-catalog': { name: 'Claude 模型列表', desc: '维护 Claude Desktop 映射原模型候选项：内置官方名 + 用户自定义。', icon: '<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 8V4H8"></path><rect x="4" y="8" width="16" height="12" rx="2"></rect><path d="M2 14h2"></path><path d="M20 14h2"></path><path d="M15 13v2"></path><path d="M9 13v2"></path></svg>' },
         'web-search': { name: '联网搜索', desc: '使用已配置的 web_search 节点，输入查询词、选择结果数量与时间范围，实时检索网页并查看本地搜索历史。', icon: '<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"></circle><path d="M2 12h20"></path><path d="M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z"></path></svg>' },
+        'iching': { name: '易经六十四卦', desc: '转动双圆环浏览六十四卦，查看完整卦辞、大象传、爻辞与小象传。', icon: '<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><line x1="12" y1="2" x2="12" y2="22"/><path d="M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z"/></svg>' },
         'classification-metrics': { name: '分类评估实验室', desc: '讲清 TP/FP/FN/TN，以及准确率、精准率、召回率，并用你的数据现场计算。', icon: '<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="7" height="7"></rect><rect x="14" y="3" width="7" height="7"></rect><rect x="14" y="14" width="7" height="7"></rect><rect x="3" y="14" width="7" height="7"></rect></svg>' },
     };
 }
@@ -3645,6 +3648,7 @@ window.openTool = function(toolId) {
     else if (toolId === 'tts-gen') renderTtsGenDetail();
     else if (toolId === 'web-search') renderWebSearchDetail();
     else if (toolId === 'claude-model-catalog') renderClaudeModelCatalogDetail();
+    else if (toolId === 'iching') renderIchingDetail();
     else if (toolId === 'classification-metrics') renderClassificationMetricsDetail();
     else if (toolId === 'antigravity-subscribe') renderAntigravitySubscribeDetail();
     else if (toolId === 'codex-subscribe') renderCodexSubscribeDetail();
