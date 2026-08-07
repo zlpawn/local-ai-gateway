@@ -2516,7 +2516,7 @@ function createGatewayEmbeddingFn(endpointId) {
   };
 }
 
-function createGatewaySummaryFn({ client, model } = {}) {
+function createGatewaySummaryFn({ client, model, endpointId } = {}) {
   return async function summarize({ title, transcript, description, signal } = {}) {
     return generateVideoSummary({
       title,
@@ -2524,6 +2524,7 @@ function createGatewaySummaryFn({ client, model } = {}) {
       description,
       client: client || "code",
       model: model || "",
+      endpointId: endpointId || "",
       listenPort: LISTEN_PORT,
       signal,
     });
@@ -2689,6 +2690,7 @@ async function routeVideoKbRequest(req, res, context, reqPath) {
       language: body.language || "auto",
       embeddingEndpointId: body.embedding_endpoint_id,
       summaryClient: body.summary_client || null,
+      summaryEndpointId: body.summary_endpoint_id || null,
       summaryModel: body.summary_model || null,
       displayTitle: body.display_title || body.title || null,
       chunkStrategy: body.chunk_strategy || "time-window",
@@ -2928,6 +2930,7 @@ async function routeVideoKbRequest(req, res, context, reqPath) {
       }
 
       const summaryClient = body.summary_client || body.client || "code";
+      const summaryEndpointId = body.summary_endpoint_id || body.endpoint_id || "";
       const summaryModel = body.summary_model || body.model || "";
       const summary = await generateVideoSummary({
         title: meta.display_title || meta.source_title || "untitled",
@@ -2935,6 +2938,7 @@ async function routeVideoKbRequest(req, res, context, reqPath) {
         description: "",
         client: summaryClient,
         model: summaryModel,
+        endpointId: summaryEndpointId,
         listenPort: LISTEN_PORT,
       });
       meta = metaStore.updateSummary(videoId, summary);
@@ -2945,6 +2949,7 @@ async function routeVideoKbRequest(req, res, context, reqPath) {
         summary,
         used_model: summaryModel || null,
         used_client: summaryClient,
+        used_endpoint_id: summaryEndpointId || null,
       });
     } catch (err) {
       sendJson(res, 500, {
@@ -4267,7 +4272,17 @@ async function forwardOpenAIChatCompletionsResolved(body, clientReq, clientRes, 
     );
   }
 
-  const route = resolveConfiguredModel(requestedModel, ["anthropic", "openai-chat", "openai-responses", "grok", "codex-subscription", "chatgpt-codex"], context.client);
+  const preferredEndpointId = String(
+    context.url.searchParams.get("endpoint_id")
+    || body.endpoint_id
+    || "",
+  ).trim() || null;
+  const route = resolveConfiguredModel(
+    requestedModel,
+    ["anthropic", "openai-chat", "openai-responses", "grok", "codex-subscription", "chatgpt-codex"],
+    context.client,
+    preferredEndpointId,
+  );
   const resolvedModel = route?.upstream_model || resolveModel(requestedModel);
   markRequestTokenUsage(clientReq, {
     context,
@@ -7319,7 +7334,11 @@ globalTaskRegistry.register(videoKbHandler.type, {
       ? createGatewayEmbeddingFn(payload.embeddingEndpointId)
       : null;
     const summaryFn = payload.summaryModel
-      ? createGatewaySummaryFn({ client: payload.summaryClient, model: payload.summaryModel })
+      ? createGatewaySummaryFn({
+        client: payload.summaryClient,
+        model: payload.summaryModel,
+        endpointId: payload.summaryEndpointId,
+      })
       : null;
     return videoKbHandler.run({
       ...payload,
@@ -8329,10 +8348,11 @@ function resolveConfiguredModelPrecise(requestedModel, allowedTypes = [], client
   return null;
 }
 
-function resolveConfiguredModel(requestedModel, allowedTypes = [], client = null) {
+function resolveConfiguredModel(requestedModel, allowedTypes = [], client = null, preferredEndpointId = null) {
   if (!requestedModel) return null;
   const text = String(requestedModel);
   const allowed = new Set(allowedTypes);
+  const preferredId = String(preferredEndpointId || "").trim();
 
   if (client === "code") {
     const internalRoute = CLAUDE_CODE_MODEL_ROUTES.routes.get(text);
@@ -8364,6 +8384,31 @@ function resolveConfiguredModel(requestedModel, allowedTypes = [], client = null
     const endpoints = allEndpoints.filter(ep =>
       !isCapabilityEndpoint(ep) && hasConfiguredApiKey(ep)
     );
+
+    // Explicit endpoint_id wins when the requested model is available on that node.
+    if (preferredId) {
+      const preferredEp = endpoints.find((ep) => ep.id === preferredId);
+      if (preferredEp && (allowed.size === 0 || allowed.has(preferredEp.type))) {
+        let targetModel = text;
+        let matched = false;
+        if (preferredEp.model_mapping && preferredEp.model_mapping[text]) {
+          targetModel = preferredEp.model_mapping[text];
+          matched = true;
+        } else if (preferredEp.models?.includes(text)) {
+          matched = true;
+        } else if (preferredEp.name === text) {
+          matched = true;
+        }
+        if (matched) {
+          return {
+            model: { id: text, display_name: text, upstream_model: targetModel, aliases: [] },
+            provider: endpointProvider(preferredEp),
+            endpoint: preferredEp,
+            upstream_model: targetModel,
+          };
+        }
+      }
+    }
     
     // Find the default endpoint first
     const defaultEp = endpoints.find(ep => ep.is_default && (allowed.size === 0 || allowed.has(ep.type)));

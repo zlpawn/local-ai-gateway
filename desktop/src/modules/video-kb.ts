@@ -171,6 +171,17 @@ const DEFAULT_PIPELINE_STEPS = [
   "vectorize",
 ];
 
+const PIPELINE_STEP_HINTS: Record<string, string> = {
+  fetch_info: "解析标题、时长与源站元数据",
+  agent_reach_get: "可选：抓取页面正文作为补充内容",
+  download_audio: "提取音轨，供后续语音转录",
+  download_video: "下载本地视频素材（可关闭）",
+  transcribe: "Whisper 语音转文字",
+  summarize: "生成短摘要与关键要点",
+  chunk: "按策略切分为可检索片段",
+  vectorize: "写入向量库，支持语义检索",
+};
+
 const videoKbState = {
   whisperTools: [] as WhisperTool[],
   whisperModels: [] as WhisperModel[],
@@ -180,6 +191,7 @@ const videoKbState = {
   searchEmbClient: "" as string,
   searchEmbEndpointId: "" as string,
   summaryClient: "" as string,
+  summaryEndpointId: "" as string,
   summaryModel: "" as string,
   pipelineNodes: [] as PipelineNodeInfo[],
   selectedSteps: new Set<string>(DEFAULT_PIPELINE_STEPS),
@@ -270,12 +282,6 @@ function importPanelHTML(): string {
     </div>
 
     <div class="video-kb-card">
-      <div class="video-kb-card-title">执行步骤</div>
-      <div id="vk-steps-select" class="video-kb-step-select"></div>
-      <div class="video-kb-status" style="margin-top:8px">可只下载素材，也可以完整转录/摘要/入库。取消不需要的步骤即可。</div>
-    </div>
-
-    <div class="video-kb-card">
       <div class="video-kb-card-title">Agent Reach 内容获取</div>
       <div id="vk-agent-reach-status"><div class="video-kb-empty">检测中...</div></div>
     </div>
@@ -314,13 +320,19 @@ function importPanelHTML(): string {
       <div class="video-kb-card-title">视频摘要</div>
       <div class="video-kb-form-grid">
         <div class="form-group">
-          <label>Client</label>
+          <label>代理节点</label>
           <select id="vk-summary-client" onchange="window.videoKbOnSummaryClientChange()">
             <option value="">加载中...</option>
           </select>
         </div>
         <div class="form-group">
-          <label>摘要模型</label>
+          <label>节点</label>
+          <select id="vk-summary-endpoint" onchange="window.videoKbOnSummaryEndpointChange()">
+            <option value="">无可用节点</option>
+          </select>
+        </div>
+        <div class="form-group">
+          <label>模型</label>
           <select id="vk-summary-model" onchange="window.videoKbOnSummaryModelChange()">
             <option value="">无</option>
           </select>
@@ -371,7 +383,22 @@ function importPanelHTML(): string {
           </select>
         </div>
       </div>
-      <div class="video-kb-actions">
+    </div>
+
+    <div class="video-kb-card video-kb-steps-card">
+      <div class="video-kb-card-head">
+        <div>
+          <div class="video-kb-card-title" style="margin-bottom:4px">执行步骤</div>
+          <div class="video-kb-status">按顺序勾选要跑的流水线节点，可只下载素材，也可完整转录 / 摘要 / 入库。</div>
+        </div>
+        <div class="video-kb-step-toolbar">
+          <button type="button" class="btn video-kb-step-tool" onclick="window.videoKbSelectPresetSteps('all')">全选</button>
+          <button type="button" class="btn video-kb-step-tool" onclick="window.videoKbSelectPresetSteps('media')">仅素材</button>
+          <button type="button" class="btn video-kb-step-tool" onclick="window.videoKbSelectPresetSteps('default')">默认</button>
+        </div>
+      </div>
+      <div id="vk-steps-select" class="video-kb-step-select"></div>
+      <div class="video-kb-actions video-kb-import-actions">
         <button class="btn btn-primary" id="vk-ingest-btn" onclick="window.videoKbIngest()">开始导入</button>
         <span id="vk-ytdlp-status" class="video-kb-status"></span>
       </div>
@@ -574,18 +601,28 @@ async function loadPipelineNodes(): Promise<void> {
   renderStepSelector();
 }
 
+function stepHint(node: PipelineNodeInfo): string {
+  return PIPELINE_STEP_HINTS[node.id] || (node.requires?.length ? `依赖: ${node.requires.join(" / ")}` : "可选执行节点");
+}
+
 function renderStepSelector(): void {
   const box = document.getElementById("vk-steps-select");
   if (!box) return;
   const nodes = videoKbState.pipelineNodes.length
     ? videoKbState.pipelineNodes
     : DEFAULT_PIPELINE_STEPS.map((id) => ({ id, label: id, default_enabled: true }));
-  box.innerHTML = nodes.map((node) => {
-    const checked = videoKbState.selectedSteps.has(node.id) ? "checked" : "";
+  box.innerHTML = nodes.map((node, index) => {
+    const checked = videoKbState.selectedSteps.has(node.id);
+    const optional = node.default_enabled === false;
     return `
-      <label class="video-kb-step-option">
-        <input type="checkbox" value="${esc(node.id)}" ${checked} onchange="window.videoKbToggleStep('${esc(node.id)}', this.checked)">
-        <span>${esc(node.label)}</span>
+      <label class="video-kb-step-option${checked ? " is-checked" : ""}${optional ? " is-optional" : ""}">
+        <input type="checkbox" value="${esc(node.id)}" ${checked ? "checked" : ""} onchange="window.videoKbToggleStep('${esc(node.id)}', this.checked)">
+        <span class="video-kb-step-index">${String(index + 1).padStart(2, "0")}</span>
+        <span class="video-kb-step-copy">
+          <span class="video-kb-step-name">${esc(node.label)}</span>
+          <span class="video-kb-step-hint">${esc(stepHint(node))}</span>
+        </span>
+        <span class="video-kb-step-check" aria-hidden="true"></span>
       </label>
     `;
   }).join("");
@@ -594,7 +631,7 @@ function renderStepSelector(): void {
 function initSummaryCascade(): void {
   const clients = getChatClients();
   const clientOpts = clients.length === 0
-    ? `<option value="">无可用 Client</option>`
+    ? `<option value="">无可用代理节点</option>`
     : clients.map((c) => `<option value="${c}">${esc(clientDisplayName(c))}</option>`).join("");
   const clientSel = document.getElementById("vk-summary-client") as HTMLSelectElement | null;
   if (!clientSel) return;
@@ -604,14 +641,43 @@ function initSummaryCascade(): void {
     videoKbState.summaryClient = clients.includes(videoKbState.embClient) ? videoKbState.embClient : clients[0];
   }
   if (videoKbState.summaryClient) clientSel.value = videoKbState.summaryClient;
-  refreshSummaryModels(videoKbState.summaryClient);
+  refreshSummaryEndpoints(videoKbState.summaryClient);
 }
 
-function refreshSummaryModels(client: string): void {
+function refreshSummaryEndpoints(client: string): void {
+  const endpointSel = document.getElementById("vk-summary-endpoint") as HTMLSelectElement | null;
+  if (!endpointSel) return;
+  const endpoints = getChatEndpoints(client);
+  if (endpoints.length === 0) {
+    endpointSel.innerHTML = `<option value="">无可用节点</option>`;
+    endpointSel.disabled = true;
+    videoKbState.summaryEndpointId = "";
+    videoKbState.summaryModel = "";
+    refreshSummaryModels(null);
+    return;
+  }
+
+  endpointSel.disabled = false;
+  let selectedId = videoKbState.summaryEndpointId;
+  if (!selectedId || !endpoints.some((ep) => ep.id === selectedId)) {
+    const preferred = endpoints.find((ep) => ep.is_default) || endpoints[0];
+    selectedId = preferred.id;
+  }
+  videoKbState.summaryEndpointId = selectedId;
+  endpointSel.innerHTML = endpoints.map((ep) => {
+    const modelHint = ep.models?.[0] || "未设置模型";
+    const defaultTag = ep.is_default ? " · 默认" : "";
+    return `<option value="${esc(ep.id)}" ${ep.id === selectedId ? "selected" : ""}>${esc(ep.name)} - ${esc(modelHint)}${defaultTag}</option>`;
+  }).join("");
+
+  const selected = endpoints.find((ep) => ep.id === selectedId) || endpoints[0];
+  refreshSummaryModels(selected || null);
+}
+
+function refreshSummaryModels(endpoint: ChatEndpoint | null): void {
   const modelSel = document.getElementById("vk-summary-model") as HTMLSelectElement | null;
   if (!modelSel) return;
-  const endpoints = getChatEndpoints(client);
-  const models = collectChatModels(endpoints);
+  const models = endpoint?.models || [];
   if (models.length === 0) {
     modelSel.innerHTML = `<option value="">无可用模型</option>`;
     modelSel.disabled = true;
@@ -630,14 +696,45 @@ function refreshSummaryModels(client: string): void {
 (window as any).videoKbToggleStep = function (stepId: string, checked: boolean): void {
   if (checked) videoKbState.selectedSteps.add(stepId);
   else videoKbState.selectedSteps.delete(stepId);
+  renderStepSelector();
+};
+
+(window as any).videoKbSelectPresetSteps = function (preset: string): void {
+  const nodes = videoKbState.pipelineNodes.length
+    ? videoKbState.pipelineNodes
+    : DEFAULT_PIPELINE_STEPS.map((id) => ({ id, label: id, default_enabled: true }));
+  let next: string[] = [];
+  if (preset === "all") {
+    next = nodes.map((n) => n.id);
+  } else if (preset === "media") {
+    next = nodes
+      .map((n) => n.id)
+      .filter((id) => ["fetch_info", "download_audio", "download_video"].includes(id));
+  } else {
+    next = nodes.filter((n) => n.default_enabled !== false).map((n) => n.id);
+    if (!next.length) next = [...DEFAULT_PIPELINE_STEPS];
+  }
+  videoKbState.selectedSteps = new Set(next);
+  renderStepSelector();
 };
 
 (window as any).videoKbOnSummaryClientChange = function (): void {
   const sel = document.getElementById("vk-summary-client") as HTMLSelectElement | null;
   if (!sel) return;
   videoKbState.summaryClient = sel.value;
+  videoKbState.summaryEndpointId = "";
   videoKbState.summaryModel = "";
-  refreshSummaryModels(sel.value);
+  refreshSummaryEndpoints(sel.value);
+};
+
+(window as any).videoKbOnSummaryEndpointChange = function (): void {
+  const sel = document.getElementById("vk-summary-endpoint") as HTMLSelectElement | null;
+  if (!sel) return;
+  videoKbState.summaryEndpointId = sel.value;
+  videoKbState.summaryModel = "";
+  const endpoints = getChatEndpoints(videoKbState.summaryClient);
+  const endpoint = endpoints.find((ep) => ep.id === sel.value) || null;
+  refreshSummaryModels(endpoint);
 };
 
 (window as any).videoKbOnSummaryModelChange = function (): void {
@@ -1029,6 +1126,7 @@ function updateModelGuide(): void {
   const chunkStrategy = (document.getElementById("vk-chunk-strategy") as HTMLSelectElement)?.value;
   const keepVideo = (document.getElementById("vk-keep-video") as HTMLSelectElement)?.value === "true";
   const summaryClient = (document.getElementById("vk-summary-client") as HTMLSelectElement)?.value || videoKbState.summaryClient;
+  const summaryEndpointId = (document.getElementById("vk-summary-endpoint") as HTMLSelectElement)?.value || videoKbState.summaryEndpointId;
   const summaryModel = (document.getElementById("vk-summary-model") as HTMLSelectElement)?.value || videoKbState.summaryModel;
   const selectedSteps = [...videoKbState.selectedSteps];
 
@@ -1047,6 +1145,7 @@ function updateModelGuide(): void {
     language,
     embedding_endpoint_id: embeddingEndpointId || null,
     summary_client: summaryClient || null,
+    summary_endpoint_id: summaryEndpointId || null,
     summary_model: summaryModel || null,
     chunk_strategy: chunkStrategy,
     keep_video: keepVideo,
@@ -1292,6 +1391,9 @@ async function loadVideoList(): Promise<void> {
   const summaryClient = (document.getElementById("vk-summary-client") as HTMLSelectElement)?.value
     || videoKbState.summaryClient
     || "";
+  const summaryEndpointId = (document.getElementById("vk-summary-endpoint") as HTMLSelectElement)?.value
+    || videoKbState.summaryEndpointId
+    || "";
   const summaryModel = (document.getElementById("vk-summary-model") as HTMLSelectElement)?.value
     || videoKbState.summaryModel
     || "";
@@ -1304,12 +1406,18 @@ async function loadVideoList(): Promise<void> {
     || videoKbState.summaryClient
     || getChatClients()[0]
     || "code";
+  const endpointId = (document.getElementById("vk-summary-endpoint") as HTMLSelectElement)?.value
+    || videoKbState.summaryEndpointId
+    || getChatEndpoints(client)[0]?.id
+    || "";
+  const endpoint = getChatEndpoints(client).find((ep) => ep.id === endpointId) || getChatEndpoints(client)[0] || null;
   const model = (document.getElementById("vk-summary-model") as HTMLSelectElement)?.value
     || videoKbState.summaryModel
+    || endpoint?.models?.[0]
     || collectChatModels(getChatEndpoints(client))[0]
     || "";
 
-  if (!confirm(`重新生成摘要？\nClient: ${client}\n模型: ${model || "规则摘要兜底"}`)) return;
+  if (!confirm(`重新生成摘要？\n代理节点: ${client}\n节点: ${endpoint?.name || endpointId || "默认"}\n模型: ${model || "规则摘要兜底"}`)) return;
 
   try {
     const resp = await fetch(`/v1/video-kb/videos/${encodeURIComponent(videoId)}/summary`, {
@@ -1317,6 +1425,7 @@ async function loadVideoList(): Promise<void> {
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
         summary_client: client,
+        summary_endpoint_id: endpointId || null,
         summary_model: model || null,
       }),
     });
