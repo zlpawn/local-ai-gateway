@@ -30,18 +30,18 @@
 
 所有候选均失败则标记 `asr_status: failed`，不得伪造字幕。
 
-输出统一 Segment Schema：
+输出统一 Segment Schema（字段名与第 5 节统一中间表示一致）：
 
 ```json
 {
-  "segment_id": "ASR-S0001",
-  "start_seconds": 0.0,
-  "end_seconds": 4.2,
+  "id": "ASR-S0001",
+  "start": 0.0,
+  "end": 4.2,
   "text": "..."
 }
 ```
 
-验证：segment_id 唯一，时间戳单调且位于视频时长内。
+验证：id 唯一，时间戳单调且位于视频时长内。
 
 ## 4. 确定性抽帧与 Slide 级去重
 
@@ -59,10 +59,10 @@
 本 skill 在 pHash 去重基础上增加 slide 级聚类：
 
 1. 对每个候选帧计算 pHash。
-2. 不受时间差限制，只要 pHash 汉明距离 <= 6 就归为同一 slide 组。
+2. 新帧始终与当前 slide 组的代表帧比较 pHash 汉明距离（不与组内其他帧比较，避免链式合并）。距离 <= 6 则归入该组；否则以此帧为起点开启新组。
 3. 每个 slide 组只保留一个代表帧：选择该组中场景变化最大或时间最早的帧。
 4. 代表帧的 `slide_hash` 字段记录该组的 pHash 特征值。
-5. 组内其他帧不删除（审计可能需要），但不进入视觉审计，不作为证据帧候选。
+5. 组内其他帧保留在临时目录但不进入视觉审计，不作为证据帧候选。
 
 pHash 依赖不可用时禁用去重（`dedup_status: disabled_dependency_missing`），不使用未定义算法。
 

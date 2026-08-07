@@ -33,7 +33,7 @@ description: "将课程或教学视频中的方法论内化为可执行的新 sk
 1. 探测操作系统和基础媒体工具（ffmpeg、ffprobe、yt-dlp），缺少必需工具时停止并报告。
 2. 确定输入源（URL 或本地文件），创建运行 Manifest 和临时目录。
 3. 下载或复制源视频到临时目录，URL 输入额外保存 `.info.json`。
-4. 执行 ASR 转写，生成结构化 transcript（含 segment_id、时间戳、文本）。
+4. 执行 ASR 转写，生成结构化 transcript（含 id、时间戳、文本）。
 5. 执行确定性抽帧，使用 slide 级去重（同一张幻灯片只保留一个代表帧）。
 6. 对代表帧执行视觉审计（OCR 提取 PPT 文字）。
 7. 将 ASR + 视觉证据合成统一中间表示。
