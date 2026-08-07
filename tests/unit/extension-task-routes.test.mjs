@@ -96,3 +96,37 @@ test("create + claim + complete happy path", async () => {
     assert.ok(getHttp.result.payload.result.file_path.startsWith(dataDir));
   });
 });
+
+test("non-owner complete does not write cookie file", async () => {
+  await withSystem(async ({ system, extensionStore, dataDir }) => {
+    extensionStore.register({ id: "ext1", name: "Leo", version: "1.1.0", capabilities: ["cookies"], permissions: [] });
+    extensionStore.register({ id: "ext2", name: "Other", version: "1.1.0", capabilities: ["cookies"], permissions: [] });
+
+    const createHttp = mockReqRes({ method: "POST", body: { domain: "owner-check.com" } });
+    await system.routeCookieExportViaExtension(createHttp.req, createHttp.res, {}, "/v1/cookies/export-via-extension");
+    assert.equal(createHttp.result.status, 200);
+    const taskId = createHttp.result.payload.task_id;
+
+    const claimHttp = mockReqRes({ method: "POST", body: { extension_id: "ext1", capabilities: ["cookies"], limit: 1 } });
+    await system.routeExtensionTaskRequest(claimHttp.req, claimHttp.res, {}, "/v1/extension-tasks/claim");
+    assert.equal(claimHttp.result.payload.tasks[0].claimed_by, "ext1");
+
+    const completeHttp = mockReqRes({
+      method: "POST",
+      body: {
+        extension_id: "ext2",
+        cookies: [{ domain: ".owner-check.com", path: "/", name: "sid", value: "1", secure: true, httpOnly: false, expirationDate: 1700000000 }],
+      },
+    });
+    await system.routeExtensionTaskRequest(completeHttp.req, completeHttp.res, {}, `/v1/extension-tasks/${taskId}/complete`);
+    assert.equal(completeHttp.result.status, 409);
+    assert.equal(completeHttp.result.payload.error.type, "conflict");
+
+    const expectedPath = path.join(dataDir, "cookies-owner-check.com.txt");
+    assert.equal(fs.existsSync(expectedPath), false);
+
+    const getHttp = mockReqRes({ method: "GET" });
+    await system.routeCookieExportViaExtension(getHttp.req, getHttp.res, {}, `/v1/cookies/export-via-extension/${taskId}`);
+    assert.equal(getHttp.result.payload.status, "running");
+  });
+});

@@ -89,3 +89,24 @@ test("persists across store instances", () => {
   assert.equal(s2.get(task.id)?.payload.domain, "z.com");
   fs.rmSync(dataDir, { recursive: true, force: true });
 });
+
+test("fail rejects non-owner running task", () => {
+  const t = tmpStore();
+  const task = t.store.create({ type: "cookies.export", capability: "cookies", payload: { domain: "a.com" } });
+  t.store.claim({ extensionId: "ext1", capabilities: ["cookies"], limit: 1 });
+  assert.throws(() => t.store.fail(task.id, { extensionId: "ext2", error: { type: "x", message: "nope" } }));
+  const still = t.store.get(task.id);
+  assert.equal(still.status, "running");
+  t.cleanup();
+});
+
+test("fail rejects extension failing queued task it does not own", () => {
+  const t = tmpStore();
+  const task = t.store.create({ type: "cookies.export", capability: "cookies", payload: { domain: "a.com" } });
+  assert.throws(() => t.store.fail(task.id, { extensionId: "ext1", error: { type: "x", message: "nope" } }));
+  assert.equal(t.store.get(task.id).status, "queued");
+  // system/timeout path without extensionId still allowed
+  const failed = t.store.fail(task.id, { error: { type: "timeout", message: "expired" } });
+  assert.equal(failed.status, "failed");
+  t.cleanup();
+});

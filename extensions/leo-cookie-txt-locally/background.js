@@ -81,16 +81,25 @@ async function claimAndRun() {
   }
 }
 
+async function postTaskUpdate(gatewayUrl, taskId, action, body) {
+  const resp = await fetch(`${gatewayUrl}/v1/extension-tasks/${encodeURIComponent(taskId)}/${action}`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(body),
+  });
+  // Best-effort: if complete/fail cannot reach gateway, task stays running until TTL.
+  if (!resp.ok) {
+    console.warn(`[cookie-ext] ${action} failed`, taskId, resp.status);
+  }
+  return resp;
+}
+
 async function executeTask(gatewayUrl, task) {
   if (!task || !task.id) return;
   if (task.type !== "cookies.export") {
-    await fetch(`${gatewayUrl}/v1/extension-tasks/${encodeURIComponent(task.id)}/fail`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        extension_id: chrome.runtime.id,
-        error: { type: "unsupported_task_type", message: `Unsupported task type: ${task.type}` },
-      }),
+    await postTaskUpdate(gatewayUrl, task.id, "fail", {
+      extension_id: chrome.runtime.id,
+      error: { type: "unsupported_task_type", message: `Unsupported task type: ${task.type}` },
     });
     return;
   }
@@ -100,39 +109,27 @@ async function executeTask(gatewayUrl, task) {
   try {
     cookies = await chrome.cookies.getAll({ domain });
   } catch (err) {
-    await fetch(`${gatewayUrl}/v1/extension-tasks/${encodeURIComponent(task.id)}/fail`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        extension_id: chrome.runtime.id,
-        error: {
-          type: "extension_error",
-          message: err && err.message ? err.message : "Failed to read cookies",
-        },
-      }),
+    await postTaskUpdate(gatewayUrl, task.id, "fail", {
+      extension_id: chrome.runtime.id,
+      error: {
+        type: "extension_error",
+        message: err && err.message ? err.message : "Failed to read cookies",
+      },
     });
     return;
   }
 
   if (!cookies || cookies.length === 0) {
-    await fetch(`${gatewayUrl}/v1/extension-tasks/${encodeURIComponent(task.id)}/fail`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        extension_id: chrome.runtime.id,
-        error: { type: "no_cookies", message: `No cookies for domain ${domain}` },
-      }),
+    await postTaskUpdate(gatewayUrl, task.id, "fail", {
+      extension_id: chrome.runtime.id,
+      error: { type: "no_cookies", message: `No cookies for domain ${domain}` },
     });
     return;
   }
 
-  await fetch(`${gatewayUrl}/v1/extension-tasks/${encodeURIComponent(task.id)}/complete`, {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({
-      extension_id: chrome.runtime.id,
-      cookies,
-    }),
+  await postTaskUpdate(gatewayUrl, task.id, "complete", {
+    extension_id: chrome.runtime.id,
+    cookies,
   });
 }
 
