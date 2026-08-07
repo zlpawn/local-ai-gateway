@@ -110,7 +110,7 @@
 ## 5. 完成标准
 
 - 所有可辨识的框架、步骤、原则、检查点、模板均已提取
-- 每条要素有至少一个 source_ref（ASR Segment ID 或 Frame ID）
+- 每条要素有至少一个 source_refs（ASR Segment ID 或 Frame ID）
 - 模糊内容全部进入 `uncertain_items`，不遗漏
 - 目标场景已确定（用户指定或用户选择）
 - 不存在讲者没说过但被补全的内容

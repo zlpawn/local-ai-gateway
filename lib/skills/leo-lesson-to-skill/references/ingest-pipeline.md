@@ -28,7 +28,7 @@
 - macOS Apple Silicon：优先 `mlx_whisper`，失败回退 `whisper-ctranslate2 --device cpu`
 - macOS Intel：`whisper-ctranslate2 --device cpu`
 
-所有候选均失败则标记 `asr_status: failed`，不得伪造字幕。
+所有候选均失败则在运行 Manifest 中记录 `asr_status: failed` 并停止流水线（无 transcript 则无法提炼方法论），不得伪造字幕。
 
 输出统一 Segment Schema（字段名与第 5 节统一中间表示一致）：
 
@@ -112,7 +112,20 @@ Ingest 层最终输出，供方法论提炼消费：
         "slide_group_size": 8
       }
     ]
-  }
+  },
+  "uncertain_items": [
+    {
+      "type": "asr",
+      "ref": "ASR-S0035",
+      "timestamp": "08:32.000",
+      "description": "该片段有背景噪音，转写可能不准确"
+    },
+    {
+      "type": "ocr",
+      "ref": "FRAME-0012",
+      "description": "PPT 右下角文字模糊，仅辨识出'...指标'"
+    }
+  ]
 }
 ```
 

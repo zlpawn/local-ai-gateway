@@ -128,7 +128,7 @@ description: "<中文描述：帮用户干什么，什么时候用>"
 
 - SKILL.md 包含 frontmatter（name + 中文 description）
 - 工作流步骤有明确的输入/动作/输出/检查点
-- 三层内容标注清晰，讲者原话有 source_ref
+- 三层内容标注清晰，讲者原话有 source_refs
 - references 文件按职责拆分，不全部堆在 SKILL.md
 - 文件名用中文，语义清晰
 - 没有把讲者没说的内容冒充为讲者原话
