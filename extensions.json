@@ -1,1 +1,18 @@
-[]
+[
+  {
+    "id": "dkgkabcokdfkmfmdjdjmbjhfdbillhim",
+    "name": "Leo cookie.txt Locally",
+    "version": "1.0.0",
+    "capabilities": [
+      "cookies"
+    ],
+    "permissions": [
+      "cookies",
+      "activeTab",
+      "storage",
+      "alarms"
+    ],
+    "registered_at": "2026-08-06T13:11:40.922Z",
+    "last_seen": "2026-08-07T00:35:57.573Z"
+  }
+]

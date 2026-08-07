@@ -245,12 +245,13 @@
           "type": "openai-chat",
           "base_url": "https://ark.cn-beijing.volces.com/api/plan/v3",
           "enabled": true,
-          "is_default": false,
+          "is_default": true,
           "models": [
             "doubao-embedding-vision"
           ],
           "model_mapping": {},
-          "embedding_model": "doubao-embedding-vision"
+          "embedding_model": "doubao-embedding-vision",
+          "dimensions": 1024
         },
         {
           "id": "ep_9bb49155-e9e0-46ff-8e7d-6458943dca61",
@@ -280,7 +281,7 @@
           "type": "openai-chat",
           "base_url": "https://openapi-ait.ke.com",
           "enabled": true,
-          "is_default": true,
+          "is_default": false,
           "models": [
             "text-embedding-3-large"
           ],
@@ -443,7 +444,7 @@
           "type": "openai-chat",
           "base_url": "https://ark.cn-beijing.volces.com/api/plan/v3",
           "enabled": true,
-          "is_default": false,
+          "is_default": true,
           "models": [
             "doubao-embedding-vision"
           ],
@@ -457,7 +458,7 @@
           "type": "openai-chat",
           "base_url": "https://openapi-ait.ke.com",
           "enabled": true,
-          "is_default": true,
+          "is_default": false,
           "models": [
             "text-embedding-3-large"
           ],

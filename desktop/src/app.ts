@@ -71,7 +71,7 @@ const metricsScenarios = {
         counts: { tp: 0, fp: 0, fn: 10, tn: 990 },
     },
 };
-const embedState = {
+window.embedState = {
     client: 'codex',
     endpointId: '',
     model: '',
@@ -85,7 +85,7 @@ const embedState = {
     error: ''
 };
 // Media-type state stays isolated so video/TTS can share only the generic helpers below.
-const imageGenState = {
+window.imageGenState = {
     client: 'codex',
     endpointId: '',
     model: '',
@@ -100,7 +100,7 @@ const imageGenState = {
     historyLoaded: false,
     referenceNotice: ''
 };
-const videoGenState = {
+window.videoGenState = {
     client: 'codex',
     endpointId: '',
     model: '',
@@ -119,7 +119,7 @@ const videoGenState = {
     historyLoaded: false,
     referenceNotice: ''
 };
-const ttsGenState = {
+window.ttsGenState = {
     client: 'codex',
     endpointId: '',
     model: '',
@@ -134,7 +134,7 @@ const ttsGenState = {
     historyLoading: false,
     historyLoaded: false
 };
-const webSearchState = {
+window.webSearchState = {
     client: 'codex',
     endpointId: '',
     query: '',
@@ -5852,12 +5852,12 @@ async function callEmbedding(text) {
 }
 
 window.runEmbedding = async function() {
-    if (!embedState.textA.trim()) {
+    const ta = document.getElementById('embed-text-a'); if (!(embedState.textA || (ta ? ta.value : '')).trim()) {
         embedState.error = '请输入文本 A';
         renderToolsDetail();
         return;
     }
-    if (embedState.mode === 'similarity' && !embedState.textB.trim()) {
+    if (embedState.mode === 'similarity' && !(embedState.textB || (() => { const tb = document.getElementById('embed-text-b'); return tb ? tb.value : ''; })()).trim()) {
         embedState.error = '请输入文本 B';
         renderToolsDetail();
         return;
@@ -5868,12 +5868,14 @@ window.runEmbedding = async function() {
     renderToolsDetail();
     try {
         const t0 = performance.now();
-        const a = await callEmbedding(embedState.textA);
+    const ta2 = document.getElementById('embed-text-a'); const textA = embedState.textA || (ta2 ? ta2.value : '');
+    const a = await callEmbedding(textA);
         const t1 = performance.now();
         if (embedState.mode === 'single') {
             embedState.result = { mode: 'single', a, elapsedMs: t1 - t0 };
         } else {
-            const b = await callEmbedding(embedState.textB);
+        const tb2 = document.getElementById('embed-text-b'); const textB = embedState.textB || (tb2 ? tb2.value : '');
+        const b = await callEmbedding(textB);
             const t2 = performance.now();
             const sim = cosineSimilarity(a.vector, b.vector);
             embedState.result = { mode: 'similarity', a, b, similarity: sim, elapsedMsA: t1 - t0, elapsedMsB: t2 - t1 };

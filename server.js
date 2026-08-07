@@ -83,7 +83,7 @@ import { chunkTranscript } from "./lib/video-kb/chunker.mjs";
 import { createVectorStore } from "./lib/video-kb/vector-store.mjs";
 import { runVideoKbPipeline, getPipelineNodes } from "./lib/video-kb/pipeline.mjs";
 import { videoKbHandler } from "./lib/video-kb/handler.mjs";
-import { detectAgentReach, getDoctorReport, getInstalledChannels } from "./lib/content-reach/detector.mjs";
+import { detectAgentReach, getDoctorReport, getDoctorSnapshot, getInstalledChannels, invalidateDoctorCache } from "./lib/content-reach/detector.mjs";
 import { fetchContent } from "./lib/content-reach/fetcher.mjs";
 import { getInstallHint, installAgentReach, installChannels } from "./lib/content-reach/installer.mjs";
 import { createModelPricingEngine, normalizeModelName } from "./lib/analytics/model-pricing.mjs";
@@ -769,6 +769,7 @@ async function forwardOpenAIEmbeddings(body, req, res, context) {
     });
     return;
   }
+
   if (!upstreamUrl.endsWith("/embeddings")) {
     const cleanBase = upstreamUrl.replace(/\/+$/, "");
     // If the configured base already ends with a version segment (/v1, /v3, ...),
@@ -781,15 +782,33 @@ async function forwardOpenAIEmbeddings(body, req, res, context) {
   }
 
 
-  const modelInput = body?.model;
+  const modelInput = body?.model ? String(body.model).trim() : "";
+  // Placeholder aliases that some clients send generically. These are not real upstream model IDs.
+  const PLACEHOLDER_MODELS = new Set(["", "text-embedding", "embedding", "text-embedding-ada-002"]);
   let upstreamModel = modelInput;
+
   if (modelInput && embeddingEndpoint.model_mapping?.[modelInput]) {
+    // 1) explicit mapping wins
     upstreamModel = embeddingEndpoint.model_mapping[modelInput];
-  } else if (!upstreamModel && embeddingEndpoint.embedding_model) {
+  } else if (!modelInput || PLACEHOLDER_MODELS.has(modelInput)) {
+    // 2) missing/placeholder model => use endpoint config
+    if (embeddingEndpoint.embedding_model) {
+      upstreamModel = embeddingEndpoint.embedding_model;
+    } else if (Array.isArray(embeddingEndpoint.models) && embeddingEndpoint.models.length > 0) {
+      upstreamModel = embeddingEndpoint.models[0];
+    } else {
+      upstreamModel = modelInput || "";
+    }
+  } else if (
+    // 3) if caller sent a concrete model that this endpoint does not own, prefer endpoint embedding_model
+    embeddingEndpoint.embedding_model
+    && Array.isArray(embeddingEndpoint.models)
+    && embeddingEndpoint.models.length > 0
+    && !embeddingEndpoint.models.includes(modelInput)
+  ) {
     upstreamModel = embeddingEndpoint.embedding_model;
-  } else if (!upstreamModel && Array.isArray(embeddingEndpoint.models) && embeddingEndpoint.models.length > 0) {
-    upstreamModel = embeddingEndpoint.models[0];
   }
+  // 4) otherwise keep caller's concrete model as-is
 
   const upstreamBody = {
     ...body,
@@ -2346,20 +2365,58 @@ if (reqPath === "/v1/config/secret" && req.method === "GET") {
 async function routeAgentReachRequest(req, res, context, reqPath) {
   // GET /v1/video-kb/tools/agent-reach - detect status + installed channels
   if (reqPath === "/v1/video-kb/tools/agent-reach" && req.method === "GET") {
+    // Fast path: version/path only. Channel doctor is expensive and returned asynchronously.
+    const force = context.url.searchParams.get("refresh") === "1" || context.url.searchParams.get("force") === "1";
+    const waitChannels = context.url.searchParams.get("wait") === "1";
     const detected = detectAgentReach();
     if (!detected.installed) {
       const hint = getInstallHint();
-      sendJson(res, 200, { installed: false, install_hint: hint });
+      sendJson(res, 200, {
+        installed: false,
+        install_hint: hint,
+        channels: [],
+        installed_channels: [],
+        channels_ready: true,
+        channels_refreshing: false,
+      });
       return;
     }
-    const report = await getDoctorReport();
-    const channels = await getInstalledChannels();
+
+    if (waitChannels) {
+      const report = await getDoctorReport({ force });
+      const installedChannels = report.channels
+        .filter((ch) => ch.status === "ok" || ch.status === "warn")
+        .map((ch) => ch.name)
+        .filter(Boolean);
+      sendJson(res, 200, {
+        installed: true,
+        version: detected.version,
+        path: detected.path,
+        channels: report.channels,
+        installed_channels: installedChannels,
+        channels_ready: true,
+        channels_refreshing: false,
+        cached: !force,
+      });
+      return;
+    }
+
+    const snapshot = getDoctorSnapshot({ force });
+    const installedChannels = (snapshot.channels || [])
+      .filter((ch) => ch.status === "ok" || ch.status === "warn")
+      .map((ch) => ch.name)
+      .filter(Boolean);
     sendJson(res, 200, {
       installed: true,
       version: detected.version,
       path: detected.path,
-      channels: report.channels,
-      installed_channels: channels,
+      channels: snapshot.channels || [],
+      installed_channels: installedChannels,
+      channels_ready: Boolean(snapshot.channels_ready),
+      channels_refreshing: Boolean(snapshot.channels_refreshing),
+      cached: Boolean(snapshot.cached),
+      cache_age_ms: snapshot.cache_age_ms,
+      last_error: snapshot.last_error || "",
     });
     return;
   }
@@ -2375,6 +2432,7 @@ async function routeAgentReachRequest(req, res, context, reqPath) {
     }
     // Submit as background task
     try {
+      invalidateDoctorCache();
       const id = globalTaskQueue.submit("agent_reach_install", {
         action: "install",
         channels: body.channels || null,
@@ -2401,6 +2459,7 @@ async function routeAgentReachRequest(req, res, context, reqPath) {
       return;
     }
     try {
+      invalidateDoctorCache();
       const id = globalTaskQueue.submit("agent_reach_install", {
         action: "channels",
         channels,
@@ -2435,11 +2494,14 @@ async function routeAgentReachRequest(req, res, context, reqPath) {
 
 function createGatewayEmbeddingFn(endpointId) {
   return async function embed(text) {
+    console.error("[embedding] calling for text length:", text?.length, "endpoint:", endpointId);
+    // Debug: uncomment to log every embedding call
+  console.log("[video-kb] embeddingFn created for endpoint:", endpointId);
     const url = `http://127.0.0.1:${LISTEN_PORT}/v1/embeddings${endpointId ? "?endpoint_id=" + encodeURIComponent(endpointId) : ""}`;
     const res = await fetch(url, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ input: text, model: "text-embedding" }),
+      body: JSON.stringify({ input: text }),
     });
     if (!res.ok) {
       const errBody = await res.text().catch(() => "");
@@ -2681,6 +2743,28 @@ async function routeCookieRequest(req, res, context, reqPath) {
     return;
   }
 
+  // GET /v1/cookies/files - list existing cookie files in config dir
+  if (reqPath === "/v1/cookies/files" && req.method === "GET") {
+    try {
+      const configDir = path.dirname(GATEWAY_CONFIG_FILE);
+      const entries = fs.readdirSync(configDir);
+      const files = entries
+        .filter((f) => f.startsWith("cookies") && f.endsWith(".txt"))
+        .map((f) => {
+          const fullPath = path.join(configDir, f);
+          const stat = fs.statSync(fullPath);
+          const domainMatch = f.match(/^cookies-(.+)\.txt$/);
+          const domain = domainMatch ? domainMatch[1] : "all";
+          return { file_path: fullPath, filename: f, domain, size: stat.size, modified: stat.mtimeMs };
+        })
+        .sort((a, b) => b.modified - a.modified);
+      sendJson(res, 200, { files });
+    } catch {
+      sendJson(res, 200, { files: [] });
+    }
+    return;
+  }
+
   // POST /v1/cookies/export
   if (reqPath === "/v1/cookies/export" && req.method === "POST") {
     let body;
@@ -2696,9 +2780,10 @@ async function routeCookieRequest(req, res, context, reqPath) {
       return;
     }
     const domain = body.domain ? String(body.domain).trim() : "";
+    const configDir = path.dirname(GATEWAY_CONFIG_FILE);
     const outputPath = body.output_path
       ? resolveProjectPath(body.output_path)
-      : path.join(path.dirname(GATEWAY_CONFIG_FILE), "cookies.txt");
+      : path.join(configDir, domain ? `cookies-${domain.replace(/[^a-zA-Z0-9.-]/g, "_")}.txt` : "cookies.txt");
     try {
       const result = await extractCookies({ browser, domain: domain || undefined, outputPath });
       sendJson(res, 200, result);

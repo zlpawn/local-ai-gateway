@@ -171,6 +171,7 @@ export function renderVideoKbDetail(): void {
 
   loadToolsData();
   loadBrowsers();
+  loadCookieFiles();
 }
 
 function importPanelHTML(): string {
@@ -280,6 +281,10 @@ function importPanelHTML(): string {
           <div id="vk-progress-fill" class="video-kb-progress-fill" style="width:0%"></div>
         </div>
         <div id="vk-progress-label" class="video-kb-progress-label"></div>
+        <div class="video-kb-actions" style="margin-top:12px">
+          <button class="btn btn-danger" id="vk-cancel-btn" onclick="window.videoKbCancelTask()" style="display:none">取消任务</button>
+          <button class="btn" id="vk-retry-btn" onclick="window.videoKbRetryTask()" style="display:none">重新导入</button>
+        </div>
       </div>
     </div>
   `;
@@ -527,17 +532,16 @@ function refreshEmbeddingModels(
   refreshEmbeddingEndpoints(sel.value, "vk-search-emb-endpoint", null, false);
 };
 
-async function loadAgentReachStatus(): Promise<void> {
+async function loadAgentReachStatus(force = false): Promise<void> {
   const container = document.getElementById("vk-agent-reach-status");
   if (!container) return;
 
-  try {
-    const resp = await fetch("/v1/video-kb/tools/agent-reach");
-    const data = await resp.json();
+  const pollToken = String(Date.now()) + Math.random().toString(16).slice(2);
+  (window as any).__vkAgentReachPollToken = pollToken;
 
+  const renderAgentReach = (data: any, opts: { refreshing?: boolean } = {}) => {
     if (!data.installed) {
       const hint = data.install_hint || {};
-      const cmds = hint.commands || [];
       container.innerHTML = `
         <div class="video-kb-banner err">Agent Reach 未安装</div>
         <div style="margin-top:12px;font-size:13px;color:var(--text-secondary);line-height:1.8">
@@ -550,15 +554,21 @@ async function loadAgentReachStatus(): Promise<void> {
       return;
     }
 
-    const channels = data.channels || [];
     const installedChannels = data.installed_channels || [];
-    const channelBadges = installedChannels.length > 0
-      ? installedChannels.map((ch: string) => `<span class="badge">${esc(ch)}</span>`).join(" ")
-      : '<span class="video-kb-status">无已安装渠道</span>';
+    const channelsReady = data.channels_ready !== false;
+    const channelsRefreshing = Boolean(opts.refreshing || data.channels_refreshing);
+    let channelBadges = "<span class=\"video-kb-status\">无已安装渠道</span>";
+    if (!channelsReady || channelsRefreshing) {
+      channelBadges = "<span class=\"video-kb-status\">渠道状态刷新中...</span>";
+    } else if (installedChannels.length > 0) {
+      channelBadges = installedChannels.map((ch: string) => `<span class="badge">${esc(ch)}</span>`).join(" ");
+    }
 
+    const versionText = esc((data.version || "").replace(/^Agent\s*Reach\s*v?/i, "v"));
     container.innerHTML = `
       <div style="display:flex;align-items:center;gap:8px;margin-bottom:8px">
-        <span class="video-kb-status ok">Agent Reach v${esc(data.version)} 已安装</span>
+        <span class="video-kb-status ok">Agent Reach ${versionText} 已安装</span>
+        ${channelsRefreshing ? "<span class=\"video-kb-status\">渠道检测中</span>" : ""}
       </div>
       <div style="margin-bottom:8px">
         <div class="video-kb-status" style="margin-bottom:4px">已安装渠道:</div>
@@ -569,7 +579,34 @@ async function loadAgentReachStatus(): Promise<void> {
         <button class="btn btn-sm" onclick="window.videoKbInstallChannels()">安装更多渠道</button>
       </div>
     `;
+  };
+
+  try {
+    const resp = await fetch("/v1/video-kb/tools/agent-reach" + (force ? "?refresh=1" : ""));
+    const data = await resp.json();
+    if ((window as any).__vkAgentReachPollToken !== pollToken) return;
+    renderAgentReach(data, { refreshing: Boolean(data.channels_refreshing) || data.channels_ready === false });
+
+    if (data.installed && (data.channels_refreshing || data.channels_ready === false)) {
+      let tries = 0;
+      const poll = async () => {
+        if ((window as any).__vkAgentReachPollToken !== pollToken) return;
+        tries += 1;
+        try {
+          const pollResp = await fetch("/v1/video-kb/tools/agent-reach");
+          const pollData = await pollResp.json();
+          if ((window as any).__vkAgentReachPollToken !== pollToken) return;
+          const stillRefreshing = Boolean(pollData.channels_refreshing) || pollData.channels_ready === false;
+          renderAgentReach(pollData, { refreshing: stillRefreshing });
+          if (stillRefreshing && tries < 30) setTimeout(poll, 1000);
+        } catch {
+          // keep installed state on transient poll errors
+        }
+      };
+      setTimeout(poll, 800);
+    }
   } catch {
+    if ((window as any).__vkAgentReachPollToken !== pollToken) return;
     container.innerHTML = '<div class="video-kb-status err">检测失败</div>';
   }
 }
@@ -601,7 +638,7 @@ async function loadAgentReachStatus(): Promise<void> {
             setTimeout(pollInstall, 2000);
           } else if (task.status === "succeeded") {
             container.innerHTML = '<div class="video-kb-banner ok">安装成功!</div>';
-            setTimeout(() => loadAgentReachStatus(), 1000);
+            setTimeout(() => loadAgentReachStatus(true), 1000);
           } else {
             container.innerHTML = `<div class="video-kb-banner err">安装失败: ${esc(task.error || "")}</div>`;
           }
@@ -615,7 +652,7 @@ async function loadAgentReachStatus(): Promise<void> {
 };
 
 (window as any).videoKbRefreshAgentReach = function (): void {
-  loadAgentReachStatus();
+  loadAgentReachStatus(true);
 };
 
 (window as any).videoKbInstallChannels = async function (): Promise<void> {
@@ -716,7 +753,7 @@ async function loadAgentReachStatus(): Promise<void> {
             setTimeout(pollChannels, 2000);
           } else if (task.status === "succeeded") {
             container.innerHTML = '<div class="video-kb-banner ok">渠道安装成功!</div>';
-            setTimeout(() => loadAgentReachStatus(), 1000);
+            setTimeout(() => loadAgentReachStatus(true), 1000);
           } else {
             container.innerHTML = `<div class="video-kb-banner err">渠道安装失败: ${esc(task.error || "")}</div>`;
           }
@@ -726,6 +763,18 @@ async function loadAgentReachStatus(): Promise<void> {
     }
   });
 };
+
+async function loadCookieFiles(): Promise<void> {
+  const sel = document.getElementById("vk-cookie") as HTMLSelectElement | null;
+  if (!sel) return;
+  const data = await apiGet<{ files: Array<{ file_path: string; filename: string; domain: string; size: number; modified: number }> }>("/v1/cookies/files");
+  if (!data || !data.files || data.files.length === 0) {
+    sel.innerHTML = `<option value="">不需要 Cookie</option>`;
+    return;
+  }
+  sel.innerHTML = `<option value="">不需要 Cookie</option>` +
+    data.files.map((f) => `<option value="${esc(f.file_path)}">${esc(f.domain)} (${esc(f.filename)})</option>`).join("");
+}
 
 async function loadBrowsers(): Promise<void> {
   const data = await apiGet<{ browsers: BrowserInfo[] }>("/v1/cookies/browsers");
@@ -800,6 +849,7 @@ async function pollTaskProgress(): Promise<void> {
   if (!task) return;
 
   renderTaskSteps(task);
+  updateTaskButtons(task);
 
   if (["succeeded", "failed", "cancelled"].includes(task.status)) {
     renderTaskComplete(task);
@@ -807,6 +857,44 @@ async function pollTaskProgress(): Promise<void> {
   }
   videoKbState.taskPollTimer = setTimeout(() => pollTaskProgress(), 1000);
 }
+
+function updateTaskButtons(task: TaskInfo): void {
+  const cancelBtn = document.getElementById("vk-cancel-btn");
+  const retryBtn = document.getElementById("vk-retry-btn");
+  const ingestBtn = document.getElementById("vk-ingest-btn");
+  const isTerminal = ["succeeded", "failed", "cancelled"].includes(task.status);
+  if (cancelBtn) cancelBtn.style.display = isTerminal ? "none" : "";
+  if (retryBtn) retryBtn.style.display = (task.status === "failed" || task.status === "cancelled") ? "" : "none";
+  if (ingestBtn) {
+    ingestBtn.disabled = !isTerminal;
+    ingestBtn.textContent = isTerminal ? "开始导入" : "导入中...";
+  }
+}
+
+(window as any).videoKbCancelTask = async function (): Promise<void> {
+  if (!videoKbState.currentTaskId) return;
+  const cancelBtn = document.getElementById("vk-cancel-btn");
+  if (cancelBtn) { cancelBtn.setAttribute("disabled", "disabled"); cancelBtn.textContent = "取消中..."; }
+  try {
+    await fetch(`/v1/tasks/${videoKbState.currentTaskId}/cancel`, { method: "POST" });
+  } catch { /* ignore */ }
+  if (cancelBtn) { cancelBtn.textContent = "取消任务"; cancelBtn.removeAttribute("disabled"); }
+  // Poll will pick up the cancelled status on next tick
+  pollTaskProgress();
+};
+
+(window as any).videoKbRetryTask = function (): void {
+  videoKbState.currentTaskId = null;
+  if (videoKbState.taskPollTimer) { clearTimeout(videoKbState.taskPollTimer); videoKbState.taskPollTimer = null; }
+  document.getElementById("vk-task-progress")!.style.display = "none";
+  const cancelBtn = document.getElementById("vk-cancel-btn");
+  const retryBtn = document.getElementById("vk-retry-btn");
+  if (cancelBtn) cancelBtn.style.display = "none";
+  if (retryBtn) retryBtn.style.display = "none";
+  const ingestBtn = document.getElementById("vk-ingest-btn") as HTMLButtonElement | null;
+  if (ingestBtn) { ingestBtn.disabled = false; ingestBtn.textContent = "开始导入"; }
+  (window as any).videoKbIngest();
+};
 
 function renderTaskSteps(task: TaskInfo): void {
   const container = document.getElementById("vk-steps-list");
@@ -830,6 +918,7 @@ function renderTaskSteps(task: TaskInfo): void {
 }
 
 function renderTaskComplete(task: TaskInfo): void {
+  updateTaskButtons(task);
   const label = document.getElementById("vk-progress-label");
   if (label) {
     if (task.status === "succeeded" && task.result) {
@@ -983,10 +1072,9 @@ async function loadVideoList(): Promise<void> {
         const result = await importResp.json();
         if (importResp.ok) {
             if (resultDiv) resultDiv.innerHTML = `<div class="video-kb-banner ok">导出成功: ${result.count} 条 cookie<br>文件: <code>${esc(result.file_path)}</code></div>`;
+            await loadCookieFiles();
             const cookieSelect = document.getElementById("vk-cookie") as HTMLSelectElement | null;
-            if (cookieSelect) {
-                cookieSelect.innerHTML = `<option value="">不需要 Cookie</option><option value="${esc(result.file_path)}" selected>cookies.txt (${result.count} 条)</option>`;
-            }
+            if (cookieSelect) cookieSelect.value = result.file_path;
         } else {
             if (resultDiv) resultDiv.innerHTML = `<div class="video-kb-banner err">导出失败: ${result.error?.message || "未知错误"}</div>`;
         }
@@ -1008,10 +1096,9 @@ async function loadVideoList(): Promise<void> {
   if (resultDiv) {
     if (result?.file_path) {
       resultDiv.innerHTML = `<div class="video-kb-banner ok">导出成功: ${result.count} 条 cookie<br>文件: <code>${esc(result.file_path)}</code><br>域名: ${esc(result.domains.join(", "))}</div>`;
+      await loadCookieFiles();
       const cookieSelect = document.getElementById("vk-cookie") as HTMLSelectElement | null;
-      if (cookieSelect) {
-        cookieSelect.innerHTML = `<option value="">不需要 Cookie</option><option value="${esc(result.file_path)}" selected>cookies.txt (${result.count} 条)</option>`;
-      }
+      if (cookieSelect) cookieSelect.value = result.file_path;
     } else {
       resultDiv.innerHTML = `<div class="video-kb-banner err">导出失败</div>`;
     }
